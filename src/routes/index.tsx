@@ -100,7 +100,7 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 	const loading = systems.isPending || snap.isPending;
 
 	return (
-		<div className="mx-auto w-full max-w-md px-5 pb-32 pt-[max(1rem,env(safe-area-inset-top))]">
+		<div className="mx-auto w-full max-w-md px-5 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
 			<Header
 				live={live}
 				refreshing={snap.isFetching}
@@ -227,7 +227,7 @@ function PoolScreen({
 }) {
 	return (
 		<div className="space-y-4">
-			<Card className="relative overflow-hidden p-7">
+			<Card className="relative overflow-hidden p-6">
 				<div
 					aria-hidden
 					className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full"
@@ -310,7 +310,7 @@ function PoolScreen({
 			) : null}
 
 			{fetchedAt ? (
-				<p className="pt-2 text-center text-xs text-muted">
+				<p className="pt-4 text-center text-xs text-muted">
 					Updated {new Date(fetchedAt).toLocaleTimeString()}
 				</p>
 			) : null}
@@ -331,11 +331,11 @@ function EquipmentScreen({
 		<div>
 			<h2 className="mb-3 text-sm font-medium text-muted">Equipment</h2>
 			{controls.length === 0 ? (
-				<Card className="p-5 text-sm text-muted">
+				<Card className="p-4 text-sm text-muted">
 					No controllable equipment found.
 				</Card>
 			) : (
-				<div className="space-y-2">
+				<div className="space-y-4">
 					{controls.map((d) => (
 						<EquipmentRow
 							key={d.id}
@@ -555,7 +555,7 @@ function BottomNav({
 	onTab: (t: "pool" | "equipment") => void;
 }) {
 	return (
-		<nav className="fixed inset-x-0 bottom-4 z-40 flex justify-center">
+		<nav className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex justify-center">
 			<div className="flex items-center gap-1 rounded-full border border-border bg-surface/90 p-1 shadow-lg backdrop-blur">
 				<TabBtn active={tab === "pool"} onPress={() => onTab("pool")}>
 					<Waves className="size-4" />
