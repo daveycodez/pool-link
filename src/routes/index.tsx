@@ -177,7 +177,7 @@ function Header({
 	onLogout: () => void;
 }) {
 	return (
-		<header className="mb-7 flex items-center justify-between">
+		<header className="mb-4 flex items-center justify-between">
 			<div className="flex items-center gap-2.5">
 				<Waves className="size-5 text-accent" />
 				<h1 className="text-lg font-semibold tracking-tight">Pool Link</h1>
