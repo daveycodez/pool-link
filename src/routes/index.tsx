@@ -103,7 +103,7 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 	const loading = systems.isPending || snap.isPending;
 
 	return (
-		<div className="mx-auto w-full max-w-md px-5 pb-32 pt-[max(1.5rem,env(safe-area-inset-top))]">
+		<div className="mx-auto w-full max-w-md px-5 pb-32 pt-[max(1rem,env(safe-area-inset-top))]">
 			<Header
 				live={live}
 				refreshing={snap.isFetching}
