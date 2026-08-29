@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/*
+ * Pool Link: dark-first "control room" base with a sunlight-readable
+ * light mode. Pool water = the accent, so it reads as the live channel.
+ */
+:root {
+	--accent: oklch(0.72 0.13 205);
+	--accent-foreground: oklch(0.16 0.02 220);
+	--background: oklch(0.98 0.006 215);
+	--foreground: oklch(0.22 0.02 235);
+	--surface: oklch(1 0 0);
+	--surface-secondary: oklch(0.96 0.005 215);
+	--border: oklch(0.9 0.01 215);
+	--muted: oklch(0.55 0.02 225);
+}
+
+.dark {
+	--accent: oklch(0.78 0.14 195);
+	--accent-foreground: oklch(0.15 0.02 220);
+	--background: oklch(0.16 0.015 235);
+	--foreground: oklch(0.96 0.01 210);
+	--surface: oklch(0.21 0.018 235);
+	--surface-secondary: oklch(0.27 0.02 235);
+	--border: oklch(0.3 0.02 235);
+	--muted: oklch(0.68 0.02 220);
+}
+
+/*
+ * Map HeroUI's component tokens (used by Select, Popover, fields) onto the
+ * custom palette above. These resolve at use-time, so they pick up the correct
+ * light/dark value automatically.
+ */
+:root {
+	--default: var(--surface-secondary);
+	--default-hover: var(--surface);
+	--field-background: var(--surface-secondary);
+	--field-hover: var(--surface);
+	--field-focus: var(--surface-secondary);
+	--field-border: var(--border);
+	--field-border-hover: var(--border);
+	--field-border-focus: var(--accent);
+	--field-foreground: var(--foreground);
+	--field-placeholder: var(--muted);
+	--overlay: var(--surface);
+	--overlay-foreground: var(--foreground);
+}
+
+html,
+body,
+#app {
+	min-height: 100dvh;
+}
+
+body {
+	margin: 0;
+	background: var(--background);
+	color: var(--foreground);
+	-webkit-tap-highlight-color: transparent;
+	font-family:
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		"Segoe UI",
+		sans-serif;
+	overscroll-behavior-y: none;
+}
+
+/* Poolside: larger hit targets, no accidental precision taps with wet hands. */
+[data-control="device"] {
+	min-height: 4.25rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	[data-pulse] {
+		animation: pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+	}
+	@keyframes pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.35;
+		}
+	}
+}
