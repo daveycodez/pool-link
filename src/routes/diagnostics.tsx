@@ -1,8 +1,7 @@
 import { Button, Card, ScrollShadow } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, Check, Copy, LogOut } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { AppHeader, IconBtn } from "#/components/app-header";
 import {
 	account,
 	api,
@@ -17,7 +16,6 @@ import {
 	sessionMeta,
 } from "#/lib/aqualink/client";
 import { AqualinkError } from "#/lib/aqualink/types";
-import { useLogout } from "#/lib/queries";
 
 /** Placeholder shown before any probe has run. */
 const EMPTY = "—";
@@ -50,7 +48,6 @@ function Diagnostics() {
 	const [out, setOut] = useState(EMPTY);
 	const [busy, setBusy] = useState("");
 	const meta = sessionMeta();
-	const logout = useLogout();
 	const [copied, setCopied] = useState(false);
 	const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -117,16 +114,7 @@ function Diagnostics() {
 		});
 
 	return (
-		<main className="mx-auto w-full max-w-3xl px-5 pb-12 pt-[max(1rem,env(safe-area-inset-top))]">
-			<AppHeader>
-				<IconBtn label="Back to dashboard" to="/">
-					<ArrowLeft className="size-4" />
-				</IconBtn>
-				<IconBtn label="Sign out" onPress={() => logout.mutate()}>
-					<LogOut className="size-4" />
-				</IconBtn>
-			</AppHeader>
-
+		<div>
 			<h2 className="mb-1 text-xl font-semibold tracking-tight">Diagnostics</h2>
 			<p className="mb-6 text-xs text-muted">
 				userId {meta.userId || "?"} · country {meta.country || "?"}
@@ -190,7 +178,7 @@ function Diagnostics() {
 					</pre>
 				</ScrollShadow>
 			</Card>
-		</main>
+		</div>
 	);
 }
 

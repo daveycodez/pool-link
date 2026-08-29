@@ -1,7 +1,7 @@
 import { Button, Card, Input, Label, TextField } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Waves } from "lucide-react";
 import { useState } from "react";
+import { errorMessage } from "#/lib/aqualink/types";
 import { useLogin } from "#/lib/queries";
 
 export const Route = createFileRoute("/login")({
@@ -23,21 +23,16 @@ function LoginScreen() {
 	}
 
 	return (
-		<main className="flex min-h-dvh flex-col items-center justify-center px-5">
-			<div className="mb-6 flex items-center gap-2.5">
-				<Waves className="size-6 text-accent" />
-				<h1 className="text-xl font-semibold tracking-tight">Pool Link</h1>
-			</div>
-
+		<div className="flex min-h-[70svh] items-center justify-center">
 			<Card className="flex w-full max-w-sm flex-col gap-6 p-6">
-				<div className="space-y-1.5 text-center">
-					<h2 className="text-lg font-semibold tracking-tight">
+				<Card.Header className="items-center gap-1.5 text-center">
+					<Card.Title className="text-lg leading-tight font-semibold tracking-tight">
 						Connect your pool
-					</h2>
-					<p className="text-sm text-balance text-muted">
+					</Card.Title>
+					<Card.Description className="text-balance">
 						Sign in with your iAqualink account
-					</p>
-				</div>
+					</Card.Description>
+				</Card.Header>
 
 				<form className="flex flex-col gap-6" onSubmit={submit}>
 					<div className="flex flex-col gap-4">
@@ -69,12 +64,12 @@ function LoginScreen() {
 						</TextField>
 						{loginMutation.isError ? (
 							<p className="text-sm text-danger" role="alert">
-								{loginMutation.error.message}
+								{errorMessage(loginMutation.error)}
 							</p>
 						) : null}
 					</div>
 
-					<div className="flex flex-col gap-3">
+					<div className="flex flex-col gap-4">
 						<Button
 							type="submit"
 							variant="primary"
@@ -91,6 +86,6 @@ function LoginScreen() {
 					</div>
 				</form>
 			</Card>
-		</main>
+		</div>
 	);
 }

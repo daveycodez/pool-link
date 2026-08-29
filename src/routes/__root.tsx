@@ -1,6 +1,15 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toast, toast } from "@heroui/react";
+import {
+	MutationCache,
+	QueryCache,
+	QueryClient,
+	QueryClientProvider,
+} from "@tanstack/react-query";
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
+import { AppLayout } from "#/components/app-layout";
+import { errorMessage } from "#/lib/aqualink/types";
 import appCss from "../styles.css?url";
 
 /** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
@@ -16,12 +25,12 @@ export const Route = createRootRoute({
 			},
 			{
 				name: "theme-color",
-				content: "#071018",
+				content: "#030608",
 				media: "(prefers-color-scheme: dark)",
 			},
 			{
 				name: "theme-color",
-				content: "#f4fbff",
+				content: "#EFF7FA",
 				media: "(prefers-color-scheme: light)",
 			},
 			{
@@ -62,19 +71,33 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				defaultOptions: {
 					queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 5_000 },
 				},
+				// Every query and mutation reports through here, so nothing needs a
+				// per-call error handler.
+				queryCache: new QueryCache({ onError: toastError }),
+				mutationCache: new MutationCache({ onError: toastError }),
 			}),
 	);
 
 	return (
-		<html lang="en" className="dark" suppressHydrationWarning>
+		// next-themes swaps the class on <html> after mount, which is exactly the
+		// kind of mismatch suppressHydrationWarning exists for.
+		<html lang="en" suppressHydrationWarning>
 			<head>
 				<HeadContent />
 			</head>
 			<body>
-				<QueryClientProvider client={client}>
-					{children}
-					<OfflineBanner />
-				</QueryClientProvider>
+				<Toast.Provider />
+				<ThemeProvider
+					attribute="class"
+					defaultTheme="system"
+					enableSystem
+					disableTransitionOnChange
+				>
+					<QueryClientProvider client={client}>
+						<AppLayout>{children}</AppLayout>
+						<OfflineBanner />
+					</QueryClientProvider>
+				</ThemeProvider>
 				<Scripts />
 			</body>
 		</html>
@@ -96,9 +119,26 @@ function OfflineBanner() {
 	}, []);
 	if (!offline) return null;
 	return (
-		<div className="fixed inset-x-0 bottom-0 z-50 border-t border-amber-400/30 bg-amber-950/90 px-4 py-2.5 text-center text-xs font-medium text-amber-200 backdrop-blur-xl">
+		<div className="fixed inset-x-0 bottom-0 z-50 border-t border-warning/30 bg-warning/15 px-4 py-2.5 text-center text-xs font-medium text-warning backdrop-blur-xl">
 			No internet — showing last known state. The panel keeps running its own
 			schedule.
 		</div>
 	);
+}
+
+/**
+ * The snapshot query polls every 5s, so an unreachable pool would otherwise
+ * raise the same toast twelve times a minute. Collapse repeats of the same
+ * message inside a short window.
+ */
+let lastToast = { message: "", at: 0 };
+const TOAST_DEDUPE_MS = 10_000;
+
+function toastError(error: unknown) {
+	const message = errorMessage(error);
+	const now = Date.now();
+	if (message === lastToast.message && now - lastToast.at < TOAST_DEDUPE_MS)
+		return;
+	lastToast = { message, at: now };
+	toast.danger(message);
 }

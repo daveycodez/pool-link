@@ -1,176 +1,67 @@
 import type { Key } from "@heroui/react";
-import { Card, Chip, ListBox, Select, Spinner, Switch } from "@heroui/react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import {
-	Droplets,
-	Flame,
-	Lightbulb,
-	LogOut,
-	RefreshCw,
-	Settings,
-	SlidersHorizontal,
-	Thermometer,
-	Waves,
-	WavesArrowDown,
-	Zap,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { AppHeader, IconBtn } from "#/components/app-header";
+import { Card, ListBox, Select } from "@heroui/react";
+import { createFileRoute } from "@tanstack/react-router";
+import { Flame, Lightbulb, Thermometer, Waves } from "lucide-react";
+import { useState } from "react";
+import { EquipmentRow, IconCircle } from "#/components/device-row";
+import { Loading } from "#/components/loading";
 import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import {
-	useActuate,
-	useLightColor,
-	useLogout,
-	useSession,
-	useSetTemps,
-	useSnapshot,
-	useSystems,
-} from "#/lib/queries";
+import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
+import { usePool, useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/")({
-	component: Dashboard,
+	component: Pool,
 });
 
-function Dashboard() {
-	const navigate = useNavigate();
-	const session = useSession();
-	const logout = useLogout();
-
-	useEffect(() => {
-		if (!session.isPending && !session.data)
-			navigate({ to: "/login", replace: true });
-	}, [session.isPending, session.data, navigate]);
-
-	if (session.isPending) return <Booting />;
-	if (!session.data) return <Booting />;
-
-	return <PoolView onLogout={() => logout.mutate()} />;
-}
-
-function Booting() {
-	return (
-		<main className="flex min-h-dvh items-center justify-center">
-			<div className="flex flex-col items-center gap-3 text-muted">
-				<div data-pulse className="size-2.5 rounded-full bg-accent" />
-				<p className="text-sm">Connecting to pool…</p>
-			</div>
-		</main>
-	);
-}
-
-function PoolView({ onLogout }: { onLogout: () => void }) {
-	const systems = useSystems(true);
-	const serial = systems.data?.[0]?.serial;
-	const snap = useSnapshot(serial);
+function Pool() {
+	const { pending, signedIn } = useRequireSession();
+	const {
+		serial,
+		loading,
+		spaMode,
+		water,
+		air,
+		poolSet,
+		spaSet,
+		heaters,
+		light,
+		jetPump,
+		waterfall,
+	} = usePool();
 	const actuate = useActuate(serial);
 	const setTemps = useSetTemps(serial);
 	const lightColor = useLightColor(serial);
-	const [tab, setTab] = useState<"pool" | "equipment">("pool");
 
-	const devices = snap.data?.devices ?? [];
-	const byName = new Map(devices.map((d) => [d.name, d]));
-	const pool = byName.get("pool_temp");
-	const spa = byName.get("spa_temp");
-	const air = byName.get("air_temp");
-	const spaMode = Boolean(spa?.value) && !pool?.value;
-	const water = spaMode ? spa : pool;
-	const poolSet = byName.get("pool_set_point");
-	const spaSet = byName.get("spa_set_point");
-	const heaters = devices.filter(
-		(d) =>
-			d.kind === "climate" &&
-			d.name.endsWith("_heater") &&
-			d.name !== "solar_heater",
-	);
-	const light = devices.find((d) => d.kind === "light");
-	const jetPump = byName.get("aux_2");
-	const waterfall = byName.get("aux_1");
-	const genericAux = /^aux\s+v\d+$/i;
-	const controls = devices.filter(
-		(d) =>
-			d.kind === "pump" ||
-			d.name === "solar_heater" ||
-			(["switch", "dimmer"].includes(d.kind) &&
-				d.name !== "aux_1" &&
-				d.name !== "aux_2" &&
-				(d.on || !genericAux.test(d.label))),
-	);
-
-	const live = snap.isSuccess && !snap.isStale;
-	const loading = systems.isPending || snap.isPending;
+	if (pending || loading) return <Loading />;
+	// No session: useRequireSession is already redirecting to /login.
+	if (!signedIn) return null;
 
 	return (
-		<div className="mx-auto w-full max-w-md px-5 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
-			<AppHeader>
-				<Chip color={live ? "success" : "warning"} size="sm" variant="soft">
-					{live ? "Live" : "Stale"}
-				</Chip>
-				<IconBtn
-					label="Refresh"
-					onPress={() => snap.refetch()}
-					disabled={snap.isFetching}
-				>
-					<RefreshCw
-						className={`size-4 ${snap.isFetching ? "animate-spin" : ""}`}
-					/>
-				</IconBtn>
-				<IconBtn label="Diagnostics" to="/diagnostics">
-					<Settings className="size-4" />
-				</IconBtn>
-				<IconBtn label="Sign out" onPress={onLogout}>
-					<LogOut className="size-4" />
-				</IconBtn>
-			</AppHeader>
-
-			{snap.isError ? (
-				<Card className="mb-4 p-4 text-sm text-danger">
-					Couldn’t reach the pool. {snap.error.message}
-				</Card>
-			) : null}
-
-			{loading ? (
-				<div className="flex min-h-[55dvh] items-center justify-center">
-					<Spinner color="accent" size="lg" />
-				</div>
-			) : tab === "pool" ? (
-				<PoolScreen
-					water={water}
-					spaMode={spaMode}
-					air={air}
-					heaters={heaters}
-					jetPump={jetPump}
-					waterfall={waterfall}
-					poolSet={poolSet}
-					spaSet={spaSet}
-					light={light}
-					busy={actuate.isPending || setTemps.isPending || lightColor.isPending}
-					onToggle={(d, on) => actuate.mutate({ device: d, on })}
-					onSetTemps={(sp, pl) => setTemps.mutate({ spa: sp, pool: pl })}
-					onLightColor={(effectId) =>
-						light
-							? lightColor.mutate({
-									name: light.name,
-									subtype:
-										typeof light.raw.subtype === "string"
-											? light.raw.subtype
-											: "",
-									effectId,
-								})
-							: undefined
-					}
-					fetchedAt={snap.data?.fetchedAt}
-				/>
-			) : (
-				<EquipmentScreen
-					controls={controls}
-					busy={actuate.isPending}
-					onToggle={(d, on) => actuate.mutate({ device: d, on })}
-				/>
-			)}
-
-			<BottomNav tab={tab} onTab={setTab} />
-		</div>
+		<PoolScreen
+			water={water}
+			spaMode={spaMode}
+			air={air}
+			heaters={heaters}
+			jetPump={jetPump}
+			waterfall={waterfall}
+			poolSet={poolSet}
+			spaSet={spaSet}
+			light={light}
+			busy={actuate.isPending || setTemps.isPending || lightColor.isPending}
+			onToggle={(d, on) => actuate.mutate({ device: d, on })}
+			onSetTemps={(sp, pl) => setTemps.mutate({ spa: sp, pool: pl })}
+			onLightColor={(effectId) =>
+				light
+					? lightColor.mutate({
+							name: light.name,
+							subtype:
+								typeof light.raw.subtype === "string" ? light.raw.subtype : "",
+							effectId,
+						})
+					: undefined
+			}
+		/>
 	);
 }
 
@@ -188,7 +79,6 @@ function PoolScreen({
 	onToggle,
 	onSetTemps,
 	onLightColor,
-	fetchedAt,
 }: {
 	water: PoolDevice | undefined;
 	spaMode: boolean;
@@ -203,7 +93,6 @@ function PoolScreen({
 	onToggle: (d: PoolDevice, on: boolean) => void;
 	onSetTemps: (spa: string, pool: string) => void;
 	onLightColor: (effectId: number) => void;
-	fetchedAt: number | undefined;
 }) {
 	return (
 		<div className="space-y-4">
@@ -216,10 +105,10 @@ function PoolScreen({
 							"radial-gradient(circle, color-mix(in oklab, var(--accent) 12%, transparent) 0%, transparent 75%)",
 					}}
 				/>
-				<div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-widest text-muted">
+				<div className="flex items-center justify-between gap-4 text-[11px] font-medium uppercase tracking-widest text-muted">
 					<div className="flex items-center gap-2">
 						{spaMode ? (
-							<Flame className="size-4 text-orange-500" />
+							<Flame className="size-4 text-accent" />
 						) : (
 							<Waves className="size-4 text-accent" />
 						)}
@@ -288,44 +177,6 @@ function PoolScreen({
 					onToggle={(on) => onToggle(waterfall, on)}
 				/>
 			) : null}
-
-			{fetchedAt ? (
-				<p className="pt-4 text-center text-xs text-muted">
-					Updated {new Date(fetchedAt).toLocaleTimeString()}
-				</p>
-			) : null}
-		</div>
-	);
-}
-
-function EquipmentScreen({
-	controls,
-	busy,
-	onToggle,
-}: {
-	controls: PoolDevice[];
-	busy: boolean;
-	onToggle: (d: PoolDevice, on: boolean) => void;
-}) {
-	return (
-		<div>
-			<h2 className="mb-3 text-sm font-medium text-muted">Equipment</h2>
-			{controls.length === 0 ? (
-				<Card className="p-4 text-sm text-muted">
-					No controllable equipment found.
-				</Card>
-			) : (
-				<div className="space-y-4">
-					{controls.map((d) => (
-						<EquipmentRow
-							key={d.id}
-							device={d}
-							busy={busy}
-							onToggle={(on) => onToggle(d, on)}
-						/>
-					))}
-				</div>
-			)}
 		</div>
 	);
 }
@@ -350,12 +201,12 @@ function HeaterTempControl({
 	const options = isSpa ? SPA_TEMP_OPTIONS : POOL_TEMP_OPTIONS;
 	const value = device.on && setPoint ? setPoint : "off";
 	return (
-		<Card className="flex-row items-center justify-between gap-3 p-4">
-			<div className="flex items-center gap-3">
+		<Card className="flex-row items-center justify-between gap-4">
+			<div className="flex items-center gap-4">
 				<IconCircle on={device.on}>
 					<Flame className="size-4" />
 				</IconCircle>
-				<p className="text-sm font-medium">{device.label}</p>
+				<Card.Title>{device.label}</Card.Title>
 			</div>
 			<Select
 				aria-label={`${device.label} temperature`}
@@ -407,12 +258,12 @@ function LightCard({
 	const showPlaceholder = device.on && picked === null;
 
 	return (
-		<Card className="flex-row items-center justify-between gap-3 p-4">
-			<div className="flex items-center gap-3">
+		<Card className="flex-row items-center justify-between gap-4">
+			<div className="flex items-center gap-4">
 				<IconCircle on={device.on}>
 					<Lightbulb className="size-4" />
 				</IconCircle>
-				<p className="text-sm font-medium">{device.label}</p>
+				<Card.Title>{device.label}</Card.Title>
 			</div>
 			<Select
 				aria-label={`${device.label} mode`}
@@ -463,126 +314,5 @@ function LightCard({
 				</Select.Popover>
 			</Select>
 		</Card>
-	);
-}
-
-function EquipmentRow({
-	device,
-	busy,
-	onToggle,
-}: {
-	device: PoolDevice;
-	busy: boolean;
-	onToggle: (on: boolean) => void;
-}) {
-	return (
-		<Card className="flex-row items-center justify-between gap-4 p-4">
-			<div className="flex items-center gap-3">
-				<IconCircle on={device.on}>
-					<DeviceIcon device={device} />
-				</IconCircle>
-				<div>
-					<p className="text-sm font-medium">{device.label}</p>
-					{device.dimLevel !== null ? (
-						<p className="text-xs text-muted">{device.dimLevel}%</p>
-					) : null}
-				</div>
-			</div>
-			<Switch
-				aria-label={device.label}
-				isSelected={device.on}
-				isDisabled={busy}
-				onChange={(on: boolean) => onToggle(on)}
-			>
-				<Switch.Content>
-					<Switch.Control>
-						<Switch.Thumb />
-					</Switch.Control>
-				</Switch.Content>
-			</Switch>
-		</Card>
-	);
-}
-
-/** Accent while the device is running, muted when it's idle. */
-function IconCircle({
-	on,
-	children,
-}: {
-	on: boolean;
-	children: React.ReactNode;
-}) {
-	return (
-		<div
-			className={`flex size-9 items-center justify-center rounded-full bg-surface-secondary ${
-				on ? "text-accent" : "text-muted"
-			}`}
-		>
-			{children}
-		</div>
-	);
-}
-
-function DeviceIcon({ device }: { device: PoolDevice }) {
-	if (device.name === "aux_1") return <WavesArrowDown className="size-4" />;
-	if (device.name === "aux_2") return <Droplets className="size-4" />;
-	switch (device.kind) {
-		case "light":
-			return <Lightbulb className="size-4" />;
-		case "dimmer":
-			return <SlidersHorizontal className="size-4" />;
-		case "pump":
-			return <Droplets className="size-4" />;
-		case "climate":
-			return <Flame className="size-4" />;
-		default:
-			return <Zap className="size-4" />;
-	}
-}
-
-function BottomNav({
-	tab,
-	onTab,
-}: {
-	tab: "pool" | "equipment";
-	onTab: (t: "pool" | "equipment") => void;
-}) {
-	return (
-		<nav className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex justify-center">
-			<div className="flex items-center gap-1 rounded-full border border-border bg-surface/90 p-1 shadow-lg backdrop-blur">
-				<TabBtn active={tab === "pool"} onPress={() => onTab("pool")}>
-					<Waves className="size-4" />
-					Pool
-				</TabBtn>
-				<TabBtn active={tab === "equipment"} onPress={() => onTab("equipment")}>
-					<SlidersHorizontal className="size-4" />
-					Equipment
-				</TabBtn>
-			</div>
-		</nav>
-	);
-}
-
-function TabBtn({
-	active,
-	onPress,
-	children,
-}: {
-	active: boolean;
-	onPress: () => void;
-	children: React.ReactNode;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onPress}
-			className={`flex h-10 items-center gap-2 rounded-full px-4 text-sm font-medium transition-colors ${
-				active
-					? "bg-accent text-accent-foreground"
-					: "text-muted hover:text-foreground"
-			}`}
-		>
-			{children}
-		</button>
 	);
 }
