@@ -13,7 +13,7 @@ export function AppHeader({
 	onBack,
 	children,
 }: {
-	/** The system's name once signed in; falls back to the app name. */
+	/** Resolved by the layout; empty while the right title is still unknown. */
 	title?: string;
 	/** Waves is the app mark; the systems list passes its own. */
 	Icon?: React.ComponentType<{ className?: string }>;
@@ -36,10 +36,10 @@ export function AppHeader({
 					<Icon className="size-5 shrink-0 text-accent" />
 				)}
 				<h1 className="truncate text-lg font-semibold tracking-tight">
-					{title || "Pool Link"}
+					{title}
 				</h1>
 			</div>
-			<div className="flex items-center gap-2.5">{children}</div>
+			<div className="flex items-center gap-2">{children}</div>
 		</header>
 	);
 }

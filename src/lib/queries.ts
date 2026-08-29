@@ -75,7 +75,10 @@ export function useSnapshot(serial: string | undefined) {
 		enabled: Boolean(serial),
 		refetchInterval: POLL_MS,
 		refetchIntervalInBackground: false,
-		staleTime: POLL_MS - 1000,
+		// Longer than the poll so healthy cycles never flip the Live chip:
+		// stale means a poll was actually missed — a backgrounded tab, a failed
+		// request — not simply the gap between two successful ones.
+		staleTime: POLL_MS * 2,
 		retry: (count, error) =>
 			error instanceof AqualinkError && error.status === 401
 				? false
