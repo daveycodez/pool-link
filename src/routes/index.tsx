@@ -1,6 +1,6 @@
 import type { Key } from "@heroui/react";
 import { Card, Chip, ListBox, Select, Spinner, Switch } from "@heroui/react";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
 	Droplets,
 	Flame,
@@ -15,6 +15,7 @@ import {
 	Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AppHeader, IconBtn } from "#/components/app-header";
 import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import {
@@ -101,12 +102,26 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 
 	return (
 		<div className="mx-auto w-full max-w-md px-5 pb-[calc(8rem+env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
-			<Header
-				live={live}
-				refreshing={snap.isFetching}
-				onRefresh={() => snap.refetch()}
-				onLogout={onLogout}
-			/>
+			<AppHeader>
+				<Chip color={live ? "success" : "warning"} size="sm" variant="soft">
+					{live ? "Live" : "Stale"}
+				</Chip>
+				<IconBtn
+					label="Refresh"
+					onPress={() => snap.refetch()}
+					disabled={snap.isFetching}
+				>
+					<RefreshCw
+						className={`size-4 ${snap.isFetching ? "animate-spin" : ""}`}
+					/>
+				</IconBtn>
+				<IconBtn label="Diagnostics" to="/diagnostics">
+					<Settings className="size-4" />
+				</IconBtn>
+				<IconBtn label="Sign out" onPress={onLogout}>
+					<LogOut className="size-4" />
+				</IconBtn>
+			</AppHeader>
 
 			{snap.isError ? (
 				<Card className="mb-4 p-4 text-sm text-danger">
@@ -156,41 +171,6 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 
 			<BottomNav tab={tab} onTab={setTab} />
 		</div>
-	);
-}
-
-function Header({
-	live,
-	refreshing,
-	onRefresh,
-	onLogout,
-}: {
-	live: boolean;
-	refreshing: boolean;
-	onRefresh: () => void;
-	onLogout: () => void;
-}) {
-	return (
-		<header className="mb-4 flex items-center justify-between">
-			<div className="flex items-center gap-2.5">
-				<Waves className="size-5 text-accent" />
-				<h1 className="text-lg font-semibold tracking-tight">Pool Link</h1>
-			</div>
-			<div className="flex items-center gap-1">
-				<Chip color={live ? "success" : "warning"} size="sm" variant="soft">
-					{live ? "Live" : "Stale"}
-				</Chip>
-				<IconBtn label="Refresh" onPress={onRefresh} disabled={refreshing}>
-					<RefreshCw className={`size-4 ${refreshing ? "animate-spin" : ""}`} />
-				</IconBtn>
-				<IconBtn label="Diagnostics" as={Link} to="/diagnostics">
-					<Settings className="size-4" />
-				</IconBtn>
-				<IconBtn label="Sign out" onPress={onLogout}>
-					<LogOut className="size-4" />
-				</IconBtn>
-			</div>
-		</header>
 	);
 }
 
@@ -372,15 +352,9 @@ function HeaterTempControl({
 	return (
 		<Card className="flex-row items-center justify-between gap-3 p-4">
 			<div className="flex items-center gap-3">
-				<div
-					className={`flex size-9 items-center justify-center rounded-full ${
-						device.on
-							? "bg-orange-500/15 text-orange-500"
-							: "bg-surface-secondary text-muted"
-					}`}
-				>
+				<IconCircle on={device.on}>
 					<Flame className="size-4" />
-				</div>
+				</IconCircle>
 				<p className="text-sm font-medium">{device.label}</p>
 			</div>
 			<Select
@@ -435,9 +409,9 @@ function LightCard({
 	return (
 		<Card className="flex-row items-center justify-between gap-3 p-4">
 			<div className="flex items-center gap-3">
-				<div className="flex size-9 items-center justify-center rounded-full bg-surface-secondary text-accent">
+				<IconCircle on={device.on}>
 					<Lightbulb className="size-4" />
-				</div>
+				</IconCircle>
 				<p className="text-sm font-medium">{device.label}</p>
 			</div>
 			<Select
@@ -504,9 +478,9 @@ function EquipmentRow({
 	return (
 		<Card className="flex-row items-center justify-between gap-4 p-4">
 			<div className="flex items-center gap-3">
-				<div className="flex size-9 items-center justify-center rounded-full bg-surface-secondary text-muted">
+				<IconCircle on={device.on}>
 					<DeviceIcon device={device} />
-				</div>
+				</IconCircle>
 				<div>
 					<p className="text-sm font-medium">{device.label}</p>
 					{device.dimLevel !== null ? (
@@ -527,6 +501,25 @@ function EquipmentRow({
 				</Switch.Content>
 			</Switch>
 		</Card>
+	);
+}
+
+/** Accent while the device is running, muted when it's idle. */
+function IconCircle({
+	on,
+	children,
+}: {
+	on: boolean;
+	children: React.ReactNode;
+}) {
+	return (
+		<div
+			className={`flex size-9 items-center justify-center rounded-full bg-surface-secondary ${
+				on ? "text-accent" : "text-muted"
+			}`}
+		>
+			{children}
+		</div>
 	);
 }
 
@@ -588,49 +581,6 @@ function TabBtn({
 					? "bg-accent text-accent-foreground"
 					: "text-muted hover:text-foreground"
 			}`}
-		>
-			{children}
-		</button>
-	);
-}
-
-function IconBtn({
-	label,
-	children,
-	onPress,
-	disabled,
-	as,
-	to,
-}: {
-	label: string;
-	children: React.ReactNode;
-	onPress?: () => void;
-	disabled?: boolean;
-	as?: "a" | typeof Link;
-	to?: string;
-}) {
-	const classes =
-		"flex size-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-secondary hover:text-foreground disabled:opacity-50";
-	if (as === Link) {
-		return (
-			<Link
-				to={to as string}
-				aria-label={label}
-				title={label}
-				className={classes}
-			>
-				{children}
-			</Link>
-		);
-	}
-	return (
-		<button
-			type="button"
-			aria-label={label}
-			title={label}
-			disabled={disabled}
-			onClick={onPress}
-			className={classes}
 		>
 			{children}
 		</button>
