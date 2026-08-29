@@ -50,7 +50,7 @@ function Dashboard() {
 function Booting() {
 	return (
 		<main className="flex min-h-dvh items-center justify-center">
-			<div className="flex flex-col items-center gap-3 opacity-70">
+			<div className="flex flex-col items-center gap-3 text-muted">
 				<div data-pulse className="size-2.5 rounded-full bg-accent" />
 				<p className="text-sm">Connecting to pool…</p>
 			</div>
@@ -74,9 +74,6 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 	const air = byName.get("air_temp");
 	const spaMode = Boolean(spa?.value) && !pool?.value;
 	const water = spaMode ? spa : pool;
-	const waterSet = spaMode
-		? byName.get("spa_set_point")
-		: byName.get("pool_set_point");
 	const poolSet = byName.get("pool_set_point");
 	const spaSet = byName.get("spa_set_point");
 	const heaters = devices.filter(
@@ -124,11 +121,8 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 			) : tab === "pool" ? (
 				<PoolScreen
 					water={water}
-					waterSet={waterSet}
 					spaMode={spaMode}
 					air={air}
-					spa={spa}
-					pool={pool}
 					heaters={heaters}
 					jetPump={jetPump}
 					waterfall={waterfall}
@@ -202,11 +196,8 @@ function Header({
 
 function PoolScreen({
 	water,
-	waterSet,
 	spaMode,
 	air,
-	spa,
-	pool,
 	heaters,
 	jetPump,
 	waterfall,
@@ -220,11 +211,8 @@ function PoolScreen({
 	fetchedAt,
 }: {
 	water: PoolDevice | undefined;
-	waterSet: PoolDevice | undefined;
 	spaMode: boolean;
 	air: PoolDevice | undefined;
-	spa: PoolDevice | undefined;
-	pool: PoolDevice | undefined;
 	heaters: PoolDevice[];
 	jetPump: PoolDevice | undefined;
 	waterfall: PoolDevice | undefined;
@@ -248,7 +236,7 @@ function PoolScreen({
 							"radial-gradient(circle, color-mix(in oklab, var(--accent) 12%, transparent) 0%, transparent 75%)",
 					}}
 				/>
-				<div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-widest opacity-50">
+				<div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-widest text-muted">
 					<div className="flex items-center gap-2">
 						{spaMode ? (
 							<Flame className="size-4 text-orange-500" />
@@ -271,14 +259,8 @@ function PoolScreen({
 					<span className="text-7xl font-semibold tabular-nums tracking-tighter">
 						{water?.value ?? "—"}
 					</span>
-					<span className="text-2xl opacity-50">{water?.unit ?? "°"}</span>
+					<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
 				</div>
-				{waterSet?.value ? (
-					<p className="mt-3 text-sm opacity-60">
-						Heating to {waterSet.value}
-						{waterSet.unit ?? "°"}
-					</p>
-				) : null}
 			</Card>
 
 			{heaters.flatMap((d) => {
@@ -287,7 +269,6 @@ function PoolScreen({
 					<HeaterTempControl
 						key={d.id}
 						device={d}
-						waterTemp={isSpa ? spa?.value : pool?.value}
 						setPoint={isSpa ? spaSet?.value : poolSet?.value}
 						busy={busy}
 						onTemp={(t) =>
@@ -329,7 +310,7 @@ function PoolScreen({
 			) : null}
 
 			{fetchedAt ? (
-				<p className="pt-2 text-center text-xs opacity-40">
+				<p className="pt-2 text-center text-xs text-muted">
 					Updated {new Date(fetchedAt).toLocaleTimeString()}
 				</p>
 			) : null}
@@ -348,9 +329,9 @@ function EquipmentScreen({
 }) {
 	return (
 		<div>
-			<h2 className="mb-3 text-sm font-medium opacity-50">Equipment</h2>
+			<h2 className="mb-3 text-sm font-medium text-muted">Equipment</h2>
 			{controls.length === 0 ? (
-				<Card className="p-5 text-sm opacity-60">
+				<Card className="p-5 text-sm text-muted">
 					No controllable equipment found.
 				</Card>
 			) : (
@@ -374,14 +355,12 @@ const POOL_TEMP_OPTIONS = Array.from({ length: 6 }, (_, i) => 78 + i * 2);
 
 function HeaterTempControl({
 	device,
-	waterTemp,
 	setPoint,
 	busy,
 	onTemp,
 	onOff,
 }: {
 	device: PoolDevice;
-	waterTemp?: string | null;
 	setPoint?: string | null;
 	busy: boolean;
 	onTemp: (temp: string) => void;
@@ -402,14 +381,7 @@ function HeaterTempControl({
 				>
 					<Flame className="size-4" />
 				</div>
-				<div>
-					<p className="text-sm font-medium">{device.label}</p>
-					<p className="text-xs opacity-50">
-						{device.on
-							? `Water ${waterTemp ?? "—"}° · set ${setPoint ?? "—"}°`
-							: "Off"}
-					</p>
-				</div>
+				<p className="text-sm font-medium">{device.label}</p>
 			</div>
 			<Select
 				aria-label={`${device.label} temperature`}
@@ -466,10 +438,7 @@ function LightCard({
 				<div className="flex size-9 items-center justify-center rounded-full bg-surface-secondary text-accent">
 					<Lightbulb className="size-4" />
 				</div>
-				<div>
-					<p className="text-sm font-medium">{device.label}</p>
-					<p className="text-xs opacity-50">{device.on ? "On" : "Off"}</p>
-				</div>
+				<p className="text-sm font-medium">{device.label}</p>
 			</div>
 			<Select
 				aria-label={`${device.label} mode`}
@@ -540,10 +509,9 @@ function EquipmentRow({
 				</div>
 				<div>
 					<p className="text-sm font-medium">{device.label}</p>
-					<p className="text-xs capitalize opacity-50">
-						{device.kind}
-						{device.dimLevel !== null ? ` · ${device.dimLevel}%` : ""}
-					</p>
+					{device.dimLevel !== null ? (
+						<p className="text-xs text-muted">{device.dimLevel}%</p>
+					) : null}
 				</div>
 			</div>
 			<Switch

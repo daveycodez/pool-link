@@ -44,7 +44,7 @@ function Diagnostics() {
 	return (
 		<main className="mx-auto w-full max-w-3xl px-4 py-6">
 			<h1 className="mb-1 text-xl font-semibold tracking-tight">Diagnostics</h1>
-			<p className="mb-4 text-xs opacity-50">
+			<p className="mb-4 text-xs text-muted">
 				userId {meta.userId || "?"} · country {meta.country || "?"}
 			</p>
 
@@ -65,7 +65,7 @@ function Diagnostics() {
 
 			<Card className="p-3">
 				<div className="mb-2 flex items-center justify-between">
-					<span className="text-xs uppercase tracking-widest opacity-50">
+					<span className="text-xs uppercase tracking-widest text-muted">
 						{busy || "response"}
 					</span>
 				</div>
