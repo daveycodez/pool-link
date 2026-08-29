@@ -30,6 +30,7 @@ export const Route = createRootRoute({
 					"A fast, offline-capable control surface for your iAqualink pool.",
 			},
 			{ name: "mobile-web-app-capable", content: "yes" },
+			{ name: "apple-mobile-web-app-title", content: "Pool" },
 			{ name: "apple-mobile-web-app-capable", content: "yes" },
 			{
 				name: "apple-mobile-web-app-status-bar-style",
@@ -40,10 +41,17 @@ export const Route = createRootRoute({
 		links: [
 			{ rel: "stylesheet", href: appCss },
 			{ rel: "manifest", href: `${base}manifest.webmanifest` },
+			// Browsers that understand SVG favicons take the first; the .ico is
+			// the fallback and also answers bare /favicon.ico requests.
 			{ rel: "icon", type: "image/svg+xml", href: `${base}icon.svg` },
-			{ rel: "apple-touch-icon", href: `${base}icons/icon-192.png` },
+			{ rel: "icon", sizes: "32x32", href: `${base}favicon.ico` },
+			// iOS ignores sizes other than 180 and applies its own squircle mask.
+			{
+				rel: "apple-touch-icon",
+				sizes: "180x180",
+				href: `${base}icons/apple-touch-icon.png`,
+			},
 		],
-		scriptAsync: [{ src: `${base}theme-init.js` }],
 	}),
 	shellComponent: RootDocument,
 });

@@ -36,8 +36,10 @@ export function useLogin() {
 	return useMutation({
 		mutationFn: ({ email, password }: { email: string; password: string }) =>
 			login(email, password),
-		onSuccess: () => {
-			qc.invalidateQueries({ queryKey: keys.session() });
+		onSuccess: (session) => {
+			// Seed the session query with the just-created session so the
+			// dashboard doesn't bounce back to /login before a refetch lands.
+			qc.setQueryData(keys.session(), session);
 			qc.invalidateQueries({ queryKey: keys.systems() });
 		},
 	});

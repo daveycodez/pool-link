@@ -36,7 +36,7 @@
 	--default: var(--surface-secondary);
 	--default-hover: var(--surface);
 	--field-background: var(--surface-secondary);
-	--field-hover: var(--surface);
+	--field-hover: var(--surface-secondary);
 	--field-focus: var(--surface-secondary);
 	--field-border: var(--border);
 	--field-border-hover: var(--border);

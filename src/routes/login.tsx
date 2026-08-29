@@ -1,5 +1,6 @@
 import { Button, Card, Input, Label, TextField } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Waves } from "lucide-react";
 import { useState } from "react";
 import { useLogin } from "#/lib/queries";
 
@@ -24,19 +25,24 @@ function LoginScreen() {
 	return (
 		<main className="flex min-h-dvh items-center justify-center px-5">
 			<Card className="w-full max-w-sm p-6 sm:p-8">
-				<div className="mb-6 space-y-1.5">
-					<h1 className="text-2xl font-semibold tracking-tight">
+				<div className="mb-5 flex items-center justify-center gap-2.5">
+					<Waves className="size-6 text-accent" />
+					<h1 className="text-xl font-semibold tracking-tight">Pool Link</h1>
+				</div>
+
+				<div className="mb-5 space-y-1.5 text-center">
+					<h2 className="text-lg font-semibold tracking-tight">
 						Connect your pool
-					</h1>
+					</h2>
 					<p className="text-sm text-balance opacity-60">
-						Sign in with the account the iAqualink app uses. The password is
-						used once to mint tokens and is never stored on this device.
+						Sign in with your iAqualink account
 					</p>
 				</div>
 
-				<form className="flex flex-col gap-4" onSubmit={submit}>
+				<form className="flex flex-col gap-3" onSubmit={submit}>
 					<TextField
 						fullWidth
+						variant="secondary"
 						name="email"
 						type="email"
 						value={email}
@@ -52,6 +58,7 @@ function LoginScreen() {
 
 					<TextField
 						fullWidth
+						variant="secondary"
 						name="password"
 						type="password"
 						value={password}
