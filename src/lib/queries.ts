@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	getDeviceStatus,
 	listSystems,
 	login,
 	logout,
@@ -21,6 +22,7 @@ export const keys = {
 	session: () => ["session"] as const,
 	systems: () => ["systems"] as const,
 	snapshot: (serial: string) => ["snapshot", serial] as const,
+	status: (serial: string) => ["status", serial] as const,
 };
 
 export function useSession() {
@@ -150,5 +152,19 @@ export function useSetDeviceName(serial: string | undefined) {
 	return useMutation({
 		mutationFn: (name: string) => setDeviceName(serial as string, name),
 		onSuccess: () => qc.invalidateQueries({ queryKey: keys.systems() }),
+	});
+}
+
+/**
+ * Online/offline for one system. Costs a request per card on the systems list,
+ * so this is polled far more slowly than a system's own snapshot.
+ */
+export function useDeviceStatus(serial: string) {
+	return useQuery({
+		queryKey: keys.status(serial),
+		queryFn: () => getDeviceStatus(serial),
+		staleTime: 60_000,
+		refetchOnWindowFocus: false,
+		retry: false,
 	});
 }

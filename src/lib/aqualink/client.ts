@@ -231,8 +231,6 @@ export class AqualinkClient implements AqualinkClientLike {
 	/** prm locations → device list (the serial source for p-api). */
 	async getSystems(): Promise<SystemSummary[]> {
 		const s = await this.currentSession();
-		const qs = new URLSearchParams();
-		qs.set("userId", s.userId);
 		const res = await fetch(`${PRM}/users/${s.userId}/locations`, {
 			headers: {
 				Authorization: `Bearer ${s.idToken}`,
@@ -264,7 +262,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				name: pick(r.Name, r.name, r.deviceName, r.label) || "Pool",
 				status: pick(r.status, r.connectionStatus) || "unknown",
 				isVSP: r.isVSP === "true" || r.isVSP === true,
-				type: pick(r.type, r.model) || "iaqualink",
+				type: pick(r.device_type, r.type, r.model) || "iaqualink",
 			};
 		});
 	}
@@ -296,6 +294,19 @@ export class AqualinkClient implements AqualinkClientLike {
 				await readBody(res),
 			);
 		return (await res.json()) as Raw;
+	}
+
+	/**
+	 * Online/offline for one system. prm's locations payload carries only a
+	 * `statusLink` token, not the status itself, so this is a second call.
+	 */
+	async getDeviceStatus(serial: string): Promise<Raw> {
+		const s = await this.currentSession();
+		return this.prm(`/device/${serial}/status`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ userId: s.userId }),
+		});
 	}
 
 	/**
@@ -398,6 +409,11 @@ export async function setTemps(
 		temp1: spa,
 		temp2: pool,
 	});
+}
+
+/** Online/offline for one system. */
+export function getDeviceStatus(serial: string): Promise<Raw> {
+	return client.getDeviceStatus(serial);
 }
 
 /** Rename the system as it appears in the iAqualink account. */
