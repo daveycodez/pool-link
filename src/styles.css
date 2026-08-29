@@ -34,7 +34,7 @@
  */
 :root {
 	--default: var(--surface-secondary);
-	--default-hover: var(--surface);
+	--default-hover: var(--surface-secondary);
 	--field-background: var(--surface-secondary);
 	--field-hover: var(--surface-secondary);
 	--field-focus: var(--surface-secondary);
