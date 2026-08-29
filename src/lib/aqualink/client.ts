@@ -298,6 +298,20 @@ export class AqualinkClient implements AqualinkClientLike {
 		return (await res.json()) as Raw;
 	}
 
+	/**
+	 * Rename a system. Not part of the upstream `iaqualink` package — that
+	 * library only ever reads from prm. Serial goes in the path, prm user id
+	 * in the body.
+	 */
+	async setDeviceName(serial: string, name: string): Promise<Raw> {
+		const s = await this.currentSession();
+		return this.prm(`/device/${serial}/name`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name, userId: s.userId }),
+		});
+	}
+
 	async logout(): Promise<void> {
 		this.session = null;
 		await clearSession();
@@ -384,6 +398,11 @@ export async function setTemps(
 		temp1: spa,
 		temp2: pool,
 	});
+}
+
+/** Rename the system as it appears in the iAqualink account. */
+export function setDeviceName(serial: string, name: string): Promise<Raw> {
+	return client.setDeviceName(serial, name);
 }
 
 export function account(): Promise<Raw> {

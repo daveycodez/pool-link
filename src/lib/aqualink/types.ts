@@ -36,3 +36,26 @@ export class AqualinkError extends Error {
 		this.name = "AqualinkError";
 	}
 }
+
+/**
+ * Best available human-readable message for a failure. p-api explains rejected
+ * commands in the response body — `{"error":{"message":"…"}}` — which is far
+ * more useful than "Request failed (400)".
+ */
+export function errorMessage(e: unknown): string {
+	if (!(e instanceof AqualinkError)) {
+		return e instanceof Error ? e.message : String(e);
+	}
+	const body = e.body;
+	if (typeof body === "string" && body.trim()) return body;
+	if (body && typeof body === "object") {
+		const { error, message } = body as Raw;
+		if (typeof error === "string" && error.trim()) return error;
+		if (error && typeof error === "object") {
+			const nested = (error as Raw).message;
+			if (typeof nested === "string" && nested.trim()) return nested;
+		}
+		if (typeof message === "string" && message.trim()) return message;
+	}
+	return e.message;
+}

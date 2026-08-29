@@ -3,6 +3,7 @@ import {
 	listSystems,
 	login,
 	logout,
+	setDeviceName,
 	setLightColor,
 	setTemps,
 	snapshot,
@@ -140,5 +141,14 @@ export function useLightColor(serial: string | undefined) {
 			effectId: number;
 		}) => setLightColor(serial as string, name, subtype, effectId),
 		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+	});
+}
+
+/** Rename the system in the iAqualink account, then refresh the system list. */
+export function useSetDeviceName(serial: string | undefined) {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (name: string) => setDeviceName(serial as string, name),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.systems() }),
 	});
 }
