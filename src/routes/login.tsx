@@ -23,13 +23,13 @@ function LoginScreen() {
 	}
 
 	return (
-		<main className="flex min-h-dvh items-center justify-center px-5">
-			<Card className="w-full max-w-sm p-6 sm:p-8">
-				<div className="mb-5 flex items-center justify-center gap-2.5">
-					<Waves className="size-6 text-accent" />
-					<h1 className="text-xl font-semibold tracking-tight">Pool Link</h1>
-				</div>
+		<main className="flex min-h-dvh flex-col items-center justify-center px-5">
+			<div className="mb-5 flex items-center gap-2.5">
+				<Waves className="size-6 text-accent" />
+				<h1 className="text-xl font-semibold tracking-tight">Pool Link</h1>
+			</div>
 
+			<Card className="w-full max-w-sm p-6 sm:p-8">
 				<div className="mb-5 space-y-1.5 text-center">
 					<h2 className="text-lg font-semibold tracking-tight">
 						Connect your pool
