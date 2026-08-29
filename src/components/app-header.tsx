@@ -1,34 +1,45 @@
 import { Button } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
-import { House, Waves } from "lucide-react";
+import { ChevronLeft, Waves } from "lucide-react";
 
 /**
- * Shared app chrome. The wordmark links home, so any sub-page gets a way back
- * for free; `children` are the right-aligned actions each route supplies.
+ * Shared app chrome. The wordmark is a label, not navigation — routes provide
+ * their own way back; `children` are the right-aligned actions each route
+ * supplies.
  */
 export function AppHeader({
 	title,
+	Icon = Waves,
+	onBack,
 	children,
 }: {
 	/** The system's name once signed in; falls back to the app name. */
 	title?: string;
+	/** Waves is the app mark; the systems list passes its own. */
+	Icon?: React.ComponentType<{ className?: string }>;
+	/** Sub-pages swap the mark for a back control. */
+	onBack?: () => void;
 	children?: React.ReactNode;
 }) {
 	return (
 		<header className="mb-2 flex items-center justify-between gap-4">
-			<Link to="/" className="flex min-w-0 items-center gap-2.5">
-				{/* Waves is the app's mark, so it only stands in for the wordmark.
-				    Once a system name is showing, the icon names the place. */}
-				{title ? (
-					<House className="size-5 shrink-0 text-accent" />
+			<div
+				className={`flex min-w-0 items-center ${onBack ? "gap-0.5" : "gap-2.5"}`}
+			>
+				{onBack ? (
+					// Negative inline start pulls the button's glyph out to the same
+					// optical edge the bare icon sat on.
+					<IconBtn className="-ms-2.5" label="Back" onPress={onBack}>
+						<ChevronLeft className="size-6 text-foreground" />
+					</IconBtn>
 				) : (
-					<Waves className="size-5 shrink-0 text-accent" />
+					<Icon className="size-5 shrink-0 text-accent" />
 				)}
 				<h1 className="truncate text-lg font-semibold tracking-tight">
 					{title || "Pool Link"}
 				</h1>
-			</Link>
-			<div className="flex items-center gap-1">{children}</div>
+			</div>
+			<div className="flex items-center gap-2.5">{children}</div>
 		</header>
 	);
 }
@@ -39,12 +50,17 @@ export function IconBtn({
 	onPress,
 	disabled,
 	to,
+	params,
+	className,
 }: {
 	label: string;
 	children: React.ReactNode;
 	onPress?: () => void;
 	disabled?: boolean;
 	to?: string;
+	/** Route params when `to` is a template path like /systems/$serial/settings. */
+	params?: Record<string, string>;
+	className?: string;
 }) {
 	if (to) {
 		return (
@@ -59,6 +75,7 @@ export function IconBtn({
 				render={(props) => (
 					<Link
 						{...(props as unknown as React.ComponentPropsWithoutRef<"a">)}
+						params={params}
 						to={to}
 					/>
 				)}
@@ -69,6 +86,7 @@ export function IconBtn({
 	}
 	return (
 		<Button
+			className={className}
 			isIconOnly
 			size="sm"
 			variant="ghost"

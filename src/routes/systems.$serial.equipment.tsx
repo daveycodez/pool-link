@@ -5,13 +5,14 @@ import { Loading } from "#/components/loading";
 import { useActuate } from "#/lib/queries";
 import { usePool, useRequireSession } from "#/lib/use-pool";
 
-export const Route = createFileRoute("/equipment")({
+export const Route = createFileRoute("/systems/$serial/equipment")({
 	component: Equipment,
 });
 
 function Equipment() {
+	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
-	const { serial, controls, loading } = usePool();
+	const { controls, loading } = usePool(serial);
 	const actuate = useActuate(serial);
 
 	if (pending || loading) return <Loading />;

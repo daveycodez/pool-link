@@ -64,3 +64,29 @@ html[data-theme="dark"] {
   --border: oklch(28.00% 0.0090 224.65);
   --separator: oklch(25.00% 0.0090 224.65);
 }
+
+/*
+ * HeroUI drives the link focus ring off React Aria's data-focus-visible, which
+ * a plain router <a> never receives — and its :focus-visible:not(:focus)
+ * fallback effectively never matches, since focus-visible implies focus. Apply
+ * the same ring ourselves so keyboard focus picks up --focus (the accent).
+ */
+.link:focus-visible {
+  @apply status-focused;
+}
+
+/*
+ * Whole-card link and button targets. Mirrors the card's own radius expression
+ * so the focus ring traces the card instead of boxing it, and carries the
+ * interaction affordances .link would otherwise provide.
+ */
+.card-link {
+  @apply block w-full text-left no-highlight;
+
+  border-radius: min(32px, var(--radius-3xl));
+  cursor: var(--cursor-interactive);
+}
+
+.card-link:focus-visible {
+  @apply status-focused;
+}

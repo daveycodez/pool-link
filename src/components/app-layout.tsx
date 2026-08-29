@@ -1,8 +1,8 @@
 import { Chip } from "@heroui/react";
-import { useRouterState } from "@tanstack/react-router";
-import { RefreshCw, Settings } from "lucide-react";
+import { useParams, useRouter, useRouterState } from "@tanstack/react-router";
+import { MapPinHouse, RefreshCw, Settings, Waves } from "lucide-react";
 import { AppHeader, IconBtn } from "#/components/app-header";
-import { BottomNav, TABBED_ROUTES } from "#/components/bottom-nav";
+import { BottomNav } from "#/components/bottom-nav";
 import { useSession, useSnapshot, useSystems } from "#/lib/queries";
 
 /**
@@ -17,48 +17,100 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	const session = useSession();
 	const signedIn = Boolean(session.data);
 	const systems = useSystems(signedIn);
-	const system = systems.data?.[0];
-	const snap = useSnapshot(system?.serial);
-	const pathname = useRouterState({ select: (s) => s.location.pathname });
-	const live = snap.isSuccess && !snap.isStale;
+	const router = useRouter();
 
-	// Only the tabbed routes need clearance for the floating nav; /settings,
-	// /diagnostics and /login would otherwise get dead space at the bottom.
-	const tabbed = signedIn && TABBED_ROUTES.includes(pathname);
+	// Present only inside /systems/$serial; undefined on the list and elsewhere.
+	const { serial } = useParams({ strict: false });
+	const system = systems.data?.find((s) => s.serial === serial);
+	const snap = useSnapshot(serial);
+
+	// On a system the chip tracks that system's live snapshot; on the list it
+	// tracks the account's system list, which is the only thing being fetched.
+	const source = serial ? snap : systems;
+	const live = source.isSuccess && !source.isStale;
+
+	// Settings and diagnostics live under /systems/$serial too, but they are not
+	// tab destinations — the bar would show Pool selected while on neither.
+	const pathname = useRouterState({ select: (st) => st.location.pathname });
+	const leaf = pathname.split("/").pop() ?? "";
+	const onTab =
+		Boolean(serial) && leaf !== "settings" && leaf !== "diagnostics";
+	// Nothing to navigate to when you are already there.
+	const onSettings = leaf === "settings";
+	// Sub-pages are titled by what they are, not by which system they belong to.
+	const pageTitle =
+		leaf === "settings"
+			? "Settings"
+			: leaf === "diagnostics"
+				? "Diagnostics"
+				: null;
+	// Live state needs a subject: a system's snapshot, or the account's system
+	// list. Account-level sub-pages have neither, so they show neither control.
+	const hasLive = Boolean(serial) || pathname === "/";
 
 	return (
 		<div
 			className={`mx-auto w-full max-w-md px-4 pt-[max(0.5rem,env(safe-area-inset-top))] ${
-				tabbed
+				onTab
 					? "pb-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]"
 					: "pb-6"
 			}`}
 		>
-			<AppHeader title={signedIn ? system?.name : undefined}>
+			<AppHeader
+				Icon={signedIn && !serial ? MapPinHouse : Waves}
+				onBack={pageTitle ? () => router.history.back() : undefined}
+				title={
+					signedIn ? (pageTitle ?? system?.name ?? "My Systems") : undefined
+				}
+			>
 				{signedIn ? (
 					<>
-						<Chip color={live ? "success" : "warning"} size="sm" variant="soft">
-							{live ? "Live" : "Stale"}
-						</Chip>
-						<IconBtn
-							label="Refresh"
-							onPress={() => snap.refetch()}
-							disabled={snap.isFetching}
-						>
-							<RefreshCw
-								className={`size-4 ${snap.isFetching ? "animate-spin" : ""}`}
-							/>
-						</IconBtn>
-						<IconBtn label="Settings" to="/settings">
-							<Settings className="size-4" />
-						</IconBtn>
+						{hasLive ? (
+							<Chip
+								color={live ? "success" : "warning"}
+								size="sm"
+								variant="soft"
+							>
+								{live ? "Live" : "Stale"}
+							</Chip>
+						) : null}
+						{/* size-5 glyphs leave 8px of padding inside each 36px button, so
+						    a smaller gap here still reads level with the chip's spacing. */}
+						<div className="flex items-center space-x-0.5">
+							{hasLive ? (
+								<IconBtn
+									label="Refresh"
+									onPress={() => source.refetch()}
+									disabled={source.isFetching}
+								>
+									<RefreshCw
+										className={`size-4.5 ${source.isFetching ? "animate-spin" : ""}`}
+									/>
+								</IconBtn>
+							) : null}
+							{/* Two settings pages: a system's adds renaming, the account's
+							    does not. */}
+							{onSettings ? null : serial ? (
+								<IconBtn
+									label="Settings"
+									params={{ serial }}
+									to="/systems/$serial/settings"
+								>
+									<Settings className="size-5" />
+								</IconBtn>
+							) : (
+								<IconBtn label="Settings" to="/settings">
+									<Settings className="size-5" />
+								</IconBtn>
+							)}
+						</div>
 					</>
 				) : null}
 			</AppHeader>
 
 			{children}
 
-			{tabbed ? <BottomNav /> : null}
+			{onTab && serial ? <BottomNav serial={serial} /> : null}
 		</div>
 	);
 }

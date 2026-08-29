@@ -10,14 +10,14 @@ import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
 import { usePool, useRequireSession } from "#/lib/use-pool";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/systems/$serial/")({
 	component: Pool,
 });
 
 function Pool() {
+	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
 	const {
-		serial,
 		loading,
 		spaMode,
 		water,
@@ -28,7 +28,7 @@ function Pool() {
 		light,
 		jetPump,
 		waterfall,
-	} = usePool();
+	} = usePool(serial);
 	const actuate = useActuate(serial);
 	const setTemps = useSetTemps(serial);
 	const lightColor = useLightColor(serial);

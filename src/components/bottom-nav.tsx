@@ -9,24 +9,31 @@ import { SlidersHorizontal, Waves } from "lucide-react";
  * destination. Settings lives behind the header gear instead.
  */
 const TABS = [
-	{ to: "/", label: "Pool", Icon: Waves },
-	{ to: "/equipment", label: "Equipment", Icon: SlidersHorizontal },
+	{ to: "/systems/$serial", label: "Pool", Icon: Waves },
+	{
+		to: "/systems/$serial/equipment",
+		label: "Equipment",
+		Icon: SlidersHorizontal,
+	},
 ] as const;
 
-/** Routes that show the tab bar; everything else is reached from the header. */
-export const TABBED_ROUTES: string[] = TABS.map((t) => t.to);
-
-export function BottomNav() {
+export function BottomNav({ serial }: { serial: string }) {
 	const navigate = useNavigate();
 	const pathname = useRouterState({ select: (s) => s.location.pathname });
+	// Match on the resolved path so the tab tracks the URL, not a local state.
+	const selected = pathname.endsWith("/equipment")
+		? "/systems/$serial/equipment"
+		: "/systems/$serial";
 
 	return (
 		<nav className="fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 flex justify-center">
 			{/* Each destination is its own route, so this is a controlled tab list
 			    that navigates — the panels are the routes themselves. */}
 			<Tabs
-				selectedKey={pathname}
-				onSelectionChange={(key) => navigate({ to: String(key) })}
+				selectedKey={selected}
+				onSelectionChange={(key) =>
+					navigate({ to: String(key), params: { serial } })
+				}
 			>
 				<Tabs.ListContainer>
 					<Tabs.List aria-label="Sections">

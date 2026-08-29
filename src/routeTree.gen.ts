@@ -11,9 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DiagnosticsRouteImport } from './routes/diagnostics'
-import { Route as EquipmentRouteImport } from './routes/equipment'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SystemsSerialIndexRouteImport } from './routes/systems.$serial.index'
+import { Route as SystemsSerialDiagnosticsRouteImport } from './routes/systems.$serial.diagnostics'
+import { Route as SystemsSerialEquipmentRouteImport } from './routes/systems.$serial.equipment'
+import { Route as SystemsSerialSettingsRouteImport } from './routes/systems.$serial.settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,11 +26,6 @@ const IndexRoute = IndexRouteImport.update({
 const DiagnosticsRoute = DiagnosticsRouteImport.update({
   id: '/diagnostics',
   path: '/diagnostics',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const EquipmentRoute = EquipmentRouteImport.update({
-  id: '/equipment',
-  path: '/equipment',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -40,43 +38,101 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SystemsSerialIndexRoute = SystemsSerialIndexRouteImport.update({
+  id: '/systems/$serial/',
+  path: '/systems/$serial/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemsSerialDiagnosticsRoute =
+  SystemsSerialDiagnosticsRouteImport.update({
+    id: '/systems/$serial/diagnostics',
+    path: '/systems/$serial/diagnostics',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const SystemsSerialEquipmentRoute = SystemsSerialEquipmentRouteImport.update({
+  id: '/systems/$serial/equipment',
+  path: '/systems/$serial/equipment',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemsSerialSettingsRoute = SystemsSerialSettingsRouteImport.update({
+  id: '/systems/$serial/settings',
+  path: '/systems/$serial/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/diagnostics': typeof DiagnosticsRoute
-  '/equipment': typeof EquipmentRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
+  '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
+  '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
+  '/systems/$serial/': typeof SystemsSerialIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/diagnostics': typeof DiagnosticsRoute
-  '/equipment': typeof EquipmentRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
+  '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
+  '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
+  '/systems/$serial': typeof SystemsSerialIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/diagnostics': typeof DiagnosticsRoute
-  '/equipment': typeof EquipmentRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
+  '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
+  '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
+  '/systems/$serial/': typeof SystemsSerialIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/diagnostics' | '/equipment' | '/login' | '/settings'
+  fullPaths:
+    | '/'
+    | '/diagnostics'
+    | '/login'
+    | '/settings'
+    | '/systems/$serial/diagnostics'
+    | '/systems/$serial/equipment'
+    | '/systems/$serial/settings'
+    | '/systems/$serial/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/diagnostics' | '/equipment' | '/login' | '/settings'
-  id: '__root__' | '/' | '/diagnostics' | '/equipment' | '/login' | '/settings'
+  to:
+    | '/'
+    | '/diagnostics'
+    | '/login'
+    | '/settings'
+    | '/systems/$serial/diagnostics'
+    | '/systems/$serial/equipment'
+    | '/systems/$serial/settings'
+    | '/systems/$serial'
+  id:
+    | '__root__'
+    | '/'
+    | '/diagnostics'
+    | '/login'
+    | '/settings'
+    | '/systems/$serial/diagnostics'
+    | '/systems/$serial/equipment'
+    | '/systems/$serial/settings'
+    | '/systems/$serial/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DiagnosticsRoute: typeof DiagnosticsRoute
-  EquipmentRoute: typeof EquipmentRoute
   LoginRoute: typeof LoginRoute
   SettingsRoute: typeof SettingsRoute
+  SystemsSerialDiagnosticsRoute: typeof SystemsSerialDiagnosticsRoute
+  SystemsSerialEquipmentRoute: typeof SystemsSerialEquipmentRoute
+  SystemsSerialSettingsRoute: typeof SystemsSerialSettingsRoute
+  SystemsSerialIndexRoute: typeof SystemsSerialIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -95,13 +151,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DiagnosticsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/equipment': {
-      id: '/equipment'
-      path: '/equipment'
-      fullPath: '/equipment'
-      preLoaderRoute: typeof EquipmentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -116,15 +165,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/systems/$serial/': {
+      id: '/systems/$serial/'
+      path: '/systems/$serial'
+      fullPath: '/systems/$serial/'
+      preLoaderRoute: typeof SystemsSerialIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/systems/$serial/diagnostics': {
+      id: '/systems/$serial/diagnostics'
+      path: '/systems/$serial/diagnostics'
+      fullPath: '/systems/$serial/diagnostics'
+      preLoaderRoute: typeof SystemsSerialDiagnosticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/systems/$serial/equipment': {
+      id: '/systems/$serial/equipment'
+      path: '/systems/$serial/equipment'
+      fullPath: '/systems/$serial/equipment'
+      preLoaderRoute: typeof SystemsSerialEquipmentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/systems/$serial/settings': {
+      id: '/systems/$serial/settings'
+      path: '/systems/$serial/settings'
+      fullPath: '/systems/$serial/settings'
+      preLoaderRoute: typeof SystemsSerialSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DiagnosticsRoute: DiagnosticsRoute,
-  EquipmentRoute: EquipmentRoute,
   LoginRoute: LoginRoute,
   SettingsRoute: SettingsRoute,
+  SystemsSerialDiagnosticsRoute: SystemsSerialDiagnosticsRoute,
+  SystemsSerialEquipmentRoute: SystemsSerialEquipmentRoute,
+  SystemsSerialSettingsRoute: SystemsSerialSettingsRoute,
+  SystemsSerialIndexRoute: SystemsSerialIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

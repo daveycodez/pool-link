@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useSession, useSnapshot, useSystems } from "#/lib/queries";
+import { useSession, useSnapshot } from "#/lib/queries";
 
 /** Bounce to /login when there is no session. Every signed-in route uses this. */
 export function useRequireSession() {
@@ -17,12 +17,10 @@ export function useRequireSession() {
 
 /**
  * Everything the pool and equipment screens derive from one snapshot. Both
- * routes call this; React Query serves the second from cache, so the split
- * costs no extra requests.
+ * routes call this with the serial from the URL; React Query serves the
+ * second from cache, so the split costs no extra requests.
  */
-export function usePool() {
-	const systems = useSystems(true);
-	const serial = systems.data?.[0]?.serial;
+export function usePool(serial: string) {
 	const snap = useSnapshot(serial);
 
 	const devices = snap.data?.devices ?? [];
@@ -37,7 +35,7 @@ export function usePool() {
 	return {
 		serial,
 		snap,
-		loading: systems.isPending || snap.isPending,
+		loading: snap.isPending,
 		spaMode,
 		water: spaMode ? spa : pool,
 		air: byName.get("air_temp"),
