@@ -1,5 +1,6 @@
-import { Button, Card, Input, Label, TextField } from "@heroui/react";
+import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Waves } from "lucide-react";
 import { useState } from "react";
 import { errorMessage } from "#/lib/aqualink/types";
 import { useLogin } from "#/lib/queries";
@@ -23,10 +24,15 @@ function LoginScreen() {
 	}
 
 	return (
-		<div className="flex min-h-[70svh] items-center justify-center">
+		<div className="flex flex-1 flex-col items-center justify-center gap-6">
+			<div className="flex items-center gap-2.5">
+				<Waves className="size-6 text-accent" />
+				<span className="text-xl font-semibold tracking-tight">Pool Link</span>
+			</div>
+
 			<Card className="flex w-full max-w-sm flex-col gap-6 p-6">
-				<Card.Header className="items-center gap-1.5 text-center">
-					<Card.Title className="text-lg leading-tight font-semibold tracking-tight">
+				<Card.Header className="items-center gap-2 text-center">
+					<Card.Title className="text-2xl leading-tight font-semibold tracking-tight">
 						Connect your pool
 					</Card.Title>
 					<Card.Description className="text-balance">
@@ -75,17 +81,34 @@ function LoginScreen() {
 							variant="primary"
 							size="lg"
 							className="w-full"
-							isDisabled={loginMutation.isPending}
+							isPending={loginMutation.isPending}
 						>
-							{loginMutation.isPending ? "Signing in…" : "Sign in"}
+							{({ isPending }) => (
+								<>
+									{isPending ? <Spinner color="current" size="sm" /> : null}
+									{isPending ? "Signing in…" : "Sign in"}
+								</>
+							)}
 						</Button>
-						<p className="text-center text-xs text-balance text-muted">
-							Your password goes straight to iAqualink. It’s never stored or
-							sent anywhere else.
-						</p>
+						{/* Reset lives on Zodiac's portal: their endpoint requires a
+						    reCAPTCHA token, which is bound to the domain that minted it
+						    and so cannot be produced here. */}
+						<a
+							className="link mx-auto text-sm"
+							href="https://iaqualink.zodiacpoolsystems.com/resetPassword"
+							rel="noreferrer"
+							target="_blank"
+						>
+							Forgot password?
+						</a>
 					</div>
 				</form>
 			</Card>
+
+			<p className="max-w-sm text-center text-xs text-balance text-muted">
+				Your password goes straight to iAqualink. It’s never stored or sent
+				anywhere else.
+			</p>
 		</div>
 	);
 }

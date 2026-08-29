@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DiagnosticsRouteImport } from './routes/diagnostics'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SignOutRouteImport } from './routes/sign-out'
 import { Route as SystemsSerialIndexRouteImport } from './routes/systems.$serial.index'
 import { Route as SystemsSerialDiagnosticsRouteImport } from './routes/systems.$serial.diagnostics'
 import { Route as SystemsSerialEquipmentRouteImport } from './routes/systems.$serial.equipment'
@@ -36,6 +37,11 @@ const LoginRoute = LoginRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignOutRoute = SignOutRouteImport.update({
+  id: '/sign-out',
+  path: '/sign-out',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SystemsSerialIndexRoute = SystemsSerialIndexRouteImport.update({
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/diagnostics': typeof DiagnosticsRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/sign-out': typeof SignOutRoute
   '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
   '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/diagnostics': typeof DiagnosticsRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/sign-out': typeof SignOutRoute
   '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
   '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/diagnostics': typeof DiagnosticsRoute
   '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/sign-out': typeof SignOutRoute
   '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
   '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/diagnostics'
     | '/login'
     | '/settings'
+    | '/sign-out'
     | '/systems/$serial/diagnostics'
     | '/systems/$serial/equipment'
     | '/systems/$serial/settings'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/diagnostics'
     | '/login'
     | '/settings'
+    | '/sign-out'
     | '/systems/$serial/diagnostics'
     | '/systems/$serial/equipment'
     | '/systems/$serial/settings'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/diagnostics'
     | '/login'
     | '/settings'
+    | '/sign-out'
     | '/systems/$serial/diagnostics'
     | '/systems/$serial/equipment'
     | '/systems/$serial/settings'
@@ -129,6 +141,7 @@ export interface RootRouteChildren {
   DiagnosticsRoute: typeof DiagnosticsRoute
   LoginRoute: typeof LoginRoute
   SettingsRoute: typeof SettingsRoute
+  SignOutRoute: typeof SignOutRoute
   SystemsSerialDiagnosticsRoute: typeof SystemsSerialDiagnosticsRoute
   SystemsSerialEquipmentRoute: typeof SystemsSerialEquipmentRoute
   SystemsSerialSettingsRoute: typeof SystemsSerialSettingsRoute
@@ -163,6 +176,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-out': {
+      id: '/sign-out'
+      path: '/sign-out'
+      fullPath: '/sign-out'
+      preLoaderRoute: typeof SignOutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/systems/$serial/': {
@@ -201,6 +221,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiagnosticsRoute: DiagnosticsRoute,
   LoginRoute: LoginRoute,
   SettingsRoute: SettingsRoute,
+  SignOutRoute: SignOutRoute,
   SystemsSerialDiagnosticsRoute: SystemsSerialDiagnosticsRoute,
   SystemsSerialEquipmentRoute: SystemsSerialEquipmentRoute,
   SystemsSerialSettingsRoute: SystemsSerialSettingsRoute,
