@@ -1,88 +1,66 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
-/*
- * Pool Link: dark-first "control room" base with a sunlight-readable
- * light mode. Pool water = the accent, so it reads as the live channel.
- */
-:root {
-	--accent: oklch(0.72 0.13 205);
-	--accent-foreground: oklch(0.16 0.02 220);
-	--background: oklch(0.98 0.006 215);
-	--foreground: oklch(0.22 0.02 235);
-	--surface: oklch(1 0 0);
-	--surface-secondary: oklch(0.96 0.005 215);
-	--border: oklch(0.9 0.01 215);
-	--muted: oklch(0.55 0.02 225);
-}
-
-.dark {
-	--accent: oklch(0.78 0.14 195);
-	--accent-foreground: oklch(0.15 0.02 220);
-	--background: oklch(0.16 0.015 235);
-	--foreground: oklch(0.96 0.01 210);
-	--surface: oklch(0.21 0.018 235);
-	--surface-secondary: oklch(0.27 0.02 235);
-	--border: oklch(0.3 0.02 235);
-	--muted: oklch(0.68 0.02 220);
-}
-
-/*
- * Map HeroUI's component tokens (used by Select, Popover, fields) onto the
- * custom palette above. These resolve at use-time, so they pick up the correct
- * light/dark value automatically.
- */
-:root {
-	--default: var(--surface-secondary);
-	--default-hover: var(--surface-secondary);
-	--field-background: var(--surface-secondary);
-	--field-hover: var(--surface-secondary);
-	--field-focus: var(--surface-secondary);
-	--field-border: var(--border);
-	--field-border-hover: var(--border);
-	--field-border-focus: var(--accent);
-	--field-foreground: var(--foreground);
-	--field-placeholder: var(--muted);
-	--overlay: var(--surface);
-	--overlay-foreground: var(--foreground);
-}
-
-html,
-body,
-#app {
-	min-height: 100dvh;
-}
-
 body {
-	margin: 0;
-	background: var(--background);
-	color: var(--foreground);
-	-webkit-tap-highlight-color: transparent;
-	font-family:
-		ui-sans-serif,
-		system-ui,
-		-apple-system,
-		"Segoe UI",
-		sans-serif;
-	overscroll-behavior-y: none;
+	@apply bg-background min-h-svh;
 }
 
-/* Poolside: larger hit targets, no accidental precision taps with wet hands. */
-[data-control="device"] {
-	min-height: 4.25rem;
+/*
+ * HeroUI Pro Theme
+ * Add this to your globals.css after importing @heroui/styles
+ * Only includes variables customized from the selected theme
+ * @see https://heroui.com/docs/react/getting-started/theming
+ */
+
+/*
+ * Font: Inter
+ * Load this font in your app:
+ * <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet" />
+ */
+:root,
+.light,
+.default,
+[data-theme="light"],
+[data-theme="default"] {
+  /* Theme Colors */
+  --background: oklch(97.02% 0.0090 224.65);
+  --muted: oklch(55.17% 0.0180 224.65);
+  --scrollbar: oklch(87.10% 0.0090 224.65);
+  --surface-secondary: oklch(95.24% 0.0135 224.65);
+  --surface-tertiary: oklch(93.73% 0.0135 224.65);
+  --default: oklch(94.00% 0.0090 224.65);
+  --accent: color-mix(in oklab, var(--color-cyan-600, #0092B8) 50%, var(--color-teal-600, #009689) 50%);
+  --success: oklch(73.29% 0.1970 147.31);
+  --warning: oklch(78.19% 0.1614 68.83);
+  --danger: oklch(65.32% 0.2370 22.24);
+  --field-border: oklch(90.00% 0.0090 224.65);
+  --border: oklch(90.00% 0.0090 224.65);
+  --separator: oklch(92.00% 0.0090 224.65);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-	[data-pulse] {
-		animation: pulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-	}
-	@keyframes pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.35;
-		}
-	}
+/* html.* rather than .* — the light block below uses :root, which has the
+   same specificity as a bare .dark, and the bundler hoists this block
+   above it. Qualifying with html wins on specificity instead of order. */
+html.dark,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  /* Theme Colors */
+  --background: oklch(12.00% 0.0090 224.65);
+  --muted: oklch(70.50% 0.0180 224.65);
+  --scrollbar: oklch(70.50% 0.0090 224.65);
+  --surface: oklch(21.03% 0.0180 224.65);
+  --surface-secondary: oklch(25.70% 0.0135 224.65);
+  --surface-tertiary: oklch(27.21% 0.0135 224.65);
+  --overlay: oklch(21.03% 0.0180 224.65);
+  --default: oklch(27.40% 0.0090 224.65);
+  --accent: color-mix(in oklab, var(--color-cyan-400, #00D3F2) 50%, var(--color-teal-400, #00D5BE) 50%);
+  --accent-foreground: var(--eclipse);
+  --success: oklch(73.29% 0.1970 147.31);
+  --warning: oklch(82.03% 0.1413 72.84);
+  --danger: oklch(59.40% 0.2002 21.13);
+  --field-background: oklch(21.03% 0.0180 224.65);
+  --field-border: oklch(28.00% 0.0090 224.65);
+  --segment: oklch(39.64% 0.0090 224.65);
+  --border: oklch(28.00% 0.0090 224.65);
+  --separator: oklch(25.00% 0.0090 224.65);
 }
