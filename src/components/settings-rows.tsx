@@ -6,11 +6,15 @@ import {
 	ListBox,
 	Select,
 	TextField,
+	Tooltip,
 } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import {
+	Check,
 	ChevronRight,
 	CircleUser,
+	Copy,
+	Hash,
 	LogOut,
 	MapPinHouse,
 	Monitor,
@@ -21,9 +25,10 @@ import {
 	Tag,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { IconCircle } from "#/components/device-row";
 import { errorMessage } from "#/lib/aqualink/types";
+import { groupSerial } from "#/lib/format";
 import { useSetDeviceName, useSystems } from "#/lib/queries";
 
 const THEMES = [
@@ -123,6 +128,68 @@ export function SystemNameRow({ serial }: { serial: string }) {
 								</AlertDialog.Container>
 							</AlertDialog.Backdrop>
 						</AlertDialog>
+					</InputGroup.Suffix>
+				</InputGroup>
+			</TextField>
+		</SettingsRow>
+	);
+}
+
+/** The serial is what the URL and every prm call address, so make it copyable. */
+export function SystemSerialRow({ serial }: { serial: string }) {
+	const [copied, setCopied] = useState(false);
+	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	useEffect(
+		() => () => {
+			if (timer.current) clearTimeout(timer.current);
+		},
+		[],
+	);
+
+	// Copy what is on screen — the add-system form strips the grouping back out.
+	const grouped = groupSerial(serial);
+
+	async function copy() {
+		try {
+			await navigator.clipboard.writeText(grouped);
+			setCopied(true);
+			if (timer.current) clearTimeout(timer.current);
+			timer.current = setTimeout(() => setCopied(false), 1500);
+		} catch {
+			// Clipboard is unavailable outside a secure context; nothing to do.
+		}
+	}
+
+	return (
+		<SettingsRow Icon={Hash} title="Serial">
+			<TextField
+				aria-label="Serial number"
+				isReadOnly
+				value={grouped}
+				variant="secondary"
+			>
+				<InputGroup>
+					<InputGroup.Input className="w-36 font-mono" />
+					<InputGroup.Suffix className="pe-0">
+						<Tooltip>
+							<Tooltip.Trigger>
+								<Button
+									aria-label="Copy serial number"
+									isIconOnly
+									onPress={copy}
+									size="sm"
+									variant="ghost"
+								>
+									{copied ? (
+										<Check className="size-4" />
+									) : (
+										<Copy className="size-4" />
+									)}
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>{copied ? "Copied" : "Copy"}</Tooltip.Content>
+						</Tooltip>
 					</InputGroup.Suffix>
 				</InputGroup>
 			</TextField>

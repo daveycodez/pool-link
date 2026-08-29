@@ -21,7 +21,7 @@ const HOME_DEVICE_LABELS: Record<string, string> = {
 	air_temp: "Air Temperature",
 	cover_pool: "Pool Cover",
 	freeze_protection: "Freeze Protection",
-	spa_pump: "Spa Pump",
+	spa_pump: "Spa Mode",
 	pool_pump: "Filter Pump",
 	spa_heater: "Spa Heater",
 	pool_heater: "Pool Heater",

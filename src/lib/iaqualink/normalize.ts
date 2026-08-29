@@ -13,7 +13,7 @@ const KNOWN_LABELS: Record<string, string> = {
 	spa_set_point: "Spa Set Point",
 	pool_chill_set_point: "Pool Chill Set Point",
 	pool_pump: "Filter Pump",
-	spa_pump: "Spa Pump",
+	spa_pump: "Spa Mode",
 	pool_heater: "Pool Heater",
 	spa_heater: "Spa Heater",
 	solar_heater: "Solar Heater",

@@ -1,6 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Loading } from "#/components/loading";
-import { AccountSettingsRows, SystemNameRow } from "#/components/settings-rows";
+import {
+	AccountSettingsRows,
+	SystemNameRow,
+	SystemSerialRow,
+} from "#/components/settings-rows";
 import { useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/settings")({
@@ -18,6 +22,7 @@ function SystemSettings() {
 	return (
 		<div className="space-y-4">
 			<SystemNameRow serial={serial} />
+			<SystemSerialRow serial={serial} />
 			<AccountSettingsRows serial={serial} />
 		</div>
 	);

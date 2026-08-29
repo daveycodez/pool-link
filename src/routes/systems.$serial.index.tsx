@@ -112,7 +112,7 @@ function PoolScreen({
 						) : (
 							<Waves className="size-4 text-accent" />
 						)}
-						{spaMode ? "Spa Mode" : "Pool"}
+						{spaMode ? "Spa" : "Pool"}
 					</div>
 					{air ? (
 						<div className="flex items-center gap-1.5">
