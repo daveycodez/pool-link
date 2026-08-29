@@ -9,7 +9,7 @@ import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import { AppLayout } from "#/components/app-layout";
-import { errorMessage } from "#/lib/aqualink/types";
+import { AqualinkError, errorMessage } from "#/lib/aqualink/types";
 import appCss from "../styles.css?url";
 
 /** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
@@ -135,6 +135,11 @@ let lastToast = { message: "", at: 0 };
 const TOAST_DEDUPE_MS = 10_000;
 
 function toastError(error: unknown) {
+	// 401s are the signed-out path, not a fault: an in-flight poll landing after
+	// sign-out, or an expired session. Both redirect to /login, which says it
+	// better than a toast would.
+	if (error instanceof AqualinkError && error.status === 401) return;
+
 	const message = errorMessage(error);
 	const now = Date.now();
 	if (message === lastToast.message && now - lastToast.at < TOAST_DEDUPE_MS)

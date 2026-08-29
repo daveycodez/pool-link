@@ -24,7 +24,7 @@ import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
 import { IconCircle } from "#/components/device-row";
 import { errorMessage } from "#/lib/aqualink/types";
-import { useLogout, useSetDeviceName, useSystems } from "#/lib/queries";
+import { useSetDeviceName, useSystems } from "#/lib/queries";
 
 const THEMES = [
 	{ id: "system", label: "System", Icon: Monitor },
@@ -135,7 +135,6 @@ export function SystemNameRow({ serial }: { serial: string }) {
  * Diagnostics link to the current system and adds a way back to the list.
  */
 export function AccountSettingsRows({ serial }: { serial?: string }) {
-	const logout = useLogout();
 	const { theme, setTheme } = useTheme();
 
 	// next-themes only knows the resolved theme after mount, so render the
@@ -200,15 +199,11 @@ export function AccountSettingsRows({ serial }: { serial?: string }) {
 				</Link>
 			) : null}
 
-			<button
-				className="card-link"
-				onClick={() => logout.mutate()}
-				type="button"
-			>
+			<Link className="card-link" to="/sign-out">
 				<SettingsRow Icon={CircleUser} title="Sign out">
 					<LogOut className="size-4 text-muted" />
 				</SettingsRow>
-			</button>
+			</Link>
 		</>
 	);
 }
