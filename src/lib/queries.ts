@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+	addDevice,
 	getDeviceStatus,
 	listSystems,
 	login,
@@ -23,6 +24,8 @@ export const keys = {
 	systems: () => ["systems"] as const,
 	snapshot: (serial: string) => ["snapshot", serial] as const,
 	status: (serial: string) => ["status", serial] as const,
+	/** Prefix that matches every system's status query. */
+	statuses: () => ["status"] as const,
 };
 
 export function useSession() {
@@ -61,7 +64,10 @@ export function useSystems(enabled: boolean) {
 		queryKey: keys.systems(),
 		queryFn: () => listSystems(),
 		enabled,
-		staleTime: 60_000,
+		refetchInterval: POLL_MS,
+		refetchIntervalInBackground: false,
+		// Double the interval, so a healthy cycle never reads as stale.
+		staleTime: POLL_MS * 2,
 	});
 }
 
@@ -166,8 +172,20 @@ export function useDeviceStatus(serial: string) {
 	return useQuery({
 		queryKey: keys.status(serial),
 		queryFn: () => getDeviceStatus(serial),
-		staleTime: 60_000,
+		refetchInterval: POLL_MS,
+		refetchIntervalInBackground: false,
+		staleTime: POLL_MS * 2,
 		refetchOnWindowFocus: false,
 		retry: false,
+	});
+}
+
+/** Attach a system to the account, then refresh the list it appears in. */
+export function useAddDevice() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: ({ serial, name }: { serial: string; name: string }) =>
+			addDevice(serial, name),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.systems() }),
 	});
 }

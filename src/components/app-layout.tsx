@@ -1,12 +1,13 @@
 import { Chip } from "@heroui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useRouterState } from "@tanstack/react-router";
-import { MapPinHouse, RefreshCw, Settings, Waves } from "lucide-react";
+import { House, MapPinHouse, RefreshCw, Settings, Waves } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppHeader, IconBtn } from "#/components/app-header";
 import { BottomNav } from "#/components/bottom-nav";
 import { Loading } from "#/components/loading";
 import { timeAgo } from "#/lib/format";
-import { useSession, useSnapshot, useSystems } from "#/lib/queries";
+import { keys, useSession, useSnapshot, useSystems } from "#/lib/queries";
 
 /**
  * Page chrome for every route. The header lives here so /login gets the
@@ -21,6 +22,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	const signedIn = Boolean(session.data);
 	const systems = useSystems(signedIn);
 	const router = useRouter();
+	const qc = useQueryClient();
 
 	// Present only inside /systems/$serial; undefined on the list and elsewhere.
 	const { serial } = useParams({ strict: false });
@@ -30,6 +32,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	// On a system the chip tracks that system's live snapshot; on the list it
 	// tracks the account's system list, which is the only thing being fetched.
 	const source = serial ? snap : systems;
+	// On the list, each card's online state is its own query — refreshing the
+	// list alone would leave every chip showing whatever it last saw.
+	const refresh = () => {
+		source.refetch();
+		if (!serial) qc.invalidateQueries({ queryKey: keys.statuses() });
+	};
 	const live = source.isSuccess && !source.isStale;
 	// Only tick while stale — no reason to re-render the whole layout every
 	// second when the label is the constant "Live".
@@ -93,7 +101,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		>
 			{onLogin ? null : (
 				<AppHeader
-					Icon={signedIn && !serial ? MapPinHouse : Waves}
+					Icon={!signedIn ? Waves : serial ? House : MapPinHouse}
 					onBack={pageTitle ? () => router.history.back() : undefined}
 					title={title}
 				>
@@ -110,7 +118,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 								{hasLive ? (
 									<IconBtn
 										label="Refresh"
-										onPress={() => source.refetch()}
+										onPress={refresh}
 										disabled={source.isFetching}
 									>
 										<RefreshCw
