@@ -8,6 +8,21 @@
 import {
 	API_KEY,
 	accountUrl,
+	CMD_ENABLE_DISABLE_HPM,
+	CMD_GET_DEVICES,
+	CMD_GET_HOME,
+	CMD_GET_MASTER_DEVICE_LIST,
+	CMD_GET_ONETOUCH,
+	CMD_GET_VSP_APPMODELSERIALS,
+	CMD_GET_VSP_NAMES,
+	CMD_GET_VSP_SPEED,
+	CMD_ICL_ONOFF,
+	CMD_ICL_SET_COLOR,
+	CMD_ICL_SET_CUSTOM_COLOR,
+	CMD_SET_ONETOUCH,
+	CMD_SET_VSP_SPEED,
+	CMD_SETPOINT_HPM_TEMP,
+	CMD_SWITCH_HPM_MODE,
 	LOGIN_URL,
 	PAPI_SESSION_URL,
 	PRM,
@@ -28,6 +43,17 @@ import {
 	type Raw,
 	type SystemSummary,
 } from "./types";
+
+/** Failed responses often carry a JSON explanation; keep it for diagnostics. */
+async function readBody(res: Response): Promise<unknown> {
+	const text = await res.text().catch(() => "");
+	if (!text) return undefined;
+	try {
+		return JSON.parse(text);
+	} catch {
+		return text;
+	}
+}
 
 function pick(...vals: unknown[]): string {
 	for (const v of vals) {
@@ -57,7 +83,11 @@ export class AqualinkClient implements AqualinkClientLike {
 			body: JSON.stringify({ api_key: API_KEY, email, password: secret }),
 		});
 		if (!res.ok)
-			throw new AqualinkError(`Login failed (${res.status})`, res.status);
+			throw new AqualinkError(
+				`Login failed (${res.status})`,
+				res.status,
+				await readBody(res),
+			);
 		const data = (await res.json()) as Raw;
 		const idToken = idTokenOf(data);
 		if (!idToken) throw new AqualinkError("Login returned no ID token", 401);
@@ -115,7 +145,11 @@ export class AqualinkClient implements AqualinkClientLike {
 			}),
 		});
 		if (!res.ok)
-			throw new AqualinkError(`Refresh failed (${res.status})`, res.status);
+			throw new AqualinkError(
+				`Refresh failed (${res.status})`,
+				res.status,
+				await readBody(res),
+			);
 		const data = (await res.json()) as Raw;
 		const merged: Session = {
 			...existing,
@@ -186,7 +220,11 @@ export class AqualinkClient implements AqualinkClientLike {
 			}
 		}
 		if (!res.ok)
-			throw new AqualinkError(`Request failed (${res.status})`, res.status);
+			throw new AqualinkError(
+				`Request failed (${res.status})`,
+				res.status,
+				await readBody(res),
+			);
 		return (await res.json()) as Raw;
 	}
 
@@ -212,7 +250,11 @@ export class AqualinkClient implements AqualinkClientLike {
 			throw new AqualinkError("Session expired — sign in again", 401);
 		}
 		if (!res.ok)
-			throw new AqualinkError(`Locations failed (${res.status})`, res.status);
+			throw new AqualinkError(
+				`Locations failed (${res.status})`,
+				res.status,
+				await readBody(res),
+			);
 		const data = (await res.json()) as Raw;
 		const arr = Array.isArray(data) ? data : pickList(data);
 		return arr.map((raw) => {
@@ -248,7 +290,11 @@ export class AqualinkClient implements AqualinkClientLike {
 			headers,
 		});
 		if (!res.ok)
-			throw new AqualinkError(`Request failed (${res.status})`, res.status);
+			throw new AqualinkError(
+				`Request failed (${res.status})`,
+				res.status,
+				await readBody(res),
+			);
 		return (await res.json()) as Raw;
 	}
 
@@ -347,6 +393,186 @@ export function account(): Promise<Raw> {
 /** Authenticated prm request (diagnostics). */
 export function api<T = Raw>(url: string, init: RequestInit = {}): Promise<T> {
 	return client.prm(url, init) as Promise<T>;
+}
+
+// ---- Full p-api surface -----------------------------------------------------
+// Every command the upstream `iaqualink` package sends. Nothing here is wired
+// into the dashboard yet — these exist so /diagnostics can probe the real API
+// and so the VSP layer has somewhere to land.
+
+/** Raw command escape hatch: any command string, any params. */
+export function command(
+	serial: string,
+	cmd: string,
+	params: Payload = {},
+): Promise<Raw> {
+	return client.sessionRequest(serial, cmd, params);
+}
+
+// -- Screen reads --
+
+/**
+ * Home screen. Upstream sends `attached_test` + `country`; `snapshot()` omits
+ * them and still works, so this is the higher-fidelity read of the two.
+ */
+export function getHome(serial: string): Promise<Raw> {
+	const { country } = client.sessionMeta();
+	return client.sessionRequest(serial, CMD_GET_HOME, {
+		attached_test: "true",
+		country,
+	});
+}
+
+export function getDevices(serial: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_DEVICES);
+}
+
+export function getOnetouch(serial: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_ONETOUCH);
+}
+
+// -- Variable speed pumps --
+
+/** pumpId -> pumpName for every VSP the panel knows about. */
+export function getVspNames(serial: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_VSP_NAMES);
+}
+
+/** Current speeds plus the speed<->aux associations, per pump slot. */
+export function getVspSpeeds(serial: string, slotId = 1): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_VSP_SPEED, {
+		slot_id: String(slotId),
+	});
+}
+
+export function getVspAppModelSerials(serial: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_VSP_APPMODELSERIALS);
+}
+
+/**
+ * Device list carrying the per-device `isVSP` flag that identifies pump slots.
+ * `listType` is mandatory (0 | 1 | 2) — upstream iaqualink-py omits it and the
+ * server answers 400, so this is a fix rather than a port of their call.
+ */
+export function getMasterDeviceList(
+	serial: string,
+	listType: "0" | "1" | "2" = "0",
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_MASTER_DEVICE_LIST, {
+		listType,
+	});
+}
+
+/** Run a pump at one of its configured speeds, addressed by id. */
+export function setVspSpeed(
+	serial: string,
+	speedId: number,
+	slotId = 1,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_VSP_SPEED, {
+		slot_id: String(slotId),
+		speed_id: String(speedId),
+		on_off_action: "on",
+	});
+}
+
+/** Stop a pump. `speed_id` is required but ignored when the action is "off". */
+export function stopVspPump(serial: string, slotId = 1): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_VSP_SPEED, {
+		slot_id: String(slotId),
+		speed_id: "1",
+		on_off_action: "off",
+	});
+}
+
+// -- Heat pump module --
+
+export function enableHpm(serial: string, on: boolean): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ENABLE_DISABLE_HPM, {
+		on_off_action: on ? "on" : "off",
+	});
+}
+
+export function switchHpmMode(serial: string, mode: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SWITCH_HPM_MODE, {
+		hpm_mode: mode,
+	});
+}
+
+/** Unlike set_temps, only the changed set point is sent — no seeding. */
+export function setHpmSetPoint(serial: string, temps: Payload): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SETPOINT_HPM_TEMP, temps);
+}
+
+// -- ICL light zones --
+
+export function iclZoneOnOff(
+	serial: string,
+	zoneId: number,
+	on: boolean,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_ONOFF, {
+		zone_id: String(zoneId),
+		on_off_action: on ? "on" : "off",
+	});
+}
+
+export function iclSetColor(
+	serial: string,
+	zoneId: number,
+	colorId: number,
+	dimLevel = 100,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_SET_COLOR, {
+		zone_id: String(zoneId),
+		color_id: String(colorId),
+		dim_level: String(dimLevel),
+	});
+}
+
+/** Brightness rides the same command as colour — there is no set_iclzone_dim. */
+export function iclSetBrightness(
+	serial: string,
+	zoneId: number,
+	dimLevel: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_SET_COLOR, {
+		zone_id: String(zoneId),
+		dim_level: String(dimLevel),
+	});
+}
+
+export function iclSetCustomColor(
+	serial: string,
+	zoneId: number,
+	red: number,
+	green: number,
+	blue: number,
+	white = 0,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_SET_CUSTOM_COLOR, {
+		zone_id: String(zoneId),
+		red_val: String(red),
+		green_val: String(green),
+		blue_val: String(blue),
+		white_val: String(white),
+	});
+}
+
+// -- Bare toggles --
+
+/**
+ * Toggle a named system switch: set_pool_pump, set_spa_pump, set_pool_heater,
+ * set_spa_heater, set_solar_heater. These carry no state param — they flip.
+ */
+export function setSwitch(serial: string, cmd: string): Promise<Raw> {
+	return client.sessionRequest(serial, cmd);
+}
+
+/** Fire a OneTouch macro. The name is appended to the command, not passed. */
+export function setOnetouch(serial: string, name: string): Promise<Raw> {
+	const id = name.replace(/^onetouch_/, "");
+	return client.sessionRequest(serial, `${CMD_SET_ONETOUCH}_${id}`);
 }
 
 function pickList(data: Raw): unknown[] {

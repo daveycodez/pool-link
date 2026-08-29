@@ -28,6 +28,9 @@ export class AqualinkError extends Error {
 	constructor(
 		message: string,
 		readonly status?: number,
+		/** Parsed failure payload, when the server sent one. p-api explains
+		 * rejected commands here, so it is worth keeping for diagnostics. */
+		readonly body?: unknown,
 	) {
 		super(message);
 		this.name = "AqualinkError";
