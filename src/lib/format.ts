@@ -8,3 +8,8 @@ export function timeAgo(at: number, now = Date.now()): string {
 	if (h < 24) return `${h}h ago`;
 	return `${Math.round(h / 24)}d ago`;
 }
+
+/** Serials print grouped in threes on the hardware label: QSS-2B7-8BD-9KE. */
+export function groupSerial(serial: string): string {
+	return serial.replace(/(.{3})(?=.)/g, "$1-");
+}

@@ -309,6 +309,16 @@ export class AqualinkClient implements AqualinkClientLike {
 		});
 	}
 
+	/** Attach a system to this account by serial. */
+	async addDevice(serial: string, name: string): Promise<Raw> {
+		const s = await this.currentSession();
+		return this.prm(`/device/${serial}/add_device`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name, userId: s.userId }),
+		});
+	}
+
 	/**
 	 * Rename a system. Not part of the upstream `iaqualink` package — that
 	 * library only ever reads from prm. Serial goes in the path, prm user id
@@ -409,6 +419,11 @@ export async function setTemps(
 		temp1: spa,
 		temp2: pool,
 	});
+}
+
+/** Attach a system to this account by serial. */
+export function addDevice(serial: string, name: string): Promise<Raw> {
+	return client.addDevice(serial, name);
 }
 
 /** Online/offline for one system. */
