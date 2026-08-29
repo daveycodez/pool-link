@@ -26,11 +26,10 @@ export const Route = createRootRoute({
 			},
 			{
 				name: "description",
-				content:
-					"A fast, offline-capable control surface for your iAqualink pool.",
+				content: "A fast control surface for your iAqualink pool and spa.",
 			},
 			{ name: "mobile-web-app-capable", content: "yes" },
-			{ name: "apple-mobile-web-app-title", content: "Pool" },
+			{ name: "apple-mobile-web-app-title", content: "Pool Link" },
 			{ name: "apple-mobile-web-app-capable", content: "yes" },
 			{
 				name: "apple-mobile-web-app-status-bar-style",

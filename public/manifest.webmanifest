@@ -1,7 +1,7 @@
 {
 	"name": "Pool Link",
-	"short_name": "Pool",
-	"description": "Offline-capable control surface for your iAqualink pool.",
+	"short_name": "Pool Link",
+	"description": "A fast control surface for your iAqualink pool and spa.",
 	"start_url": ".",
 	"scope": ".",
 	"display": "standalone",
