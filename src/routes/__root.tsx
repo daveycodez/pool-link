@@ -3,6 +3,9 @@ import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import appCss from "../styles.css?url";
 
+/** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
+const base = import.meta.env.BASE_URL;
+
 export const Route = createRootRoute({
 	head: () => ({
 		meta: [
@@ -36,11 +39,11 @@ export const Route = createRootRoute({
 		],
 		links: [
 			{ rel: "stylesheet", href: appCss },
-			{ rel: "manifest", href: "/manifest.webmanifest" },
-			{ rel: "icon", type: "image/svg+xml", href: "/icon.svg" },
-			{ rel: "apple-touch-icon", href: "/icons/icon-192.png" },
+			{ rel: "manifest", href: `${base}manifest.webmanifest` },
+			{ rel: "icon", type: "image/svg+xml", href: `${base}icon.svg` },
+			{ rel: "apple-touch-icon", href: `${base}icons/icon-192.png` },
 		],
-		scriptAsync: [{ src: "/theme-init.js" }],
+		scriptAsync: [{ src: `${base}theme-init.js` }],
 	}),
 	shellComponent: RootDocument,
 });
