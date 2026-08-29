@@ -1,5 +1,5 @@
 import type { Key } from "@heroui/react";
-import { Card, Chip, ListBox, Select, Switch } from "@heroui/react";
+import { Card, Chip, ListBox, Select, Spinner, Switch } from "@heroui/react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
 	Droplets,
@@ -86,19 +86,21 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 			d.name !== "solar_heater",
 	);
 	const light = devices.find((d) => d.kind === "light");
-	const spaPump = byName.get("spa_pump");
+	const jetPump = byName.get("aux_2");
 	const waterfall = byName.get("aux_1");
 	const genericAux = /^aux\s+v\d+$/i;
 	const controls = devices.filter(
 		(d) =>
-			(d.kind === "pump" && d.name !== "spa_pump") ||
+			d.kind === "pump" ||
 			d.name === "solar_heater" ||
 			(["switch", "dimmer"].includes(d.kind) &&
 				d.name !== "aux_1" &&
+				d.name !== "aux_2" &&
 				(d.on || !genericAux.test(d.label))),
 	);
 
 	const live = snap.isSuccess && !snap.isStale;
+	const loading = systems.isPending || snap.isPending;
 
 	return (
 		<div className="mx-auto w-full max-w-md px-5 pb-32 pt-[max(1.5rem,env(safe-area-inset-top))]">
@@ -115,7 +117,11 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 				</Card>
 			) : null}
 
-			{tab === "pool" ? (
+			{loading ? (
+				<div className="flex min-h-[55dvh] items-center justify-center">
+					<Spinner color="accent" size="lg" />
+				</div>
+			) : tab === "pool" ? (
 				<PoolScreen
 					water={water}
 					waterSet={waterSet}
@@ -124,7 +130,7 @@ function PoolView({ onLogout }: { onLogout: () => void }) {
 					spa={spa}
 					pool={pool}
 					heaters={heaters}
-					spaPump={spaPump}
+					jetPump={jetPump}
 					waterfall={waterfall}
 					poolSet={poolSet}
 					spaSet={spaSet}
@@ -202,7 +208,7 @@ function PoolScreen({
 	spa,
 	pool,
 	heaters,
-	spaPump,
+	jetPump,
 	waterfall,
 	poolSet,
 	spaSet,
@@ -220,7 +226,7 @@ function PoolScreen({
 	spa: PoolDevice | undefined;
 	pool: PoolDevice | undefined;
 	heaters: PoolDevice[];
-	spaPump: PoolDevice | undefined;
+	jetPump: PoolDevice | undefined;
 	waterfall: PoolDevice | undefined;
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
@@ -292,13 +298,13 @@ function PoolScreen({
 						onOff={() => onToggle(d, false)}
 					/>,
 				];
-				if (isSpa && spaPump) {
+				if (isSpa && jetPump) {
 					items.push(
 						<EquipmentRow
 							key={`${d.id}-pump`}
-							device={spaPump}
+							device={jetPump}
 							busy={busy}
-							onToggle={(on) => onToggle(spaPump, on)}
+							onToggle={(on) => onToggle(jetPump, on)}
 						/>,
 					);
 				}
@@ -558,6 +564,7 @@ function EquipmentRow({
 
 function DeviceIcon({ device }: { device: PoolDevice }) {
 	if (device.name === "aux_1") return <WavesArrowDown className="size-4" />;
+	if (device.name === "aux_2") return <Droplets className="size-4" />;
 	switch (device.kind) {
 		case "light":
 			return <Lightbulb className="size-4" />;

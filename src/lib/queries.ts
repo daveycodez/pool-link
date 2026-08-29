@@ -14,7 +14,7 @@ import { normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
-const POLL_MS = 10_000;
+const POLL_MS = 5_000;
 
 export const keys = {
 	session: () => ["session"] as const,
