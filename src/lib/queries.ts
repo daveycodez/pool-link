@@ -787,11 +787,15 @@ const withRememberedSpeeds = (serial: string, pumps: VspPump[]): VspPump[] =>
 			rememberSpeed(serial, pump.pumpId, active.id);
 			return pump;
 		}
+		// The last known speed, or failing that the first configured one — the
+		// same default a turn-on would send — so the dimmed selection always
+		// previews exactly what "on" will do.
 		const last = readMemory(lastSpeedKey(serial))[pump.pumpId];
-		if (last === undefined) return pump;
+		const mark = pump.speeds.find((s) => s.id === last) ?? pump.speeds[0];
+		if (!mark) return pump;
 		return {
 			...pump,
-			speeds: pump.speeds.map((s) => ({ ...s, active: s.id === last })),
+			speeds: pump.speeds.map((s) => ({ ...s, active: s.id === mark.id })),
 		};
 	});
 
