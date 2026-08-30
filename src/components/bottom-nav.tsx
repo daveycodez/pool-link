@@ -1,6 +1,6 @@
 import { Tabs } from "@heroui/react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { Lightbulb, Waves } from "lucide-react";
+import { House, Lightbulb } from "lucide-react";
 
 /**
  * Two destinations only. A third would overflow on a small phone once labels
@@ -9,7 +9,7 @@ import { Lightbulb, Waves } from "lucide-react";
  * destination. Settings lives behind the header gear instead.
  */
 const TABS = [
-	{ to: "/systems/$serial", label: "Pool", Icon: Waves },
+	{ to: "/systems/$serial", label: "Home", Icon: House },
 	{ to: "/systems/$serial/equipment", label: "Equipment", Icon: Lightbulb },
 ] as const;
 
