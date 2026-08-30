@@ -10,6 +10,7 @@ import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import { AppLayout } from "#/components/app-layout";
 import { AqualinkError, errorMessage } from "#/lib/aqualink/types";
+import { keys } from "#/lib/queries";
 import appCss from "../styles.css?url";
 
 /** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
@@ -75,36 +76,54 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-	const [client] = useState(
-		() =>
-			new QueryClient({
-				defaultOptions: {
-					queries: {
-						// Retry count is the library default. Only the backoff cap is
-						// ours: theirs tops out at 30s, six times the poll interval,
-						// and a query will not start its next scheduled poll while a
-						// retry is still pending — so a blip could hold the screen on
-						// half-minute-old data when polling again would have been
-						// fresher. Capped near one interval, the poll is the retry.
-						retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
-						refetchOnWindowFocus: false,
-						staleTime: 5_000,
-					},
+	const [client] = useState(() => {
+		// A 401 means the session is gone — the client has already cleared it by
+		// the time this runs. Re-reading it turns useRequireSession's guard from
+		// something that only fires on a cold start into one that catches a
+		// session dying mid-use, which is the case that used to strand people.
+		const signedOut = (error: unknown) => {
+			if (!(error instanceof AqualinkError) || error.status !== 401)
+				return false;
+			queryClient.invalidateQueries({ queryKey: keys.session() });
+			return true;
+		};
+
+		const queryClient: QueryClient = new QueryClient({
+			defaultOptions: {
+				queries: {
+					// Retry count is the library default. Only the backoff cap is
+					// ours: theirs tops out at 30s, six times the poll interval,
+					// and a query will not start its next scheduled poll while a
+					// retry is still pending — so a blip could hold the screen on
+					// half-minute-old data when polling again would have been
+					// fresher. Capped near one interval, the poll is the retry.
+					retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+					refetchOnWindowFocus: false,
+					staleTime: 5_000,
 				},
-				// Every query and mutation reports through here, so nothing needs a
-				// per-call error handler.
-				queryCache: new QueryCache({
-					onError: (error, query) => {
-						// A poll that fails behind data we already hold changes nothing
-						// on screen and the next one will likely succeed. The header's
-						// updated-at is the honest signal for that, not a toast.
-						if (query.state.data !== undefined) return;
-						toastError(error);
-					},
-				}),
-				mutationCache: new MutationCache({ onError: toastError }),
+			},
+			// Every query and mutation reports through here, so nothing needs a
+			// per-call error handler.
+			queryCache: new QueryCache({
+				onError: (error, query) => {
+					if (signedOut(error)) return;
+					// A poll that fails behind data we already hold changes nothing
+					// on screen and the next one will likely succeed. The header's
+					// updated-at is the honest signal for that, not a toast.
+					if (query.state.data !== undefined) return;
+					toastError(error);
+				},
 			}),
-	);
+			mutationCache: new MutationCache({
+				onError: (error) => {
+					if (signedOut(error)) return;
+					toastError(error);
+				},
+			}),
+		});
+
+		return queryClient;
+	});
 
 	return (
 		// next-themes swaps the class on <html> after mount, which is exactly the

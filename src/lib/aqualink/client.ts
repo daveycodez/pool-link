@@ -144,12 +144,25 @@ export class AqualinkClient implements AqualinkClientLike {
 				refresh_token: existing.refreshToken,
 			}),
 		});
-		if (!res.ok)
+		if (!res.ok) {
+			const body = await readBody(res);
+			// A rejected refresh token cannot be retried into working, so the
+			// session is over and has to go — otherwise it stays in storage, the
+			// app still believes it is signed in, and every request fails quietly
+			// forever. A 5xx or a network fault is not that, and must not sign
+			// anyone out. Rejections are rethrown as 401 whatever the pool
+			// answered, so there is one signal for "sign in again".
+			if ([400, 401, 403].includes(res.status)) {
+				this.session = null;
+				await clearSession();
+				throw new AqualinkError("Session expired — sign in again", 401, body);
+			}
 			throw new AqualinkError(
 				`Refresh failed (${res.status})`,
 				res.status,
-				await readBody(res),
+				body,
 			);
+		}
 		const data = (await res.json()) as Raw;
 		const merged: Session = {
 			...existing,
