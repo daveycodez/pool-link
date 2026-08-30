@@ -1,6 +1,6 @@
 import { Tabs } from "@heroui/react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { SlidersHorizontal, Waves } from "lucide-react";
+import { Lightbulb, Waves } from "lucide-react";
 
 /**
  * Two destinations only. A third would overflow on a small phone once labels
@@ -10,11 +10,7 @@ import { SlidersHorizontal, Waves } from "lucide-react";
  */
 const TABS = [
 	{ to: "/systems/$serial", label: "Pool", Icon: Waves },
-	{
-		to: "/systems/$serial/equipment",
-		label: "Equipment",
-		Icon: SlidersHorizontal,
-	},
+	{ to: "/systems/$serial/equipment", label: "Equipment", Icon: Lightbulb },
 ] as const;
 
 export function BottomNav({ serial }: { serial: string }) {
