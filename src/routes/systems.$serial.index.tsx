@@ -376,27 +376,23 @@ function PoolSpaHero({
 						) : null}
 					</div>
 
-					<div className="mt-2 flex items-baseline gap-1.5 leading-none">
+					{/* Bottom-aligned rather than baseline-aligned: the column beside
+					    the numeral has the chip above the degree, and a baseline would
+					    take the chip's rather than the degree's. Aligning the bottoms
+					    keeps the degree where it sat and drops the chip into the empty
+					    height a 7xl numeral leaves above a 2xl unit — so the card does
+					    not grow when the chip appears. */}
+					<div className="mt-2 flex items-end gap-1.5 leading-none">
 						<span className="text-7xl font-semibold tabular-nums tracking-tighter">
 							{water?.value || waterMemory?.value || "—"}
 						</span>
-						{/* The degree sits at the reading's baseline, which leaves the
-						    whole height of a 7xl numeral empty beneath it — so the
-						    estimate goes there rather than on a line of its own. It
-						    comes and goes without moving anything below it. */}
 						<div className="flex flex-col items-start gap-1.5">
-							<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
-							{/* One slot, two things that are never both true: an estimate
-							    belongs to a live reading, and an age belongs to one the
-							    panel has stopped giving. A remembered number says nothing
-							    for its first half hour, because the water has barely moved
-							    and it is as good as live — after that it has to admit what
-							    it is. */}
 							{caption ? (
 								<Chip className="whitespace-nowrap" variant="soft">
 									{caption}
 								</Chip>
 							) : null}
+							<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
 						</div>
 					</div>
 
