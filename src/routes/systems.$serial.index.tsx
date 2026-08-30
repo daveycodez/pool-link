@@ -336,14 +336,19 @@ function PoolSpaHero({
 						<span className="text-7xl font-semibold tabular-nums tracking-tighter">
 							{water?.value ?? "—"}
 						</span>
-						<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
+						{/* The degree sits at the reading's baseline, which leaves the
+						    whole height of a 7xl numeral empty beneath it — so the
+						    estimate goes there rather than on a line of its own. It
+						    comes and goes without moving anything below it. */}
+						<div className="flex flex-col items-start gap-1.5">
+							<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
+							{eta ? (
+								<Chip className="whitespace-nowrap" variant="soft">
+									{eta}
+								</Chip>
+							) : null}
+						</div>
 					</div>
-
-					{/* Between the reading and the target because that is what it is
-					    about: this number reaching that one. The height is reserved the
-					    way the eyebrow's h-6 is above, so the stepper does not shift
-					    when the line comes and goes. */}
-					<p className="mt-1 h-4 text-xs text-muted tabular-nums">{eta}</p>
 
 					{/* Target sits under the reading so the two can be compared — the
 					    whole point of showing both. */}

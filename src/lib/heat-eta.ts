@@ -266,7 +266,12 @@ export function heatCaption(
 	// expired: heaters approach the last degree asymptotically and plenty of
 	// installs cut out short of the number, so a timer reaching zero is a fact
 	// about arithmetic rather than about water.
-	if (remaining <= 0) return "Ready";
+	//
+	// And only when a rate says we watched it climb. Water sitting above its set
+	// point is the ordinary state of a warm pool in summer, not an arrival — the
+	// heater reports "enabled" all season next to it, so announcing readiness on
+	// the arithmetic alone would park the word on the card until October.
+	if (remaining <= 0) return rate === null ? "" : "Ready";
 	if (remaining <= 1) return "almost ready";
 	if (rate === null) return `${Math.round(remaining)}° to go`;
 	// A rate pointing away from the target is a heat-up that has already ended.
