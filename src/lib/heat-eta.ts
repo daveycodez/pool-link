@@ -410,9 +410,12 @@ export function heatCaption(
 	// stretch of a real heat-up, where the approach goes asymptotic and any
 	// estimate is at its worst.
 	if (remaining <= HEATING_ONLY_DEGREES) return "Heating";
-	if (rate === null) return `${Math.round(remaining)}° to go`;
-	// A rate pointing away from the target is a heat-up that has already ended.
-	if (rate <= 0) return "";
+	// Degrees whenever there is no usable rate — none measured yet, or one
+	// pointing away from the target, which happens when a poll lands mid-drift
+	// or the water gave back a degree before the burner caught it. Neither is a
+	// reason to say nothing: the distance is still true, and a heat-up in
+	// progress showing an empty chip is the one outcome with no defence.
+	if (rate === null || rate <= 0) return `${Math.round(remaining)}° to go`;
 	return timeToGo(remaining / rate);
 }
 
@@ -433,6 +436,7 @@ export function useHeatEta({
 	heater,
 	heatPump,
 	freezing,
+	fallbackTemp = Number.NaN,
 }: {
 	serial: string;
 	water: PoolDevice | undefined;
@@ -442,6 +446,8 @@ export function useHeatEta({
 	heater: PoolDevice | undefined;
 	heatPump: HeatPump | null;
 	freezing: boolean;
+	/** A remembered reading, for the stretches the panel reports none. */
+	fallbackTemp?: number;
 }): string {
 	// Every mutation, not just this panel's: the pad answers for the whole
 	// system, so a command to any part of it blanks the temperatures.
@@ -498,19 +504,27 @@ export function useHeatEta({
 		if (teachable !== null) rememberHeatRate(serial, memoryKey, teachable);
 	}, [serial, memoryKey, teachable]);
 
-	if (!run) return "";
+	// Measuring needs a live reading. Saying how far there is to go does not —
+	// the panel reports a temperature only for the circulating body and drops
+	// it entirely while the valves swing, and going quiet through exactly that
+	// stretch left a heating spa with no chip at all. The remembered reading
+	// stands in for the distance; it never becomes a crossing.
+	const shown = Number.isFinite(temp) ? temp : sane(fallbackTemp, celsius);
+	if (!firing) return "";
+
 	// Last time's rate stands in until this time's is measured — which is the
 	// first three minutes, and the three minutes somebody is most likely to be
 	// looking. Withdrawn once a climb has gone that long without a single
 	// crossing: the heater is reporting itself on without moving water, and a
 	// remembered rate would be answering for a heat-up that is not happening.
-	const stalled =
-		run.steps.length === 0 && updatedAt - run.startedAt >= SEED_GRACE_MS;
+	const stalled = run
+		? run.steps.length === 0 && updatedAt - run.startedAt >= SEED_GRACE_MS
+		: false;
 	const rate =
 		live ?? (stalled ? null : lastHeatRate(serial, memoryKey, celsius));
 
 	// The target arrives already through a bare `Number()`, which is 0 for the
 	// empty string a panel sends for a set point it does not have — and counting
 	// down to zero degrees would report every warm pool as ready.
-	return heatCaption(rate, temp, sane(target, celsius));
+	return heatCaption(rate, shown, sane(target, celsius));
 }

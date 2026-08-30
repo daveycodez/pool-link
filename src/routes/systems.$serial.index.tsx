@@ -324,6 +324,7 @@ function PoolSpaHero({
 	// its 600ms debounce is a number nobody has asked the panel for yet.
 	const eta = useHeatEta({
 		celsius,
+		fallbackTemp: Number(waterMemory?.value ?? Number.NaN),
 		freezing,
 		heatPump,
 		heater,
@@ -337,11 +338,11 @@ function PoolSpaHero({
 	 * not. An estimate over a remembered number would be arithmetic on a
 	 * temperature nobody is measuring any more, so the two never overlap.
 	 */
-	const caption = water?.value
-		? eta
-		: waterMemory && updatedAt - waterMemory.at >= TEMP_STALE_MS
-			? timeAgo(waterMemory.at, updatedAt)
-			: "";
+	// The age wins only once the reading is old enough to distrust; below that
+	// the estimate speaks, live reading or remembered one.
+	const stale =
+		!water?.value && waterMemory && updatedAt - waterMemory.at >= TEMP_STALE_MS;
+	const caption = stale ? timeAgo(waterMemory.at, updatedAt) : eta;
 	/**
 	 * Three things the chip can mean, in three colours that do not collide.
 	 *
