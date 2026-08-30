@@ -1058,13 +1058,19 @@ const lastTempKey = (serial: string) => `pool-link:temp-last:${serial}`;
  * The two bodies keep their heat on completely different terms. A pool is tens
  * of thousands of gallons with a day's thermal inertia, so a reading taken
  * this morning still describes the afternoon. A spa is a few hundred gallons
- * that sheds an hour of heat the way a pool sheds a day — off the heater it is
- * measurably cooler within one, so an hour is as far as a spa number can be
- * carried before it is telling someone about water that no longer exists.
+ * over a large surface, and off the heater it drops fast enough that half an
+ * hour is already a different temperature — so its number is discarded at the
+ * same age the other memories would start apologising for one.
+ *
+ * That alignment is deliberate: TEMP_STALE_MS is also half an hour, so a spa
+ * reading is either fresh enough to stand on its own or gone. It never appears
+ * wearing an age, because a spa temperature old enough to need dating is not
+ * worth showing at all. The pool keeps that middle state, where a reading from
+ * a few hours ago is still worth having as long as it says so.
  */
 const TEMP_MEMORY_MAX_AGE_MS: Record<string, number> = {
 	pool_temp: 6 * 60 * 60_000,
-	spa_temp: 60 * 60_000,
+	spa_temp: 30 * 60_000,
 };
 
 /**
