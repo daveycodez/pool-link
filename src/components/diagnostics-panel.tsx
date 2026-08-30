@@ -1,4 +1,4 @@
-import { Button, Card, ScrollShadow } from "@heroui/react";
+import { Button, Card, ScrollShadow, Spinner } from "@heroui/react";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CardColumns } from "#/components/card-columns";
@@ -245,20 +245,38 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 					<Card.Description>Signed-in user and their systems.</Card.Description>
 				</Card.Header>
 				<Probes>
-					<Probe onPress={() => probe("account", account)}>account</Probe>
+					{/* Labels are what the spinner keys on, so no two may share one —
+					    the raw and parsed locations rows would otherwise both spin. */}
 					<Probe
+						isDisabled={Boolean(busy)}
+						isPending={busy === "account"}
+						onPress={() => probe("account", account)}
+					>
+						account
+					</Probe>
+					<Probe
+						isDisabled={Boolean(busy)}
+						isPending={busy === "locations (raw)"}
 						onPress={() =>
-							probe("locations", () =>
+							probe("locations (raw)", () =>
 								api(`/users/${sessionMeta().userId}/locations`),
 							)
 						}
 					>
 						locations (raw)
 					</Probe>
-					<Probe onPress={() => probe("locations", listSystems)}>
+					<Probe
+						isDisabled={Boolean(busy)}
+						isPending={busy === "locations (parsed)"}
+						onPress={() => probe("locations (parsed)", listSystems)}
+					>
 						locations (parsed)
 					</Probe>
-					<Probe onPress={() => probe("userId", () => api("/userId"))}>
+					<Probe
+						isDisabled={Boolean(busy)}
+						isPending={busy === "userId"}
+						onPress={() => probe("userId", () => api("/userId"))}
+					>
 						userId
 					</Probe>
 				</Probes>
@@ -275,7 +293,12 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 						</Card.Header>
 						<Probes>
 							{SCREEN_PROBES.map(([label, fn]) => (
-								<Probe key={label} onPress={onSerial(label, fn)}>
+								<Probe
+									isDisabled={Boolean(busy)}
+									isPending={busy === label}
+									key={label}
+									onPress={onSerial(label, fn)}
+								>
 									{label}
 								</Probe>
 							))}
@@ -291,7 +314,12 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 						</Card.Header>
 						<Probes>
 							{VSP_PROBES.map(([label, fn]) => (
-								<Probe key={label} onPress={onSerial(label, fn)}>
+								<Probe
+									isDisabled={Boolean(busy)}
+									isPending={busy === label}
+									key={label}
+									onPress={onSerial(label, fn)}
+								>
 									{label}
 								</Probe>
 							))}
@@ -308,7 +336,12 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 						</Card.Header>
 						<Probes>
 							{PHORP_PROBES.map(([label, fn]) => (
-								<Probe key={label} onPress={onSerial(label, fn)}>
+								<Probe
+									isDisabled={Boolean(busy)}
+									isPending={busy === label}
+									key={label}
+									onPress={onSerial(label, fn)}
+								>
 									{label}
 								</Probe>
 							))}
@@ -356,11 +389,21 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 					</Button>
 				</Card.Header>
 				{/* Wrapping keeps this to one scroll axis despite very long values. */}
-				<ScrollShadow className="max-h-[60vh]">
-					<pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-						{out}
-					</pre>
-				</ScrollShadow>
+				{/* Whatever was here belonged to the last command, and the title above
+				    already names the new one — leaving the old JSON under the new
+				    heading reads as an answer that has arrived. The spinner says the
+				    only true thing for those seconds. */}
+				{busy ? (
+					<div className="flex justify-center py-6">
+						<Spinner size="sm" />
+					</div>
+				) : (
+					<ScrollShadow className="max-h-[60vh]">
+						<pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+							{out}
+						</pre>
+					</ScrollShadow>
+				)}
 			</Card>
 		</CardColumns>
 	);
@@ -382,13 +425,25 @@ function Probes({ children }: { children: React.ReactNode }) {
 
 function Probe({
 	onPress,
+	isPending,
+	isDisabled,
 	children,
 }: {
 	onPress: () => void;
+	/** This is the probe in flight, so it carries the spinner. */
+	isPending?: boolean;
+	/** Any probe is in flight: the panel answers one command at a time. */
+	isDisabled?: boolean;
 	children: React.ReactNode;
 }) {
 	return (
-		<Button onPress={onPress} size="sm" variant="secondary">
+		<Button
+			isDisabled={isDisabled}
+			onPress={onPress}
+			size="sm"
+			variant="secondary"
+		>
+			{isPending ? <Spinner color="current" size="sm" /> : null}
 			{children}
 		</Button>
 	);
