@@ -48,16 +48,19 @@ export function usePool(serial: string) {
 				d.name !== "solar_heater",
 		),
 		light: devices.find((d) => d.kind === "light"),
+		// The real spa-mode control: turning it on throws the valves over, which
+		// is what makes the panel report spa_temp instead of pool_temp.
+		spaPump: byName.get("spa_pump"),
 		jetPump: byName.get("aux_2"),
 		waterfall: byName.get("aux_1"),
+		// Equipment is the granular view: every actionable device the panel
+		// exposes, including ones the pool screen surfaces its own way. Only the
+		// unconfigured virtual slots are hidden, and only while they are off.
 		controls: devices.filter(
 			(d) =>
-				d.kind === "pump" ||
-				d.name === "solar_heater" ||
-				(["switch", "dimmer"].includes(d.kind) &&
-					d.name !== "aux_1" &&
-					d.name !== "aux_2" &&
-					(d.on || !genericAux.test(d.label))),
+				(["pump", "switch", "dimmer", "light"].includes(d.kind) ||
+					d.name === "solar_heater") &&
+				(d.on || !genericAux.test(d.label)),
 		),
 	};
 }
