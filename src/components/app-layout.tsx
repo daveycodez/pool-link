@@ -16,7 +16,8 @@ import { BottomNav } from "#/components/bottom-nav";
 import { Loading } from "#/components/loading";
 import { ThemeToggle } from "#/components/theme-toggle";
 import { isCelsius, timeAgo } from "#/lib/format";
-import { keys, usePanel, useSession, useSystems } from "#/lib/queries";
+import { keys } from "#/lib/keys";
+import { usePanel, useSession, useSystems, useUserId } from "#/lib/queries";
 
 /**
  * Page chrome for every route. The header lives here so /login gets the
@@ -33,6 +34,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	const session = useSession();
 	const signedIn = Boolean(session.data);
 	const systems = useSystems(signedIn);
+	const uid = useUserId();
 	const router = useRouter();
 	const navigate = useNavigate();
 	const qc = useQueryClient();
@@ -66,7 +68,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	// list alone would leave every chip showing whatever it last saw.
 	const refresh = () => {
 		source.refetch();
-		if (!serial) qc.invalidateQueries({ queryKey: keys.statuses() });
+		if (!serial) qc.invalidateQueries({ queryKey: keys.statuses(uid) });
 	};
 	const live = source.isSuccess && !source.isStale;
 	// Only tick while stale — no reason to re-render the whole layout every
@@ -104,10 +106,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		pageTitle ??
 		(!signedIn ? "Pool Link" : serial ? (system?.name ?? "") : "My Systems");
 
-	// Any first load is a bare spinner — no header, no chrome around it. Both
-	// queries report pending while disabled, so each is gated on actually being
-	// needed here: the list and a system page need `systems`, only a system page
-	// needs its snapshot.
+	// Any first load is a bare spinner — no header, no chrome around it. What
+	// matters is whether there is anything to draw, not whether a fetch is in
+	// flight: coming back to a page whose data is still cached should show it,
+	// and refetch behind the spinner-free screen.
 	const needsSystems = pathname === "/" || Boolean(serial);
 	// A single system means the list is a page with one link on it, so the route
 	// sends them straight through. Counting that as loading keeps the header and
@@ -134,7 +136,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		session.isPending ||
 		(signedIn && needsSystems && systems.isPending) ||
 		passingThrough ||
-		(Boolean(serial) && snap.isPending);
+		(Boolean(serial) && !snap.data);
 
 	// /sign-out renders its own spinner, but it has to actually mount to run the
 	// mutation — so it bypasses the chrome without bypassing `children`.

@@ -1,13 +1,11 @@
-import { Toast, toast } from "@heroui/react";
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { Toast } from "@heroui/react";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import { AppLayout } from "#/components/app-layout";
-import { AqualinkError, errorMessage } from "#/lib/aqualink/types";
 import { persistOptions } from "#/lib/persist";
-import { keys } from "#/lib/queries";
+import { queryClient } from "#/lib/query-client";
 import appCss from "../styles.css?url";
 
 /** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
@@ -73,55 +71,6 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-	const [client] = useState(() => {
-		// A 401 means the session is gone — the client has already cleared it by
-		// the time this runs. Re-reading it turns useRequireSession's guard from
-		// something that only fires on a cold start into one that catches a
-		// session dying mid-use, which is the case that used to strand people.
-		const signedOut = (error: unknown) => {
-			if (!(error instanceof AqualinkError) || error.status !== 401)
-				return false;
-			queryClient.invalidateQueries({ queryKey: keys.session() });
-			return true;
-		};
-
-		const queryClient: QueryClient = new QueryClient({
-			defaultOptions: {
-				queries: {
-					// Retry count is the library default. Only the backoff cap is
-					// ours: theirs tops out at 30s, six times the poll interval,
-					// and a query will not start its next scheduled poll while a
-					// retry is still pending — so a blip could hold the screen on
-					// half-minute-old data when polling again would have been
-					// fresher. Capped near one interval, the poll is the retry.
-					retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
-					refetchOnWindowFocus: false,
-					staleTime: 5_000,
-				},
-			},
-			// Every query and mutation reports through here, so nothing needs a
-			// per-call error handler.
-			queryCache: new QueryCache({
-				onError: (error, query) => {
-					if (signedOut(error)) return;
-					// A poll that fails behind data we already hold changes nothing
-					// on screen and the next one will likely succeed. The header's
-					// updated-at is the honest signal for that, not a toast.
-					if (query.state.data !== undefined) return;
-					toastError(error);
-				},
-			}),
-			mutationCache: new MutationCache({
-				onError: (error) => {
-					if (signedOut(error)) return;
-					toastError(error);
-				},
-			}),
-		});
-
-		return queryClient;
-	});
-
 	return (
 		// next-themes swaps the class on <html> after mount, which is exactly the
 		// kind of mismatch suppressHydrationWarning exists for.
@@ -138,7 +87,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 					disableTransitionOnChange
 				>
 					<PersistQueryClientProvider
-						client={client}
+						client={queryClient}
 						persistOptions={persistOptions}
 					>
 						<AppLayout>{children}</AppLayout>
@@ -178,19 +127,3 @@ function OfflineBanner() {
  * raise the same toast twelve times a minute. Collapse repeats of the same
  * message inside a short window.
  */
-let lastToast = { message: "", at: 0 };
-const TOAST_DEDUPE_MS = 10_000;
-
-function toastError(error: unknown) {
-	// 401s are the signed-out path, not a fault: an in-flight poll landing after
-	// sign-out, or an expired session. Both redirect to /login, which says it
-	// better than a toast would.
-	if (error instanceof AqualinkError && error.status === 401) return;
-
-	const message = errorMessage(error);
-	const now = Date.now();
-	if (message === lastToast.message && now - lastToast.at < TOAST_DEDUPE_MS)
-		return;
-	lastToast = { message, at: now };
-	toast.danger(message);
-}

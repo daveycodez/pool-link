@@ -403,7 +403,9 @@ export async function devicesScreen(
 /** OneTouch macros. A panel without them answers harmlessly. */
 export async function onetouchScreen(serial: string): Promise<unknown> {
 	const res = await getOnetouch(serial).catch(() => undefined);
-	return res?.onetouch_screen;
+	// Null, never undefined: a panel with no macros is a valid answer, and
+	// react-query reads undefined as "the fetcher returned nothing" and throws.
+	return res?.onetouch_screen ?? null;
 }
 
 export async function toggleDevice(

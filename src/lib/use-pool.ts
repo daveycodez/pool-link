@@ -72,7 +72,9 @@ export function usePool(serial: string) {
 	const snap = usePanel(serial);
 	// Started here rather than inside the cards that need it, so the two run
 	// together and the screen has everything before it draws anything.
-	const pumps = useVspPumps(serial);
+	// Started here so it runs with the panel rather than after the first paint;
+	// the cards that use it read it through their own hook.
+	useVspPumps(serial);
 
 	const devices = snap.data?.devices ?? [];
 	const byName = new Map(devices.map((d) => [d.name, d]));
@@ -87,7 +89,10 @@ export function usePool(serial: string) {
 		serial,
 		snap,
 		// Both, so speed dropdowns arrive with their cards instead of after them.
-		loading: snap.isPending || pumps.isPending,
+		// The panel only. Pump speeds are an enhancement on top of the cards —
+		// AuxHero draws without them — so waiting on that query blanked the whole
+		// screen for something the page does not need to exist.
+		loading: snap.isPending,
 		spaMode,
 		celsius: isCelsius(snap.data?.raw),
 		water: spaMode ? spa : pool,

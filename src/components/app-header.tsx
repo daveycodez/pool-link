@@ -90,25 +90,19 @@ export function IconBtn({
 	className?: string;
 }) {
 	if (to) {
+		// The button's own classes on an anchor, rather than Button rendering one
+		// through `render`: it builds a <button> and warns when handed an <a>,
+		// because the props it wires up are typed and behave as a button's. The
+		// BEM classes are the documented way to give a link the same look.
 		return (
-			<Button
-				isIconOnly
-				size="sm"
-				variant="ghost"
+			<Link
 				aria-label={label}
-				// Button renders a <button>; swap in the router Link so the icon
-				// button navigates. The cast is needed because the handler props
-				// are typed against HTMLButtonElement, not HTMLAnchorElement.
-				render={(props) => (
-					<Link
-						{...(props as unknown as React.ComponentPropsWithoutRef<"a">)}
-						params={params}
-						to={to}
-					/>
-				)}
+				className={`link button button--sm button--ghost button--icon-only no-underline ${className ?? ""}`}
+				params={params}
+				to={to}
 			>
 				{children}
-			</Button>
+			</Link>
 		);
 	}
 	return (

@@ -1,4 +1,5 @@
 import {
+	skipToken,
 	useIsMutating,
 	useMutation,
 	useQuery,
@@ -35,6 +36,8 @@ import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
 import { normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice, PoolSnapshot } from "#/lib/iaqualink/types";
+import { keys } from "#/lib/keys";
+import { PERSIST_GC_TIME_MS } from "#/lib/persist";
 
 /** What can be asked of a zone. Colour carries brightness, as the API does. */
 export type IclChange =
@@ -42,29 +45,6 @@ export type IclChange =
 	| { kind: "color"; zoneId: number; colorId: number; dim: number }
 	| { kind: "brightness"; zoneId: number; dim: number }
 	| { kind: "custom"; zoneId: number; rgbw: [number, number, number, number] };
-
-/**
- * How long a persisted entry may be reused. Long, because what is kept barely
- * changes — pump wiring moves when someone rewires the pad, and not otherwise
- * — and everything restored is refetched on mount regardless, so age costs at
- * most a stale first paint. It doubles as the gcTime of what gets persisted:
- * a restore older than gcTime is collected on arrival, so the two must agree.
- *
- * The persister applies this to the whole stored blob rather than per query,
- * so the systems list rides the same window. That is harmless for the same
- * reason: it is replaced by a fetch as soon as anything mounts.
- */
-export const PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-
-/**
- * The gcTime for persisted queries. On the client it must match
- * PERSIST_MAX_AGE_MS or a restore would be collected on arrival — but a finite
- * gcTime is a live setTimeout, and during the prerender that timer is what
- * keeps the build process from exiting (react-query's own server default is
- * Infinity for exactly this reason, and an explicit value overrides it).
- */
-const PERSIST_GC_TIME_MS =
-	typeof window === "undefined" ? Infinity : PERSIST_MAX_AGE_MS;
 
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
 const POLL_MS = 10_000;
@@ -92,19 +72,13 @@ const ONETOUCH_POLL_MS = POLL_MS * 6;
 const settle = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
 
-export const keys = {
-	session: () => ["session"] as const,
-	systems: () => ["systems"] as const,
-	/** Everything read from one panel, so a mutation can invalidate the lot. */
-	panel: (serial: string) => ["panel", serial] as const,
-	home: (serial: string) => ["panel", serial, "home"] as const,
-	devices: (serial: string) => ["panel", serial, "devices"] as const,
-	onetouch: (serial: string) => ["panel", serial, "onetouch"] as const,
-	status: (serial: string) => ["status", serial] as const,
-	/** Prefix that matches every system's status query. */
-	statuses: () => ["status"] as const,
-	vsp: (serial: string) => ["vsp", serial] as const,
-};
+/**
+ * Who the cache belongs to. Empty until the session resolves, which also keeps
+ * every account-scoped query disabled until there is an account to scope to.
+ */
+export function useUserId(): string {
+	return useSession().data?.userId ?? "";
+}
 
 export function useSession() {
 	return useQuery({
@@ -116,6 +90,7 @@ export function useSession() {
 }
 
 export function useLogin() {
+	const uid = useUserId();
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: ({ email, password }: { email: string; password: string }) =>
@@ -124,7 +99,7 @@ export function useLogin() {
 			// Seed the session query with the just-created session so the
 			// dashboard doesn't bounce back to /login before a refetch lands.
 			qc.setQueryData(keys.session(), session);
-			qc.invalidateQueries({ queryKey: keys.systems() });
+			qc.invalidateQueries({ queryKey: keys.systems(uid) });
 		},
 	});
 }
@@ -138,10 +113,10 @@ export function useLogout() {
 }
 
 export function useSystems(enabled: boolean) {
+	const uid = useUserId();
 	return useQuery({
-		queryKey: keys.systems(),
-		queryFn: () => listSystems(),
-		enabled,
+		queryKey: keys.systems(uid),
+		queryFn: enabled && uid ? () => listSystems() : skipToken,
 		refetchInterval: POLL_MS,
 		refetchIntervalInBackground: false,
 		// Double the interval, so a healthy cycle never reads as stale.
@@ -161,66 +136,46 @@ export function useSystems(enabled: boolean) {
  * live ones. Split, each keeps its own cadence and its own fate, and they sit
  * under one key prefix so a mutation still refreshes the panel in one line.
  */
-function panelQuery<T>(
-	queryKey: readonly unknown[],
-	queryFn: () => Promise<T>,
-	serial: string | undefined,
-	mutating: boolean,
-	interval: number,
-) {
-	return {
-		queryKey,
-		queryFn,
-		enabled: Boolean(serial),
-		refetchInterval: (mutating ? false : interval) as number | false,
-		refetchIntervalInBackground: false,
-		// A cycle plus the longest a command can hold the poll. Equal to the
-		// interval, data would turn stale at the very moment the next poll is
-		// due — so the header would read "10s ago" every cycle, on a panel that
-		// was answering perfectly. Stale should mean a poll was actually missed.
-		staleTime: interval + LIGHT_SETTLE_MS,
-		retry: (count: number, error: unknown) =>
-			error instanceof AqualinkError && error.status === 401
-				? false
-				: count < 2,
-	};
-}
+const panelOptions = (mutating: boolean, interval: number) => ({
+	refetchInterval: (mutating ? false : interval) as number | false,
+	refetchIntervalInBackground: false,
+	// A cycle plus the longest a command can hold the poll. Equal to the
+	// interval, data would turn stale at the very moment the next poll is due —
+	// so the header would read "10s ago" every cycle, on a panel that was
+	// answering perfectly. Stale should mean a poll was actually missed.
+	staleTime: interval + LIGHT_SETTLE_MS,
+	retry: (count: number, error: unknown) =>
+		error instanceof AqualinkError && error.status === 401 ? false : count < 2,
+});
 
 export function usePanel(serial: string | undefined) {
+	const uid = useUserId();
 	// Mutations stay pending until the panel has settled, so this covers both
 	// the request and the transient state that follows it.
 	const mutating = useIsMutating() > 0;
-	const id = serial as string;
+	const ready = Boolean(serial) && Boolean(uid);
 
-	const home = useQuery(
-		panelQuery(
-			keys.home(serial ?? "-"),
-			() => homeScreen(id),
-			serial,
-			mutating,
-			POLL_MS,
-		),
-	);
-	const devices = useQuery(
-		panelQuery(
-			keys.devices(serial ?? "-"),
-			() => devicesScreen(id),
-			serial,
-			mutating,
-			POLL_MS,
-		),
-	);
+	// skipToken rather than `enabled`: it disables the query and removes the
+	// fetcher with it, so a serial that is not there cannot be cast into one.
+	// Without it these run before the session names the account and key under
+	// an empty user id — every account's cache sharing one bucket.
+	const home = useQuery({
+		queryKey: keys.home(uid, serial ?? "-"),
+		queryFn: ready && serial ? () => homeScreen(serial) : skipToken,
+		...panelOptions(mutating, POLL_MS),
+	});
+	const devices = useQuery({
+		queryKey: keys.devices(uid, serial ?? "-"),
+		queryFn: ready && serial ? () => devicesScreen(serial) : skipToken,
+		...panelOptions(mutating, POLL_MS),
+	});
 	// Macros change when someone edits them at the panel, which is never in the
 	// course of using the app — and this is the one screen worth restoring from
 	// storage, since it is names rather than readings.
 	const onetouch = useQuery({
-		...panelQuery(
-			keys.onetouch(serial ?? "-"),
-			() => onetouchScreen(id),
-			serial,
-			mutating,
-			ONETOUCH_POLL_MS,
-		),
+		queryKey: keys.onetouch(uid, serial ?? "-"),
+		queryFn: ready && serial ? () => onetouchScreen(serial) : skipToken,
+		...panelOptions(mutating, ONETOUCH_POLL_MS),
 		// The one screen worth keeping: names rather than readings, so a restore
 		// is still true. It has to outlive maxAge to survive being restored.
 		gcTime: PERSIST_GC_TIME_MS,
@@ -230,14 +185,14 @@ export function usePanel(serial: string | undefined) {
 		() =>
 			home.data && devices.data
 				? normalize(
-						id,
+						serial ?? "",
 						home.data,
 						devices.data.devices,
 						devices.data.icl,
 						onetouch.data,
 					)
 				: undefined,
-		[id, home.data, devices.data, onetouch.data],
+		[serial, home.data, devices.data, onetouch.data],
 	);
 
 	return {
@@ -260,8 +215,9 @@ export function usePanel(serial: string | undefined) {
 
 /** Optimistic actuation: flip the cache instantly, roll back on failure. */
 export function useActuate(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(serial ?? "-");
+	const qk = keys.panel(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
 			const res = await toggleDevice(
@@ -297,7 +253,7 @@ export function useActuate(serial: string | undefined) {
 		// from data up to a cycle older.
 		onSettled: () => {
 			qc.invalidateQueries({ queryKey: qk });
-			qc.invalidateQueries({ queryKey: keys.vsp(serial ?? "-") });
+			qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") });
 		},
 	});
 }
@@ -310,8 +266,9 @@ export function useActuate(serial: string | undefined) {
  * takes only the one that changed.
  */
 export function useSetPoint(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(serial ?? "-");
+	const qk = keys.panel(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async ({ name, value }: { name: string; value: number }) => {
 			const snap = qc.getQueryData(qk) as PoolSnapshot | undefined;
@@ -364,8 +321,9 @@ export function useSetPoint(serial: string | undefined) {
  * ends whichever was running.
  */
 export function useOneTouch(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(serial ?? "-");
+	const qk = keys.panel(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async (name: string) => {
 			const res = await setOnetouch(serial as string, name);
@@ -398,8 +356,9 @@ export function useOneTouch(serial: string | undefined) {
 
 /** Enable the heat pump, or switch it between heating and chilling. */
 export function useHeatPump(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(serial ?? "-");
+	const qk = keys.panel(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async (
 			v: { kind: "power"; on: boolean } | { kind: "mode"; mode: string },
@@ -435,8 +394,9 @@ export function useHeatPump(serial: string | undefined) {
 
 /** Set a light's color effect. */
 export function useLightColor(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(serial ?? "-");
+	const qk = keys.panel(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async ({
 			name,
@@ -486,12 +446,12 @@ export function useLightColor(serial: string | undefined) {
  * and the mutation below invalidates this — the poll is just drift correction.
  */
 export function useVspPumps(serial: string | undefined) {
+	const uid = useUserId();
 	const mutating = useIsMutating() > 0;
 
 	return useQuery({
-		queryKey: keys.vsp(serial ?? "-"),
-		queryFn: () => listVspPumps(serial as string),
-		enabled: Boolean(serial),
+		queryKey: keys.vsp(uid, serial ?? "-"),
+		queryFn: uid && serial ? () => listVspPumps(serial) : skipToken,
 		refetchInterval: mutating ? false : VSP_POLL_MS,
 		refetchIntervalInBackground: false,
 		staleTime: VSP_POLL_MS * 2,
@@ -507,8 +467,9 @@ export function useVspPumps(serial: string | undefined) {
  * a light colour turns the light on.
  */
 export function useSetVspSpeed(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.vsp(serial ?? "-");
+	const qk = keys.vsp(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async ({
 			pumpId,
@@ -545,7 +506,7 @@ export function useSetVspSpeed(serial: string | undefined) {
 		// The pump's aux relay may have switched on, so refresh the panel too.
 		onSettled: () => {
 			qc.invalidateQueries({ queryKey: qk });
-			qc.invalidateQueries({ queryKey: keys.panel(serial ?? "-") });
+			qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") });
 		},
 	});
 }
@@ -556,8 +517,9 @@ export function useSetVspSpeed(serial: string | undefined) {
  * same way whichever was sent.
  */
 export function useIclZone(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(serial ?? "-");
+	const qk = keys.panel(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async (v: IclChange) => {
 			const id = v.zoneId;
@@ -611,10 +573,11 @@ export function useIclZone(serial: string | undefined) {
 
 /** Rename the system in the iAqualink account, then refresh the system list. */
 export function useSetDeviceName(serial: string | undefined) {
+	const uid = useUserId();
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: (name: string) => setDeviceName(serial as string, name),
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.systems() }),
+		onSuccess: () => qc.invalidateQueries({ queryKey: keys.systems(uid) }),
 	});
 }
 
@@ -623,9 +586,10 @@ export function useSetDeviceName(serial: string | undefined) {
  * so this is polled far more slowly than a system's own snapshot.
  */
 export function useDeviceStatus(serial: string) {
+	const uid = useUserId();
 	return useQuery({
-		queryKey: keys.status(serial),
-		queryFn: () => getDeviceStatus(serial),
+		queryKey: keys.status(uid, serial),
+		queryFn: uid ? () => getDeviceStatus(serial) : skipToken,
 		refetchInterval: POLL_MS,
 		refetchIntervalInBackground: false,
 		staleTime: POLL_MS * 2,
@@ -635,12 +599,13 @@ export function useDeviceStatus(serial: string) {
 
 /** Attach a system to the account, then refresh the list it appears in. */
 export function useAddDevice() {
+	const uid = useUserId();
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: ({ serial, name }: { serial: string; name: string }) =>
 			addDevice(serial, name),
 		// Awaited, not fired and forgotten: whoever added the system is about to
 		// be shown the list, and it should already have the new one in it.
-		onSuccess: () => qc.refetchQueries({ queryKey: keys.systems() }),
+		onSuccess: () => qc.refetchQueries({ queryKey: keys.systems(uid) }),
 	});
 }

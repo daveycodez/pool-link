@@ -1,7 +1,9 @@
-import { del, get, set } from "idb-keyval";
+import { keys } from "#/lib/keys";
+import { flushPersisted } from "#/lib/persist";
+import { queryClient } from "#/lib/query-client";
 
 /**
- * Persisted session. The account password is NEVER stored here — we keep the
+ * The signed-in session. The account password is NEVER stored — we keep the
  * refresh token and mint fresh idTokens from it.
  */
 export interface Session {
@@ -16,20 +18,28 @@ export interface Session {
 	country: string;
 }
 
-const KEY = "pool-link:session";
-const canUseIDB = () => typeof indexedDB !== "undefined";
-
+/**
+ * Held in the query cache rather than a store of its own. It is persisted the
+ * same way everything else is, `useSession` reads it without a wrapper around
+ * a second database, and signing out clears it with the rest.
+ *
+ * Reads are synchronous against the cache. Nothing calls these before the
+ * restore has finished, because every request originates from a query and the
+ * provider holds those idle until it has.
+ */
 export async function loadSession(): Promise<Session | null> {
-	if (!canUseIDB()) return null;
-	return (await get<Session>(KEY)) ?? null;
+	return queryClient.getQueryData<Session | null>(keys.session()) ?? null;
 }
 
 export async function saveSession(session: Session): Promise<void> {
-	if (!canUseIDB()) return;
-	await set(KEY, session);
+	queryClient.setQueryData(keys.session(), session);
+	// Written through rather than left to the throttle: the pool rotates the
+	// refresh token, so a save followed by a close inside the throttle window
+	// would lose the new one while the old is already dead.
+	await flushPersisted();
 }
 
 export async function clearSession(): Promise<void> {
-	if (!canUseIDB()) return;
-	await del(KEY);
+	queryClient.setQueryData(keys.session(), null);
+	await flushPersisted();
 }
