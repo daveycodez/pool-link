@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { AppHeader, IconBtn } from "#/components/app-header";
 import { BottomNav } from "#/components/bottom-nav";
 import { Loading } from "#/components/loading";
-import { timeAgo } from "#/lib/format";
+import { isCelsius, timeAgo } from "#/lib/format";
 import { keys, useSession, useSnapshot, useSystems } from "#/lib/queries";
 
 /**
@@ -45,8 +45,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	const air = snap.data?.devices.find((d) => d.name === "air_temp");
 	// `unit` is only "°" — the scale itself is on the raw home payload, and the
 	// warm/cold threshold has to follow it.
-	const celsius =
-		String(snap.data?.raw?.temp_scale ?? "F").toUpperCase() === "C";
+	const celsius = isCelsius(snap.data?.raw);
 	const airValue = Number(air?.value);
 	const AirIcon =
 		Number.isFinite(airValue) && airValue >= (celsius ? 21 : 70)

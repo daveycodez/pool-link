@@ -1,17 +1,10 @@
 import { Button, Card, Switch } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-	Bubbles,
-	Flame,
-	Lightbulb,
-	LightbulbOff,
-	Waves,
-	Wind,
-} from "lucide-react";
+import { Bubbles, Flame, Lightbulb, LightbulbOff, Waves } from "lucide-react";
 import { useState } from "react";
-import { EquipmentRow } from "#/components/device-row";
+import { AuxCard } from "#/components/aux-card";
 import { Loading } from "#/components/loading";
-import { POOL_RANGE, SPA_RANGE, TempStepper } from "#/components/temp-stepper";
+import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
@@ -32,9 +25,9 @@ function Pool() {
 		spaSet,
 		heaters,
 		light,
-		jetPump,
 		spaPump,
-		waterfall,
+		auxes,
+		celsius,
 	} = usePool(serial);
 	const actuate = useActuate(serial);
 	const setTemps = useSetTemps(serial);
@@ -46,12 +39,13 @@ function Pool() {
 
 	return (
 		<PoolScreen
+			serial={serial}
 			water={water}
 			spaMode={spaMode}
 			heaters={heaters}
-			jetPump={jetPump}
 			spaPump={spaPump}
-			waterfall={waterfall}
+			auxes={auxes}
+			celsius={celsius}
 			poolSet={poolSet}
 			spaSet={spaSet}
 			light={light}
@@ -75,9 +69,10 @@ function PoolScreen({
 	water,
 	spaMode,
 	heaters,
-	jetPump,
+	serial,
 	spaPump,
-	waterfall,
+	auxes,
+	celsius,
 	poolSet,
 	spaSet,
 	light,
@@ -88,23 +83,24 @@ function PoolScreen({
 	water: PoolDevice | undefined;
 	spaMode: boolean;
 	heaters: PoolDevice[];
-	jetPump: PoolDevice | undefined;
 	spaPump: PoolDevice | undefined;
-	waterfall: PoolDevice | undefined;
+	auxes: PoolDevice[];
+	celsius: boolean;
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
 	light: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 	onSetTemps: (spa: string, pool: string) => void;
 	onLightColor: (effectId: number) => void;
+	serial: string;
 }) {
 	return (
 		<div className="space-y-4">
 			<ModeHero
+				celsius={celsius}
 				heater={heaters.find((h) =>
 					spaMode ? h.name.startsWith("spa") : h.name.startsWith("pool"),
 				)}
-				jetPump={jetPump}
 				onSetPoint={(t) =>
 					spaMode
 						? onSetTemps(String(t), poolSet?.value ?? "")
@@ -125,12 +121,16 @@ function PoolScreen({
 				/>
 			) : null}
 
-			{waterfall ? (
-				<EquipmentRow
-					device={waterfall}
-					onToggle={(on) => onToggle(waterfall, on)}
+			{/* One card per relay, in the panel's own order — nothing on this
+			    screen is positioned by what the equipment happens to be. */}
+			{auxes.map((aux) => (
+				<AuxCard
+					device={aux}
+					key={aux.id}
+					onToggle={(on) => onToggle(aux, on)}
+					serial={serial}
 				/>
-			) : null}
+			))}
 		</div>
 	);
 }
@@ -143,8 +143,8 @@ function PoolScreen({
 function ModeHero({
 	water,
 	spaMode,
+	celsius,
 	spaPump,
-	jetPump,
 	heater,
 	setPoint,
 	onToggle,
@@ -152,8 +152,8 @@ function ModeHero({
 }: {
 	water: PoolDevice | undefined;
 	spaMode: boolean;
+	celsius: boolean;
 	spaPump: PoolDevice | undefined;
-	jetPump: PoolDevice | undefined;
 	heater: PoolDevice | undefined;
 	setPoint: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
@@ -188,7 +188,7 @@ function ModeHero({
 						<TempStepper
 							className="mt-3 w-fit"
 							onCommit={onSetPoint}
-							range={spaMode ? SPA_RANGE : POOL_RANGE}
+							range={tempRange(spaMode ? "spa" : "pool", celsius)}
 							value={target}
 						/>
 					) : null}
@@ -206,8 +206,6 @@ function ModeHero({
 							tone="warning"
 						/>
 					) : null}
-					{/* Jets only exist as a spa control — no reason to offer them while
-					    the valves are set to pool. */}
 					{heater ? (
 						<TrackSwitch
 							device={heater}
@@ -217,16 +215,6 @@ function ModeHero({
 							onLabel="Heat"
 							onToggle={onToggle}
 							tone="danger"
-						/>
-					) : null}
-					{spaMode && jetPump ? (
-						<TrackSwitch
-							device={jetPump}
-							offIcon={Wind}
-							offLabel="Jets"
-							onIcon={Wind}
-							onLabel="Jets"
-							onToggle={onToggle}
 						/>
 					) : null}
 				</div>

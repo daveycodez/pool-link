@@ -4,7 +4,11 @@ import { Thermometer } from "lucide-react";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
 import { PumpSpeeds } from "#/components/pump-speeds";
-import { POOL_RANGE, SPA_RANGE, TempStepper } from "#/components/temp-stepper";
+import {
+	type TempRange,
+	TempStepper,
+	tempRange,
+} from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useSetTemps } from "#/lib/queries";
 import { usePool, useRequireSession } from "#/lib/use-pool";
@@ -16,7 +20,8 @@ export const Route = createFileRoute("/systems/$serial/equipment")({
 function Equipment() {
 	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
-	const { controls, heaters, poolSet, spaSet, loading } = usePool(serial);
+	const { controls, heaters, poolSet, spaSet, loading, celsius } =
+		usePool(serial);
 	const actuate = useActuate(serial);
 	const setTemps = useSetTemps(serial);
 
@@ -76,7 +81,7 @@ function Equipment() {
 				<TempRow
 					device={poolSet}
 					onChange={pool}
-					range={POOL_RANGE}
+					range={tempRange("pool", celsius)}
 					title="Pool Temp"
 				/>
 			) : null}
@@ -91,7 +96,7 @@ function Equipment() {
 				<TempRow
 					device={spaSet}
 					onChange={spa}
-					range={SPA_RANGE}
+					range={tempRange("spa", celsius)}
 					title="Spa Temp"
 				/>
 			) : null}
@@ -119,7 +124,7 @@ function TempRow({
 }: {
 	title: string;
 	device: PoolDevice;
-	range: { min: number; max: number; step: number };
+	range: TempRange;
 	onChange: (temp: number) => void;
 }) {
 	return (

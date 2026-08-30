@@ -1,6 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { isCelsius } from "#/lib/format";
 import { useSession, useSnapshot } from "#/lib/queries";
+
+/** Jandy LED WaterColors — the one light family with an effect list here. */
+const JANDY_SUBTYPE = 4;
+
+const num = (v: unknown) => (v == null ? Number.NaN : Number(v));
 
 /** Bounce to /login when there is no session. Every signed-in route uses this. */
 export function useRequireSession() {
@@ -37,6 +43,7 @@ export function usePool(serial: string) {
 		snap,
 		loading: snap.isPending,
 		spaMode,
+		celsius: isCelsius(snap.data?.raw),
 		water: spaMode ? spa : pool,
 		air: byName.get("air_temp"),
 		poolSet: byName.get("pool_set_point"),
@@ -47,12 +54,25 @@ export function usePool(serial: string) {
 				d.name.endsWith("_heater") &&
 				d.name !== "solar_heater",
 		),
-		light: devices.find((d) => d.kind === "light"),
+		// A colour light is type 2; the subtype names the brand, which decides
+		// what effect list applies. Only the Jandy family is implemented, so
+		// anything else stays an ordinary switch rather than getting a hero
+		// wired to effects it does not have.
+		light: devices.find(
+			(d) => d.kind === "light" && num(d.raw.subtype) === JANDY_SUBTYPE,
+		),
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),
-		jetPump: byName.get("aux_2"),
-		waterfall: byName.get("aux_1"),
+		// Every aux relay the panel reports, in its own order. Nothing here is
+		// named or positioned by this app — the pool screen renders one card
+		// each, so a pool with different equipment gets different cards.
+		auxes: devices.filter(
+			(d) =>
+				d.name.startsWith("aux_") &&
+				d.kind !== "light" &&
+				(d.on || !genericAux.test(d.label)),
+		),
 		// Equipment is the granular view: every actionable device the panel
 		// exposes, including ones the pool screen surfaces its own way. Only the
 		// unconfigured virtual slots are hidden, and only while they are off.

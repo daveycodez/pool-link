@@ -545,6 +545,8 @@ export interface VspPump {
 	min: number;
 	max: number;
 	speeds: VspSpeed[];
+	/** Aux relay numbers this pump drives, from the panel's own assignments. */
+	auxes: number[];
 }
 
 export interface VspSpeed {
@@ -581,14 +583,12 @@ export async function listVspPumps(serial: string): Promise<VspPump[]> {
 	return Promise.all(
 		installed.map(async (m) => {
 			const pumpId = Number(m.pumpId);
-			const { min, max, speeds } = await getPumpSpeeds(serial, pumpId);
+			const slot = await getPumpSpeeds(serial, pumpId);
 			return {
 				pumpId,
 				name: named.get(pumpId) || `Pump ${pumpId}`,
 				app: String(m.appName ?? ""),
-				min,
-				max,
-				speeds,
+				...slot,
 			};
 		}),
 	);
@@ -608,11 +608,34 @@ async function getPumpSpeeds(serial: string, pumpId: number) {
 		active: s.enabled === "true",
 	}));
 	const named = all.filter((s) => !/^Speed\d+$/.test(s.name));
+
+	// Position n of the assignment list is aux n, holding the speed that aux
+	// runs at, or "No". This is what ties a pump to a relay without matching
+	// on names, which differ per install.
+	const assignments = Array.isArray(raw.aux_speed_assignments)
+		? (raw.aux_speed_assignments as unknown[])
+		: [];
+	const auxes = assignments
+		.map((a, i) => (/^\d+$/.test(String(a)) ? i + 1 : 0))
+		.filter((n) => n > 0);
+
 	return {
 		min: Number(raw.minSpeed),
 		max: Number(raw.maxSpeed),
 		speeds: named.length > 0 ? named : all,
+		auxes,
 	};
+}
+
+/** The pump driving a device, matched on the aux relay the device sits on. */
+export function pumpForDevice(
+	pumps: VspPump[] | undefined,
+	deviceName: string | undefined,
+): VspPump | undefined {
+	const aux = /^aux_(\d+)$/.exec(deviceName ?? "");
+	if (!aux) return undefined;
+	const n = Number(aux[1]);
+	return pumps?.find((p) => p.auxes.includes(n));
 }
 
 // -- Heat pump module --

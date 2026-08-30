@@ -8,9 +8,31 @@ import { useEffect, useRef, useState } from "react";
  */
 const DEBOUNCE_MS = 600;
 
-/** Ranges the panel accepts, and the granularity it steps in. */
-export const SPA_RANGE = { min: 98, max: 104, step: 1 };
-export const POOL_RANGE = { min: 78, max: 88, step: 2 };
+export interface TempRange {
+	min: number;
+	max: number;
+	step: number;
+}
+
+/**
+ * Set-point bounds. The panel advertises its scale but not its limits, so these
+ * stay constants — the Celsius pair is the Fahrenheit pair converted, rounded
+ * inward to whole degrees so neither end can land outside what the panel takes.
+ */
+const RANGES: Record<"F" | "C", { spa: TempRange; pool: TempRange }> = {
+	F: {
+		spa: { min: 98, max: 104, step: 1 },
+		pool: { min: 78, max: 88, step: 2 },
+	},
+	C: {
+		spa: { min: 37, max: 40, step: 1 },
+		pool: { min: 26, max: 31, step: 1 },
+	},
+};
+
+export function tempRange(body: "spa" | "pool", celsius: boolean): TempRange {
+	return RANGES[celsius ? "C" : "F"][body];
+}
 
 export function TempStepper({
 	value,
@@ -19,7 +41,7 @@ export function TempStepper({
 	className,
 }: {
 	value: number;
-	range: { min: number; max: number; step: number };
+	range: TempRange;
 	onCommit: (temp: number) => void;
 	className?: string;
 }) {

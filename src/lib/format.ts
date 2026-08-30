@@ -13,3 +13,12 @@ export function timeAgo(at: number, now = Date.now()): string {
 export function groupSerial(serial: string): string {
 	return serial.replace(/(.{3})(?=.)/g, "$1-");
 }
+
+/**
+ * The panel reports its own scale on the home screen. Everything that shows or
+ * bounds a temperature has to ask, since the two scales share no numbers.
+ */
+export function isCelsius(raw: unknown): boolean {
+	const scale = (raw as { temp_scale?: unknown } | undefined)?.temp_scale;
+	return String(scale ?? "F").toUpperCase() === "C";
+}
