@@ -35,7 +35,7 @@ import { HPM_TEMP_PARAM } from "#/lib/aqualink/enums";
 import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
 import { normalize } from "#/lib/iaqualink/normalize";
-import type { PoolDevice, PoolSnapshot } from "#/lib/iaqualink/types";
+import type { PoolDevice, PoolSnapshot, Raw } from "#/lib/iaqualink/types";
 import { keys } from "#/lib/keys";
 import { PERSIST_GC_TIME_MS } from "#/lib/persist";
 
@@ -213,11 +213,147 @@ export function usePanel(serial: string | undefined) {
 	};
 }
 
+type DevicesScreen = { devices: Raw; icl: unknown };
+
+/**
+ * Optimistic writes for the panel mutations.
+ *
+ * The cache holds the three screens as the API sent them — normalize() runs at
+ * render, not at fetch — so an optimistic update has to speak the wire format:
+ * flip the raw state, and the same parser that reads the panel reads the flip.
+ * (These updates used to write a normalized snapshot to the combined panel
+ * key, which stopped being a real cache entry when the panel split into three
+ * queries — every switch sent its command and then sat unmoved until the next
+ * poll, reading as dead.)
+ */
+function usePanelCache(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const s = serial ?? "-";
+	const qk = keys.panel(uid, s);
+	const hk = keys.home(uid, s);
+	const dk = keys.devices(uid, s);
+	const ok = keys.onetouch(uid, s);
+
+	// A raw entry is `{ state: "0", ... }` or a bare scalar that is the state.
+	const withState = (v: unknown, state: string): unknown =>
+		v && typeof v === "object" && !Array.isArray(v)
+			? { ...(v as Raw), state }
+			: state;
+
+	/** The snapshot the screens are rendering, composed from the raw cache. */
+	const read = (): PoolSnapshot | undefined => {
+		const home = qc.getQueryData<Raw>(hk);
+		const devices = qc.getQueryData<DevicesScreen>(dk);
+		return home && devices
+			? normalize(s, home, devices.devices, devices.icl, qc.getQueryData(ok))
+			: undefined;
+	};
+
+	return {
+		read,
+		cancel: () => qc.cancelQueries({ queryKey: qk }),
+		invalidate: () => qc.invalidateQueries({ queryKey: qk }),
+		snapshot: () => ({
+			home: qc.getQueryData<Raw>(hk),
+			devices: qc.getQueryData<DevicesScreen>(dk),
+			onetouch: qc.getQueryData(ok),
+		}),
+		// setQueryData ignores undefined, which is right here: a screen that
+		// held nothing was never patched, so there is nothing to put back.
+		restore: (prev: {
+			home: Raw | undefined;
+			devices: DevicesScreen | undefined;
+			onetouch: unknown;
+		}) => {
+			qc.setQueryData(hk, prev.home);
+			qc.setQueryData(dk, prev.devices);
+			qc.setQueryData(ok, prev.onetouch);
+		},
+		/** Set one device's raw state on whichever screen(s) report it. */
+		setDeviceState: (name: string, state: string) => {
+			qc.setQueryData(hk, (old: Raw | undefined) =>
+				old && name in old
+					? { ...old, [name]: withState(old[name], state) }
+					: old,
+			);
+			qc.setQueryData(dk, (old: DevicesScreen | undefined) =>
+				old && name in old.devices
+					? {
+							...old,
+							devices: {
+								...old.devices,
+								[name]: withState(old.devices[name], state),
+							},
+						}
+					: old,
+			);
+		},
+		patchHeatPump: (patch: { on?: boolean; mode?: string }) => {
+			qc.setQueryData(hk, (old: Raw | undefined) => {
+				const hp = old?.heatpump_info;
+				if (!hp || typeof hp !== "object" || Array.isArray(hp)) return old;
+				// The two casings get_home and the command echoes disagree on.
+				const cased = "isHPMPresent" in hp;
+				const next = { ...(hp as Raw) };
+				if (patch.on !== undefined)
+					next[cased ? "HPMstatus" : "heatpumpstatus"] = patch.on
+						? "on"
+						: "off";
+				if (patch.mode !== undefined)
+					next[cased ? "HPMmode" : "heatpumpmode"] = patch.mode;
+				return { ...old, heatpump_info: next };
+			});
+		},
+		patchZone: (zoneId: number, patch: Raw) => {
+			qc.setQueryData(dk, (old: DevicesScreen | undefined) =>
+				old && Array.isArray(old.icl)
+					? {
+							...old,
+							icl: old.icl.map((z: unknown) =>
+								z &&
+								typeof z === "object" &&
+								Number((z as Raw).zoneId) === zoneId
+									? { ...(z as Raw), ...patch }
+									: z,
+							),
+						}
+					: old,
+			);
+		},
+		/** Flip `name`, stopping the rest: the panel runs one macro at a time. */
+		toggleMacro: (name: string) => {
+			const running = read()?.macros.find((m) => m.name === name)?.on;
+			qc.setQueryData(ok, (old: unknown) => {
+				if (!Array.isArray(old)) return old;
+				return old.map((row) => {
+					if (!row || typeof row !== "object") return row;
+					const out: Raw = {};
+					for (const [key, parts] of Object.entries(row as Raw)) {
+						out[key] =
+							key.startsWith("onetouch_") && Array.isArray(parts)
+								? parts.map((p: unknown) =>
+										p && typeof p === "object" && "state" in p
+											? {
+													...(p as Raw),
+													state: key === name && !running ? "1" : "0",
+												}
+											: p,
+									)
+								: parts;
+					}
+					return out;
+				});
+			});
+		},
+	};
+}
+
 /** Optimistic actuation: flip the cache instantly, roll back on failure. */
 export function useActuate(serial: string | undefined) {
 	const uid = useUserId();
 	const qc = useQueryClient();
-	const qk = keys.panel(uid, serial ?? "-");
+	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
 			const res = await toggleDevice(
@@ -231,28 +367,22 @@ export function useActuate(serial: string | undefined) {
 			return res;
 		},
 		onMutate: async ({ device, on }) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
-				if (!old) return old;
-				return {
-					...old,
-					devices: old.devices.map((d) =>
-						d.id === device.id ? { ...d, on } : d,
-					),
-				};
-			});
+			await panel.cancel();
+			const prev = panel.snapshot();
+			// "1" reads as on through every parser this can touch — isOn for
+			// relays and lights, heaterOn for heaters — and "0" as off for both.
+			panel.setDeviceState(device.name, on ? "1" : "0");
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prev);
 		},
 		// The pumps too: a relay carrying a variable-speed pump reports its
 		// speed on a separate query with a slower cycle, and leaving that behind
 		// left one button reading its fill from the snapshot and its selection
 		// from data up to a cycle older.
 		onSettled: () => {
-			qc.invalidateQueries({ queryKey: qk });
+			panel.invalidate();
 			qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") });
 		},
 	});
@@ -266,12 +396,10 @@ export function useActuate(serial: string | undefined) {
  * takes only the one that changed.
  */
 export function useSetPoint(serial: string | undefined) {
-	const uid = useUserId();
-	const qc = useQueryClient();
-	const qk = keys.panel(uid, serial ?? "-");
+	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationFn: async ({ name, value }: { name: string; value: number }) => {
-			const snap = qc.getQueryData(qk) as PoolSnapshot | undefined;
+			const snap = panel.read();
 			const param = HPM_TEMP_PARAM[name];
 			const viaHpm = name === "pool_chill_set_point" || Boolean(snap?.heatPump);
 
@@ -295,23 +423,16 @@ export function useSetPoint(serial: string | undefined) {
 			return res;
 		},
 		onMutate: async ({ name, value }) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
-				if (!old) return old;
-				return {
-					...old,
-					devices: old.devices.map((d) =>
-						d.name === name ? { ...d, value: String(value) } : d,
-					),
-				};
-			});
+			await panel.cancel();
+			const prev = panel.snapshot();
+			// A set point's shown value reads from the same raw state field.
+			panel.setDeviceState(name, String(value));
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prev);
 		},
-		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+		onSettled: () => panel.invalidate(),
 	});
 }
 
@@ -321,9 +442,7 @@ export function useSetPoint(serial: string | undefined) {
  * ends whichever was running.
  */
 export function useOneTouch(serial: string | undefined) {
-	const uid = useUserId();
-	const qc = useQueryClient();
-	const qk = keys.panel(uid, serial ?? "-");
+	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationFn: async (name: string) => {
 			const res = await setOnetouch(serial as string, name);
@@ -332,33 +451,21 @@ export function useOneTouch(serial: string | undefined) {
 			return res;
 		},
 		onMutate: async (name) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
-				if (!old) return old;
-				const running = old.macros.find((m) => m.name === name)?.on;
-				return {
-					...old,
-					macros: old.macros.map((m) => ({
-						...m,
-						on: m.name === name ? !running : false,
-					})),
-				};
-			});
+			await panel.cancel();
+			const prev = panel.snapshot();
+			panel.toggleMacro(name);
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prev);
 		},
-		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+		onSettled: () => panel.invalidate(),
 	});
 }
 
 /** Enable the heat pump, or switch it between heating and chilling. */
 export function useHeatPump(serial: string | undefined) {
-	const uid = useUserId();
-	const qc = useQueryClient();
-	const qk = keys.panel(uid, serial ?? "-");
+	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationFn: async (
 			v: { kind: "power"; on: boolean } | { kind: "mode"; mode: string },
@@ -371,32 +478,21 @@ export function useHeatPump(serial: string | undefined) {
 			return res;
 		},
 		onMutate: async (v) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
-				if (!old?.heatPump) return old;
-				return {
-					...old,
-					heatPump:
-						v.kind === "power"
-							? { ...old.heatPump, on: v.on }
-							: { ...old.heatPump, mode: v.mode },
-				};
-			});
+			await panel.cancel();
+			const prev = panel.snapshot();
+			panel.patchHeatPump(v.kind === "power" ? { on: v.on } : { mode: v.mode });
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prev);
 		},
-		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+		onSettled: () => panel.invalidate(),
 	});
 }
 
 /** Set a light's color effect. */
 export function useLightColor(serial: string | undefined) {
-	const uid = useUserId();
-	const qc = useQueryClient();
-	const qk = keys.panel(uid, serial ?? "-");
+	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationFn: async ({
 			name,
@@ -418,23 +514,15 @@ export function useLightColor(serial: string | undefined) {
 		},
 		// Effect ids start at 1 and 0 is "off", so choosing one turns the light on.
 		onMutate: async ({ name }) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
-				if (!old) return old;
-				return {
-					...old,
-					devices: old.devices.map((d) =>
-						d.name === name ? { ...d, on: true } : d,
-					),
-				};
-			});
+			await panel.cancel();
+			const prev = panel.snapshot();
+			panel.setDeviceState(name, "1");
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prev);
 		},
-		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+		onSettled: () => panel.invalidate(),
 	});
 }
 
@@ -517,9 +605,7 @@ export function useSetVspSpeed(serial: string | undefined) {
  * same way whichever was sent.
  */
 export function useIclZone(serial: string | undefined) {
-	const uid = useUserId();
-	const qc = useQueryClient();
-	const qk = keys.panel(uid, serial ?? "-");
+	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationFn: async (v: IclChange) => {
 			const id = v.zoneId;
@@ -543,31 +629,30 @@ export function useIclZone(serial: string | undefined) {
 			return res;
 		},
 		onMutate: async (v) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
-				if (!old) return old;
-				return {
-					...old,
-					icl: old.icl.map((z) =>
-						z.zoneId !== v.zoneId
-							? z
-							: v.kind === "power"
-								? { ...z, on: v.on }
-								: v.kind === "color"
-									? { ...z, on: true, colorId: v.colorId }
-									: v.kind === "brightness"
-										? { ...z, dim: v.dim }
-										: { ...z, on: true, rgbw: v.rgbw },
-					),
-				};
-			});
+			await panel.cancel();
+			const prev = panel.snapshot();
+			panel.patchZone(
+				v.zoneId,
+				v.kind === "power"
+					? { zoneStatus: v.on ? "on" : "off" }
+					: v.kind === "color"
+						? { zoneStatus: "on", zoneColor: v.colorId, dim_level: v.dim }
+						: v.kind === "brightness"
+							? { dim_level: v.dim }
+							: {
+									zoneStatus: "on",
+									red_val: v.rgbw[0],
+									green_val: v.rgbw[1],
+									blue_val: v.rgbw[2],
+									white_val: v.rgbw[3],
+								},
+			);
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prev);
 		},
-		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+		onSettled: () => panel.invalidate(),
 	});
 }
 
