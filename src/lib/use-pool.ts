@@ -2,12 +2,14 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { HPM_FAULTS, IaquaHeaterState } from "#/lib/aqualink/enums";
+import { presenceOf } from "#/lib/chemistry";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import {
 	lastTemp,
 	rememberTemp,
 	usePanel,
+	usePhOrp,
 	useSession,
 	useSwc,
 	useVspPumps,
@@ -193,6 +195,18 @@ export function usePool(serial: string) {
 
 	const devices = snap.data?.devices ?? [];
 	const byName = new Map(devices.map((d) => [d.name, d]));
+	/**
+	 * Whether the home screen put a number on either chemistry key. It is the
+	 * gate on asking the probe about itself: a panel with nothing to say about
+	 * pH or ORP has no reading on screen to qualify, so it never sends the
+	 * request — see usePhOrp. Note that "0" passes this, deliberately. A zero is
+	 * exactly the number worth doubting, and doubting it is what the query is
+	 * for.
+	 */
+	const chemReported = Boolean(
+		byName.get("ph")?.value || byName.get("orp")?.value,
+	);
+	const phorp = usePhOrp(serial, chemReported);
 	const pool = byName.get("pool_temp");
 	const spa = byName.get("spa_temp");
 	const spaPump = byName.get("spa_pump");
@@ -252,6 +266,17 @@ export function usePool(serial: string) {
 			salinity: byName.get(spaMode ? "spa_salinity" : "pool_salinity"),
 			orp: byName.get("orp"),
 			ph: byName.get("ph"),
+			/**
+			 * What the probe says about each channel, so the row can tell a pad
+			 * with no TruSense from one whose probe is fitted and not reading.
+			 * Both stay `unknown` until the gated query answers, and `unknown`
+			 * renders precisely as this app always has — nothing here can hide a
+			 * reading on the strength of a request that never happened. Salt has
+			 * no equivalent: the chlorinator reports its own presence on the home
+			 * screen, so its reading needs no second opinion.
+			 */
+			phPresence: presenceOf(phorp.data?.phStatus),
+			orpPresence: presenceOf(phorp.data?.orpStatus),
 		},
 		heaters: devices.filter(
 			(d) =>

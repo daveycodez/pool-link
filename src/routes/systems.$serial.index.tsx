@@ -18,6 +18,7 @@ import { OneTouchHero } from "#/components/one-touch-hero";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
+import { type ChemPresence, isBlankReading } from "#/lib/chemistry";
 import { timeAgo } from "#/lib/format";
 import { useHeatEta } from "#/lib/heat-eta";
 import type {
@@ -32,6 +33,9 @@ interface Chem {
 	salinity: PoolDevice | undefined;
 	orp: PoolDevice | undefined;
 	ph: PoolDevice | undefined;
+	/** Whether a probe is fitted behind each reading; see ChemRow. */
+	phPresence: ChemPresence;
+	orpPresence: ChemPresence;
 }
 
 import type { IclChange, RememberedTemp } from "#/lib/queries";
@@ -530,37 +534,77 @@ function chemTone(value: string, band: Band): "accent" | "warning" | "danger" {
 }
 
 /**
- * The readings a panel with chemistry automation reports. Absent probes report
- * nothing, so the row hides itself rather than leaving a gap under the
- * temperature — and salinity follows the body on show, since each has its own.
+ * The readings a panel with chemistry automation reports.
+ *
+ * Three states per channel, and the row says a different thing in each. A pad
+ * with no probe reports nothing and gets no chip, so the row hides itself
+ * rather than leaving a gap under the temperature. A probe the panel names as
+ * absent gets no chip either, however confident the number beside it looked —
+ * that is the case this row could not see before, where a placeholder zero
+ * painted as pH 0 in the same red a genuinely ruined pool would earn. And a
+ * probe that is fitted but reporting nothing says so in words, because "this
+ * needs looking at" and "your water is a molar acid" are different sentences
+ * and only one of them is true.
+ *
+ * Salinity follows the body on show, since each has its own, and is never
+ * suppressed: the chlorinator declares itself on the home screen, so its
+ * reading has no second opinion to wait for and needs none.
  */
 function ChemRow({ chem }: { chem: Chem }) {
 	const readings = [
-		{ band: CHEM_BANDS.ph, device: chem.ph, label: "pH", unit: "" },
-		{ band: CHEM_BANDS.orp, device: chem.orp, label: "ORP", unit: "mV" },
+		{
+			band: CHEM_BANDS.ph,
+			device: chem.ph,
+			label: "pH",
+			presence: chem.phPresence,
+			unit: "",
+		},
+		{
+			band: CHEM_BANDS.orp,
+			device: chem.orp,
+			label: "ORP",
+			presence: chem.orpPresence,
+			unit: "mV",
+		},
 		{
 			band: CHEM_BANDS.salt,
 			device: chem.salinity,
 			label: "Salt",
+			// Never gated: no probe status exists for salt, and `unknown` is the
+			// value that leaves a reading rendering as it always has.
+			presence: "unknown" as ChemPresence,
 			unit: "ppm",
 		},
 	]
 		.map((r) => ({ ...r, value: r.device?.value?.trim() ?? "" }))
-		.filter((r) => r.value !== "");
+		.filter((r) => r.value !== "" && r.presence !== "absent");
 
 	if (readings.length === 0) return null;
 
 	return (
 		<div className="flex flex-wrap gap-1.5">
-			{readings.map(({ band, label, unit, value }) => (
-				<Chip color={chemTone(value, band)} key={label} variant="soft">
-					<span className="opacity-70">{label}</span>
-					<span className="tabular-nums">
-						{value}
-						{unit ? ` ${unit}` : ""}
-					</span>
-				</Chip>
-			))}
+			{readings.map(({ band, label, presence, unit, value }) => {
+				// A fitted probe reporting zero is reporting nothing. Amber, not
+				// red: the water is not the problem, the probe is.
+				const blank = presence === "present" && isBlankReading(value);
+				return (
+					<Chip
+						color={blank ? "warning" : chemTone(value, band)}
+						key={label}
+						variant="soft"
+					>
+						<span className="opacity-70">{label}</span>
+						{blank ? (
+							<span>No reading</span>
+						) : (
+							<span className="tabular-nums">
+								{value}
+								{unit ? ` ${unit}` : ""}
+							</span>
+						)}
+					</Chip>
+				);
+			})}
 		</div>
 	);
 }

@@ -24,6 +24,13 @@ export const keys = {
 	 * the same prefix and one panel invalidation still refreshes everything.
 	 */
 	swc: (uid: string, serial: string) => [uid, "panel", serial, "swc"] as const,
+	/**
+	 * The chemistry probe's report on itself — presence and health, not the
+	 * reading, which arrives with the home screen. A fifth panel screen, under
+	 * the same prefix for the same reason as the fourth.
+	 */
+	phorp: (uid: string, serial: string) =>
+		[uid, "panel", serial, "phorp"] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,
