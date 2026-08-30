@@ -88,6 +88,13 @@ export function usePool(serial: string) {
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),
 		cover: byName.get("cover_pool"),
+		// Kept out of `heaters` because it pairs with no body — it serves
+		// whichever one is circulating, so the hero shows it alongside rather
+		// than swapping it in and out.
+		solar: byName.get("solar_heater"),
+		// A mode, not a control: when it fires the panel runs equipment on its
+		// own terms, which is worth saying rather than leaving unexplained.
+		freezing: byName.get("freeze_protection")?.on === true,
 		// Every aux relay the panel reports, in its own order — lights included,
 		// since the screen decides per relay which card to draw. Nothing here is
 		// named or positioned by this app, so a pool with different equipment

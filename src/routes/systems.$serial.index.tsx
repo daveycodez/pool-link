@@ -1,4 +1,4 @@
-import { Button, Card } from "@heroui/react";
+import { Button, Card, Chip } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	Blinds,
@@ -6,6 +6,7 @@ import {
 	Flame,
 	Lightbulb,
 	LightbulbOff,
+	Sun,
 	Waves,
 } from "lucide-react";
 import { useState } from "react";
@@ -39,6 +40,8 @@ function Pool() {
 		heaters,
 		spaPump,
 		cover,
+		solar,
+		freezing,
 		auxes,
 		celsius,
 	} = usePool(serial);
@@ -58,6 +61,8 @@ function Pool() {
 			heaters={heaters}
 			spaPump={spaPump}
 			cover={cover}
+			solar={solar}
+			freezing={freezing}
 			auxes={auxes}
 			celsius={celsius}
 			poolSet={poolSet}
@@ -83,6 +88,8 @@ function PoolScreen({
 	serial,
 	spaPump,
 	cover,
+	solar,
+	freezing,
 	auxes,
 	celsius,
 	poolSet,
@@ -96,6 +103,8 @@ function PoolScreen({
 	heaters: PoolDevice[];
 	spaPump: PoolDevice | undefined;
 	cover: PoolDevice | undefined;
+	solar: PoolDevice | undefined;
+	freezing: boolean;
 	auxes: PoolDevice[];
 	celsius: boolean;
 	poolSet: PoolDevice | undefined;
@@ -122,6 +131,8 @@ function PoolScreen({
 				spaMode={spaMode}
 				spaPump={spaPump}
 				cover={cover}
+				solar={solar}
+				freezing={freezing}
 				water={water}
 			/>
 
@@ -160,6 +171,8 @@ function ModeHero({
 	celsius,
 	spaPump,
 	cover,
+	solar,
+	freezing,
 	heater,
 	setPoint,
 	onToggle,
@@ -170,6 +183,8 @@ function ModeHero({
 	celsius: boolean;
 	spaPump: PoolDevice | undefined;
 	cover: PoolDevice | undefined;
+	solar: PoolDevice | undefined;
+	freezing: boolean;
 	heater: PoolDevice | undefined;
 	setPoint: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
@@ -191,6 +206,13 @@ function ModeHero({
 							<Waves className="size-4 text-accent" />
 						)}
 						{spaMode ? "Spa" : "Pool"}
+						{/* The panel overrides equipment while this is on, so it is
+						    said here rather than left to look like a fault. */}
+						{freezing ? (
+							<Chip color="warning" variant="soft">
+								Freeze
+							</Chip>
+						) : null}
 					</div>
 
 					<div className="mt-2 flex items-baseline gap-1.5 leading-none">
@@ -231,6 +253,19 @@ function ModeHero({
 							offLabel="Heat"
 							onIcon={Flame}
 							onLabel="Heat"
+							onToggle={onToggle}
+							tone="danger"
+						/>
+					) : null}
+					{/* Solar sits with the heater it supplements, and serves whichever
+					    body is circulating — so it does not swap with the mode. */}
+					{isReported(solar) ? (
+						<TrackSwitch
+							device={solar}
+							offIcon={Sun}
+							offLabel="Solar"
+							onIcon={Sun}
+							onLabel="Solar"
 							onToggle={onToggle}
 							tone="danger"
 						/>
