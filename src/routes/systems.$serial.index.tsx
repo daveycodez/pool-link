@@ -18,7 +18,13 @@ import { OneTouchHero } from "#/components/one-touch-hero";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
-import type { IclZone, OneTouchMacro, PoolDevice } from "#/lib/iaqualink/types";
+import { useHeatEta } from "#/lib/heat-eta";
+import type {
+	HeatPump,
+	IclZone,
+	OneTouchMacro,
+	PoolDevice,
+} from "#/lib/iaqualink/types";
 
 /** The three readings a panel with chemistry automation reports. */
 interface Chem {
@@ -54,11 +60,13 @@ function Pool() {
 	const { pending, signedIn } = useRequireSession();
 	const {
 		loading,
+		snap,
 		spaMode,
 		water,
 		poolSet,
 		spaSet,
 		heaters,
+		heatPump,
 		spaPump,
 		iclZones,
 		macros,
@@ -88,6 +96,8 @@ function Pool() {
 			water={water}
 			spaMode={spaMode}
 			heaters={heaters}
+			heatPump={heatPump}
+			updatedAt={snap.dataUpdatedAt}
 			spaPump={spaPump}
 			cover={cover}
 			solar={solar}
@@ -121,6 +131,8 @@ function PoolScreen({
 	water,
 	spaMode,
 	heaters,
+	heatPump,
+	updatedAt,
 	serial,
 	spaPump,
 	cover,
@@ -145,6 +157,9 @@ function PoolScreen({
 	water: PoolDevice | undefined;
 	spaMode: boolean;
 	heaters: PoolDevice[];
+	heatPump: HeatPump | null;
+	/** When the panel last answered, which is the estimator's only clock. */
+	updatedAt: number;
 	spaPump: PoolDevice | undefined;
 	cover: PoolDevice | undefined;
 	solar: PoolDevice | undefined;
@@ -171,6 +186,9 @@ function PoolScreen({
 				heater={heaters.find((h) =>
 					spaMode ? h.name.startsWith("spa") : h.name.startsWith("pool"),
 				)}
+				heatPump={heatPump}
+				serial={serial}
+				updatedAt={updatedAt}
 				onSetPoint={(t) =>
 					onSetPoint(spaMode ? "spa_set_point" : "pool_set_point", t)
 				}
@@ -236,6 +254,7 @@ function PoolSpaHero({
 	water,
 	spaMode,
 	celsius,
+	serial,
 	spaPump,
 	cover,
 	solar,
@@ -243,6 +262,8 @@ function PoolSpaHero({
 	hpmFault,
 	chem,
 	heater,
+	heatPump,
+	updatedAt,
 	setPoint,
 	onToggle,
 	onSetPoint,
@@ -250,6 +271,7 @@ function PoolSpaHero({
 	water: PoolDevice | undefined;
 	spaMode: boolean;
 	celsius: boolean;
+	serial: string;
 	spaPump: PoolDevice | undefined;
 	cover: PoolDevice | undefined;
 	solar: PoolDevice | undefined;
@@ -257,11 +279,25 @@ function PoolSpaHero({
 	hpmFault: string;
 	chem: Chem;
 	heater: PoolDevice | undefined;
+	heatPump: HeatPump | null;
+	updatedAt: number;
 	setPoint: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 	onSetPoint: (temp: number) => void;
 }) {
 	const target = Number(setPoint?.value);
+	// The committed panel value, not the stepper's draft: a target still inside
+	// its 600ms debounce is a number nobody has asked the panel for yet.
+	const eta = useHeatEta({
+		celsius,
+		freezing,
+		heatPump,
+		heater,
+		serial,
+		target,
+		updatedAt,
+		water,
+	});
 	// One width for the stack: these switches sit above one another, right
 	// aligned, so any difference between them reads as a mistake.
 	const trackWidth = "w-17";
@@ -302,6 +338,12 @@ function PoolSpaHero({
 						</span>
 						<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
 					</div>
+
+					{/* Between the reading and the target because that is what it is
+					    about: this number reaching that one. The height is reserved the
+					    way the eyebrow's h-6 is above, so the stepper does not shift
+					    when the line comes and goes. */}
+					<p className="mt-1 h-4 text-xs text-muted tabular-nums">{eta}</p>
 
 					{/* Target sits under the reading so the two can be compared — the
 					    whole point of showing both. */}

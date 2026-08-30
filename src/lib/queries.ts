@@ -36,6 +36,7 @@ import {
 import { HPM_TEMP_PARAM } from "#/lib/aqualink/enums";
 import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
+import { clearHeatRuns } from "#/lib/heat-eta";
 import { normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice, PoolSnapshot, Raw } from "#/lib/iaqualink/types";
 import { keys } from "#/lib/keys";
@@ -88,7 +89,7 @@ const LIGHT_HOLD_MS = 15_000;
  * every temperature as 0 until the next poll, with the light itself reading
  * a perfectly agreeable "off".
  */
-const PAD_SETTLE_MS = 5_000;
+export const PAD_SETTLE_MS = 5_000;
 
 /** Pump speeds are near-static, so they ride a much slower cycle. */
 const VSP_POLL_MS = POLL_MS * 2;
@@ -135,7 +136,13 @@ export function useLogout() {
 	const qc = useQueryClient();
 	return useMutation({
 		mutationFn: () => logout(),
-		onSuccess: () => qc.clear(),
+		// The heat measurement is not in the cache, so qc.clear() does not reach
+		// it — and a series of spa temperatures is as much the last account's as
+		// any query is.
+		onSuccess: () => {
+			qc.clear();
+			clearHeatRuns();
+		},
 	});
 }
 

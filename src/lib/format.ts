@@ -9,6 +9,26 @@ export function timeAgo(at: number, now = Date.now()): string {
 	return `${Math.round(h / 24)}d ago`;
 }
 
+/**
+ * The forward-looking sibling of timeAgo, for the heat-up caption: "about 35
+ * min". Its own function because timeAgo is past tense to the bone — it hard
+ * codes " ago" and clamps a future instant to "0s ago".
+ *
+ * Rounded up, never to nearest, because the two errors are not the same size:
+ * arriving to water already warm costs nothing, and walking outside to a cold
+ * spa because the line ran out is the failure that leaves the estimate worth
+ * less than no estimate. Five-minute steps for the reason the line names a
+ * duration rather than a clock time — it is worth about ±25%, and a number
+ * ending in a 7 invites a precision it does not have.
+ */
+export function aboutHowLong(ms: number): string {
+	const m = Math.max(5, Math.ceil(ms / 300_000) * 5);
+	if (m < 60) return `about ${m} min`;
+	const h = Math.floor(m / 60);
+	const rest = m % 60;
+	return rest ? `about ${h} hr ${rest} min` : `about ${h} hr`;
+}
+
 /** Serials print grouped in threes on the hardware label: QSS-2B7-8BD-9KE. */
 export function groupSerial(serial: string): string {
 	return serial.replace(/(.{3})(?=.)/g, "$1-");
