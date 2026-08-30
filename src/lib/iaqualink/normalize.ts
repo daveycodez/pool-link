@@ -1,5 +1,6 @@
 import type {
 	DeviceKind,
+	HeatPump,
 	IclZone,
 	PoolDevice,
 	PoolSnapshot,
@@ -136,6 +137,30 @@ function buildZones(icl: unknown): IclZone[] {
 	});
 }
 
+/**
+ * get_home spells these lowercase; the three HPM write commands echo the same
+ * data back in HPMxxx casing. Both are accepted, or a command's response would
+ * read as "no heat pump" and the row would vanish mid-interaction.
+ */
+function buildHeatPump(raw: unknown): HeatPump | null {
+	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+	const hp = raw as Raw;
+	const cased = "isHPMPresent" in hp;
+	const present = cased ? hp.isHPMPresent : hp.isheatpumpPresent;
+	if (!present || String(present).toLowerCase() === "false") return null;
+
+	const status = str(cased ? hp.HPMstatus : hp.heatpumpstatus) ?? "";
+	return {
+		status,
+		// "enabled" means paired and ready; the panel uses it alongside "on".
+		on: ["on", "enabled"].includes(status.toLowerCase()),
+		mode: str(cased ? hp.HPMmode : hp.heatpumpmode) ?? "",
+		chillAvailable: Boolean(hp.isChillAvailable),
+		type: str(cased ? hp.HPMtype : hp.heatpumptype) ?? "",
+		alert: str(hp.alert_message) ?? "",
+	};
+}
+
 export function normalize(
 	serial: string,
 	home: Raw,
@@ -163,6 +188,7 @@ export function normalize(
 		fetchedAt: Date.now(),
 		devices: out,
 		icl: buildZones(icl),
+		heatPump: buildHeatPump(merged.heatpump_info),
 		raw: merged,
 	};
 }

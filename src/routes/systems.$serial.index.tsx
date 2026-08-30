@@ -30,7 +30,7 @@ import {
 	useActuate,
 	useIclZone,
 	useLightColor,
-	useSetTemps,
+	useSetPoint,
 } from "#/lib/queries";
 import {
 	isJandyLight,
@@ -58,12 +58,13 @@ function Pool() {
 		cover,
 		solar,
 		freezing,
+		hpmFault,
 		chem,
 		auxes,
 		celsius,
 	} = usePool(serial);
 	const actuate = useActuate(serial);
-	const setTemps = useSetTemps(serial);
+	const setPoint = useSetPoint(serial);
 	const lightColor = useLightColor(serial);
 	const iclZone = useIclZone(serial);
 
@@ -82,6 +83,7 @@ function Pool() {
 			solar={solar}
 			iclZones={iclZones}
 			freezing={freezing}
+			hpmFault={hpmFault}
 			onIclChange={(change) => iclZone.mutate(change)}
 			chem={chem}
 			auxes={auxes}
@@ -89,7 +91,7 @@ function Pool() {
 			poolSet={poolSet}
 			spaSet={spaSet}
 			onToggle={(d, on) => actuate.mutate({ device: d, on })}
-			onSetTemps={(sp, pl) => setTemps.mutate({ spa: sp, pool: pl })}
+			onSetPoint={(name, value) => setPoint.mutate({ name, value })}
 			onLightColor={(device, effectId) =>
 				lightColor.mutate({
 					name: device.name,
@@ -111,6 +113,7 @@ function PoolScreen({
 	cover,
 	solar,
 	freezing,
+	hpmFault,
 	chem,
 	iclZones,
 	auxes,
@@ -119,7 +122,7 @@ function PoolScreen({
 	poolSet,
 	spaSet,
 	onToggle,
-	onSetTemps,
+	onSetPoint,
 	onLightColor,
 }: {
 	water: PoolDevice | undefined;
@@ -129,6 +132,7 @@ function PoolScreen({
 	cover: PoolDevice | undefined;
 	solar: PoolDevice | undefined;
 	freezing: boolean;
+	hpmFault: string;
 	chem: Chem;
 	auxes: PoolDevice[];
 	iclZones: IclZone[];
@@ -137,7 +141,7 @@ function PoolScreen({
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
-	onSetTemps: (spa: string, pool: string) => void;
+	onSetPoint: (name: string, value: number) => void;
 	onLightColor: (device: PoolDevice, effectId: number) => void;
 	serial: string;
 }) {
@@ -149,9 +153,7 @@ function PoolScreen({
 					spaMode ? h.name.startsWith("spa") : h.name.startsWith("pool"),
 				)}
 				onSetPoint={(t) =>
-					spaMode
-						? onSetTemps(String(t), poolSet?.value ?? "")
-						: onSetTemps(spaSet?.value ?? "", String(t))
+					onSetPoint(spaMode ? "spa_set_point" : "pool_set_point", t)
 				}
 				onToggle={onToggle}
 				setPoint={spaMode ? spaSet : poolSet}
@@ -160,6 +162,7 @@ function PoolScreen({
 				cover={cover}
 				solar={solar}
 				freezing={freezing}
+				hpmFault={hpmFault}
 				chem={chem}
 				water={water}
 			/>
@@ -207,6 +210,7 @@ function ModeHero({
 	cover,
 	solar,
 	freezing,
+	hpmFault,
 	chem,
 	heater,
 	setPoint,
@@ -220,6 +224,7 @@ function ModeHero({
 	cover: PoolDevice | undefined;
 	solar: PoolDevice | undefined;
 	freezing: boolean;
+	hpmFault: string;
 	chem: Chem;
 	heater: PoolDevice | undefined;
 	setPoint: PoolDevice | undefined;
@@ -249,6 +254,13 @@ function ModeHero({
 								Freeze
 							</Chip>
 						) : null}
+						{/* A fault means the pump has stopped doing what was asked, so
+						    it says what rather than only that something is wrong. */}
+						{hpmFault ? (
+							<Chip color="danger" variant="soft">
+								{hpmFault}
+							</Chip>
+						) : null}
 					</div>
 
 					<div className="mt-2 flex items-baseline gap-1.5 leading-none">
@@ -264,7 +276,7 @@ function ModeHero({
 						<TempStepper
 							className="mt-3 w-fit"
 							onCommit={onSetPoint}
-							range={tempRange(spaMode ? "spa" : "pool", celsius)}
+							range={tempRange(celsius)}
 							value={target}
 						/>
 					) : null}

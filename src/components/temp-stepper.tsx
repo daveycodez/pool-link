@@ -15,23 +15,18 @@ export interface TempRange {
 }
 
 /**
- * Set-point bounds. The panel advertises its scale but not its limits, so these
- * stay constants — the Celsius pair is the Fahrenheit pair converted, rounded
- * inward to whole degrees so neither end can land outside what the panel takes.
+ * Set-point bounds, from flz/iaqualink-py's own limits — the range the panel
+ * accepts rather than a range that seemed sensible. It does not narrow these
+ * per body or per set point: pool, spa and chill share one, and whole degrees
+ * are all it takes.
  */
-const RANGES: Record<"F" | "C", { spa: TempRange; pool: TempRange }> = {
-	F: {
-		spa: { min: 98, max: 104, step: 1 },
-		pool: { min: 78, max: 88, step: 2 },
-	},
-	C: {
-		spa: { min: 37, max: 40, step: 1 },
-		pool: { min: 26, max: 31, step: 1 },
-	},
+const RANGES: Record<"F" | "C", TempRange> = {
+	F: { min: 34, max: 104, step: 1 },
+	C: { min: 1, max: 40, step: 1 },
 };
 
-export function tempRange(body: "spa" | "pool", celsius: boolean): TempRange {
-	return RANGES[celsius ? "C" : "F"][body];
+export function tempRange(celsius: boolean): TempRange {
+	return RANGES[celsius ? "C" : "F"];
 }
 
 export function TempStepper({

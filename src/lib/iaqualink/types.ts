@@ -16,6 +16,24 @@ export type DeviceKind =
 	| "unknown";
 
 /**
+ * A paired heat pump module. Absent on most panels, and when present it takes
+ * over heating from the relay heaters — which is why it changes how set points
+ * are written rather than only adding controls.
+ */
+export interface HeatPump {
+	/** "off" | "enabled" | "on"; enabled counts as on. */
+	status: string;
+	on: boolean;
+	/** "heat" | "chill". Only meaningful when `chillAvailable`. */
+	mode: string;
+	chillAvailable: boolean;
+	/** Model string the panel reports, for the row's description. */
+	type: string;
+	/** Only ever present on a command's echo, never in get_home. */
+	alert: string;
+}
+
+/**
  * One iAquaLink Color Lights zone. Zones are their own subsystem — addressed
  * by id, not by an aux relay — so they sit beside the devices rather than
  * among them.
@@ -53,5 +71,7 @@ export interface PoolSnapshot {
 	devices: PoolDevice[];
 	/** Colour-light zones, which are not aux relays. */
 	icl: IclZone[];
+	/** Null unless a heat pump is paired. */
+	heatPump: HeatPump | null;
 	raw: Raw;
 }

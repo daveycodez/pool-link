@@ -195,3 +195,37 @@ const EFFECT_ALIASES: Record<string, string> = {
 export function effectStops(name: string): string[] {
 	return WATERCOLOR_STOPS[EFFECT_ALIASES[name] ?? name] ?? [];
 }
+
+/**
+ * Heat pump fault codes (flz/iaqualink-py `IaquaHpmErrorCode`). 13 is genuinely
+ * missing from the reference list rather than omitted here.
+ */
+export const HPM_FAULTS: Record<string, string> = {
+	"1": "Exchanger protection (cool)",
+	"2": "Evaporator high temperature (cool)",
+	"3": "Phase order fault",
+	"4": "Cooling low pressure",
+	"5": "Cooling high pressure",
+	"6": "Compressor discharge temperature fault",
+	"7": "Water inlet sensor fault",
+	"8": "Fluid line sensor fault",
+	"9": "Defrost sensor fault",
+	"10": "Air inlet sensor fault",
+	"11": "Compressor discharge sensor fault",
+	"12": "Board communication fault",
+	"14": "Electronic board overheat",
+	"15": "Electrical network protection",
+	"16": "Fan motor error",
+	"17": "Compressor driver problem",
+	"18": "Driver/compressor comms error",
+	"19": "Main PCB not configured",
+	"20": "Unrecognised configuration fault",
+	"-1": "Unknown fault",
+};
+
+/** Set-point name -> the parameter `setpoint_hpm_temp` wants for it. */
+export const HPM_TEMP_PARAM: Record<string, string> = {
+	pool_set_point: "poolheatsetpointtemp",
+	spa_set_point: "spaheatsetpointtemp",
+	pool_chill_set_point: "poolchillsetpointtemp",
+};

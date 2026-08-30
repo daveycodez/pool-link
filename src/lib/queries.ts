@@ -7,6 +7,7 @@ import {
 import type { VspPump } from "#/lib/aqualink/client";
 import {
 	addDevice,
+	enableHpm,
 	getDeviceStatus,
 	iclSetBrightness,
 	iclSetColor,
@@ -17,16 +18,19 @@ import {
 	login,
 	logout,
 	setDeviceName,
+	setHpmSetPoint,
 	setLightColor,
 	setTemps,
 	setVspSpeed,
 	snapshot,
+	switchHpmMode,
 	toggleDevice,
 } from "#/lib/aqualink/client";
+import { HPM_TEMP_PARAM } from "#/lib/aqualink/enums";
 import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
 import { normalize } from "#/lib/iaqualink/normalize";
-import type { PoolDevice } from "#/lib/iaqualink/types";
+import type { PoolDevice, PoolSnapshot } from "#/lib/iaqualink/types";
 
 /** What can be asked of a zone. Colour carries brightness, as the API does. */
 export type IclChange =
@@ -173,17 +177,42 @@ export function useActuate(serial: string | undefined) {
 	});
 }
 
-/** Adjust a heater set point. p-api needs both spa and pool values together. */
-export function useSetTemps(serial: string | undefined) {
+/**
+ * Adjust one set point. Which command carries it depends on the equipment: a
+ * paired heat pump supersedes the relay heaters, so it takes the set points
+ * with it, and pool chill only ever existed on that path. The difference is
+ * not cosmetic — set_temps needs both values seeded, while setpoint_hpm_temp
+ * takes only the one that changed.
+ */
+export function useSetPoint(serial: string | undefined) {
 	const qc = useQueryClient();
 	const qk = keys.snapshot(serial ?? "-");
 	return useMutation({
-		mutationFn: async ({ spa, pool }: { spa: string; pool: string }) => {
-			const res = await setTemps(serial as string, spa, pool);
+		mutationFn: async ({ name, value }: { name: string; value: number }) => {
+			const snap = qc.getQueryData(qk) as PoolSnapshot | undefined;
+			const param = HPM_TEMP_PARAM[name];
+			const viaHpm = name === "pool_chill_set_point" || Boolean(snap?.heatPump);
+
+			let res: unknown;
+			if (viaHpm && param) {
+				res = await setHpmSetPoint(serial as string, {
+					[param]: String(value),
+				});
+			} else {
+				// set_temps carries both bodies, so the untouched one is read back
+				// out of the cache rather than left blank, which would clear it.
+				const at = (n: string) =>
+					snap?.devices.find((d) => d.name === n)?.value ?? "";
+				res = await setTemps(
+					serial as string,
+					name === "spa_set_point" ? String(value) : at("spa_set_point"),
+					name === "pool_set_point" ? String(value) : at("pool_set_point"),
+				);
+			}
 			await settle(SETTLE_MS);
 			return res;
 		},
-		onMutate: async ({ spa, pool }) => {
+		onMutate: async ({ name, value }) => {
 			await qc.cancelQueries({ queryKey: qk });
 			const prev = qc.getQueryData(qk);
 			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
@@ -191,12 +220,45 @@ export function useSetTemps(serial: string | undefined) {
 				return {
 					...old,
 					devices: old.devices.map((d) =>
-						d.name === "spa_set_point"
-							? { ...d, value: spa }
-							: d.name === "pool_set_point"
-								? { ...d, value: pool }
-								: d,
+						d.name === name ? { ...d, value: String(value) } : d,
 					),
+				};
+			});
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+	});
+}
+
+/** Enable the heat pump, or switch it between heating and chilling. */
+export function useHeatPump(serial: string | undefined) {
+	const qc = useQueryClient();
+	const qk = keys.snapshot(serial ?? "-");
+	return useMutation({
+		mutationFn: async (
+			v: { kind: "power"; on: boolean } | { kind: "mode"; mode: string },
+		) => {
+			const res =
+				v.kind === "power"
+					? await enableHpm(serial as string, v.on)
+					: await switchHpmMode(serial as string, v.mode);
+			await settle(SETTLE_MS);
+			return res;
+		},
+		onMutate: async (v) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
+				if (!old?.heatPump) return old;
+				return {
+					...old,
+					heatPump:
+						v.kind === "power"
+							? { ...old.heatPump, on: v.on }
+							: { ...old.heatPump, mode: v.mode },
 				};
 			});
 			return { prev };

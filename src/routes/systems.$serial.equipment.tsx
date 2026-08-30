@@ -1,6 +1,6 @@
-import { Card } from "@heroui/react";
+import { Card, ListBox, Select, Switch } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Snowflake, Thermometer } from "lucide-react";
+import { Heater as HeatPumpIcon, Snowflake, Thermometer } from "lucide-react";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
 import { PumpSpeeds } from "#/components/pump-speeds";
@@ -10,7 +10,7 @@ import {
 	tempRange,
 } from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import { useActuate, useSetTemps } from "#/lib/queries";
+import { useActuate, useHeatPump, useSetPoint } from "#/lib/queries";
 import { usePool, useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/equipment")({
@@ -20,21 +20,28 @@ export const Route = createFileRoute("/systems/$serial/equipment")({
 function Equipment() {
 	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
-	const { controls, heaters, poolSet, spaSet, poolChill, loading, celsius } =
-		usePool(serial);
+	const {
+		controls,
+		heaters,
+		poolSet,
+		spaSet,
+		poolChill,
+		heatPump,
+		loading,
+		celsius,
+	} = usePool(serial);
 	const actuate = useActuate(serial);
-	const setTemps = useSetTemps(serial);
+	const setPoint = useSetPoint(serial);
+	const heatPumpM = useHeatPump(serial);
 
 	if (pending || loading) return <Loading />;
 	// No session: useRequireSession is already redirecting to /login.
 	if (!signedIn) return null;
 
-	// set_temps needs both values in one request, so each control sends the
-	// other body's current value alongside its own change.
-	const spa = (t: number) =>
-		setTemps.mutate({ spa: String(t), pool: poolSet?.value ?? "" });
-	const pool = (t: number) =>
-		setTemps.mutate({ spa: spaSet?.value ?? "", pool: String(t) });
+	// Which command carries a set point depends on the equipment, so the hook
+	// decides — the page only says which one moved.
+	const commit = (name: string) => (value: number) =>
+		setPoint.mutate({ name, value });
 
 	const spaHeater = heaters.find((h) => h.name.startsWith("spa"));
 	const poolHeater = heaters.find((h) => h.name.startsWith("pool"));
@@ -80,8 +87,8 @@ function Equipment() {
 			{poolSet ? (
 				<TempRow
 					device={poolSet}
-					onChange={pool}
-					range={tempRange("pool", celsius)}
+					onChange={commit("pool_set_point")}
+					range={tempRange(celsius)}
 					title="Pool Temp"
 				/>
 			) : null}
@@ -91,9 +98,11 @@ function Equipment() {
 			    Shown whether or not the panel reports a value: this page is the
 			    inventory, and it hides nothing. */}
 			{poolChill ? (
-				<ReadingRow
+				<TempRow
 					device={poolChill}
 					icon={<Snowflake className="size-4" />}
+					onChange={commit("pool_chill_set_point")}
+					range={tempRange(celsius)}
 					title="Pool Chill"
 				/>
 			) : null}
@@ -104,11 +113,75 @@ function Equipment() {
 					onToggle={(on) => actuate.mutate({ device: spaHeater, on })}
 				/>
 			) : null}
+			{heatPump ? (
+				<Card className="flex-row items-center justify-between gap-4">
+					<div className="flex items-center gap-4">
+						<IconCircle on={heatPump.on}>
+							<HeatPumpIcon className="size-4" />
+						</IconCircle>
+						<div className="min-w-0">
+							<Card.Title>Heat Pump</Card.Title>
+							{heatPump.type ? (
+								<Card.Description>{heatPump.type}</Card.Description>
+							) : null}
+						</div>
+					</div>
+					<Switch
+						aria-label="Heat pump"
+						isSelected={heatPump.on}
+						onChange={(on) => heatPumpM.mutate({ kind: "power", on })}
+					>
+						<Switch.Content>
+							<Switch.Control>
+								<Switch.Thumb />
+							</Switch.Control>
+						</Switch.Content>
+					</Switch>
+				</Card>
+			) : null}
+
+			{/* Only pumps that can chill offer the choice; a heat-only unit has
+			    nothing to switch between. */}
+			{heatPump?.chillAvailable ? (
+				<Card className="flex-row items-center justify-between gap-4">
+					<div className="flex items-center gap-4">
+						<IconCircle on={heatPump.mode === "chill"}>
+							<Snowflake className="size-4" />
+						</IconCircle>
+						<Card.Title>Heat Pump Mode</Card.Title>
+					</div>
+					<Select
+						aria-label="Heat pump mode"
+						className="w-32"
+						onChange={(v) =>
+							v != null && heatPumpM.mutate({ kind: "mode", mode: String(v) })
+						}
+						value={heatPump.mode || null}
+						variant="secondary"
+					>
+						<Select.Trigger>
+							<Select.Value />
+							<Select.Indicator />
+						</Select.Trigger>
+						<Select.Popover>
+							<ListBox>
+								{["heat", "chill"].map((mode) => (
+									<ListBox.Item id={mode} key={mode} textValue={mode}>
+										<span className="capitalize">{mode}</span>
+										<ListBox.ItemIndicator />
+									</ListBox.Item>
+								))}
+							</ListBox>
+						</Select.Popover>
+					</Select>
+				</Card>
+			) : null}
+
 			{spaSet ? (
 				<TempRow
 					device={spaSet}
-					onChange={spa}
-					range={tempRange("spa", celsius)}
+					onChange={commit("spa_set_point")}
+					range={tempRange(celsius)}
 					title="Spa Temp"
 				/>
 			) : null}
@@ -127,52 +200,25 @@ function Equipment() {
 	);
 }
 
-/**
- * A set point the panel reports but offers no command to change. Same row as
- * the steppers so it reads as part of the set, without a control implying it
- * can be driven.
- */
-function ReadingRow({
-	title,
-	device,
-	icon,
-}: {
-	title: string;
-	device: PoolDevice;
-	icon: React.ReactNode;
-}) {
-	return (
-		<Card className="flex-row items-center justify-between gap-4">
-			<div className="flex items-center gap-4">
-				<IconCircle on={false}>{icon}</IconCircle>
-				<Card.Title>{title}</Card.Title>
-			</div>
-			<span className="text-sm tabular-nums text-muted">
-				{device.value ?? "—"}
-				{device.unit ?? "°"}
-			</span>
-		</Card>
-	);
-}
-
 /** A set point as a stepper, in the same row shape as every other control. */
 function TempRow({
 	title,
 	device,
 	range,
 	onChange,
+	icon = <Thermometer className="size-4" />,
 }: {
 	title: string;
 	device: PoolDevice;
 	range: TempRange;
 	onChange: (temp: number) => void;
+	/** Chill is still a temperature, but not a warm one. */
+	icon?: React.ReactNode;
 }) {
 	return (
 		<Card className="flex-row items-center justify-between gap-4">
 			<div className="flex items-center gap-4">
-				<IconCircle on={false}>
-					<Thermometer className="size-4" />
-				</IconCircle>
+				<IconCircle on={false}>{icon}</IconCircle>
 				<Card.Title>{title}</Card.Title>
 			</div>
 			<TempStepper

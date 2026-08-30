@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { HPM_FAULTS } from "#/lib/aqualink/enums";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useSession, useSnapshot, useVspPumps } from "#/lib/queries";
@@ -94,6 +95,9 @@ export function usePool(serial: string) {
 		// Colour-light zones are their own subsystem, addressed by zone id and
 		// never by an aux relay — so they sit apart from the device list.
 		iclZones: snap.data?.icl ?? [],
+		// When paired, this becomes the equipment that heats — so it changes how
+		// set points are sent, not just what the equipment page lists.
+		heatPump: snap.data?.heatPump ?? null,
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),
@@ -105,6 +109,11 @@ export function usePool(serial: string) {
 		// A mode, not a control: when it fires the panel runs equipment on its
 		// own terms, which is worth saying rather than leaving unexplained.
 		freezing: byName.get("freeze_protection")?.on === true,
+		// Faults arrive only on a command's echo, never in get_home — so this is
+		// set by acting on the pump, and cleared by the next poll.
+		hpmFault: snap.data?.heatPump?.alert
+			? (HPM_FAULTS[snap.data.heatPump.alert] ?? "Heat pump fault")
+			: "",
 		// Every aux relay the panel reports, in its own order — lights included,
 		// since the screen decides per relay which card to draw. Nothing here is
 		// named or positioned by this app, so a pool with different equipment
