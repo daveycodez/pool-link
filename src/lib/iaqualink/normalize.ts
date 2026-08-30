@@ -1,3 +1,8 @@
+import {
+	AUX_TYPE_COLOR_LIGHT,
+	AUX_TYPE_DIMMER,
+	DIMMER_STEP,
+} from "#/lib/aqualink/enums";
 import type {
 	DeviceKind,
 	HeatPump,
@@ -82,6 +87,42 @@ function heaterOn(v: unknown): boolean {
 	return s === "1" || s === "3";
 }
 
+/**
+ * A dimming relay's current level, from the field that carries it.
+ *
+ * `subtype` is the panel's most overloaded field: on a colour light it names the
+ * light's brand, on a plain relay it carries a VSP assignment flag, and only on
+ * a dimming relay is it a level at all. Every relay reports one — this pool's
+ * configured pair say 0 and its virtual slots say 2, none of them dimmers — so
+ * this must never be reached without checking `type` first, or a waterfall reads
+ * as lit to 2%.
+ *
+ * Unverified, and the least certain thing in this file. No capture of a dimming
+ * relay exists anywhere public; iaqualink-py reads this field as a percentage on
+ * the strength of its own comment and has no dimmer fixture in its tests. The
+ * complication is that the panel's own encoding for a classic dimmer is a mode
+ * index — 0 to 4 across the five names it holds instead of numbers — and
+ * AqualinkD, driving the same relay directly, converts between index and percent
+ * explicitly ("value or Dimmer2 is the actual %, while Dimmer & colorlight is an
+ * index into an array"). Which of the two the cloud echoes back here is unknown.
+ *
+ * So both are read, which is free because they cannot collide: a real level is a
+ * multiple of 25, so anything in 1-4 can only be an index, and anything from 25
+ * up can only be a percentage. 0 is off under either reading. No value is legal
+ * in one encoding and silently wrong in the other — this costs nothing if
+ * iaqualink-py is right, and saves a fully-lit relay reading 4% if it is not.
+ */
+function dimmerLevel(raw: Raw): number | null {
+	// A blank field parses as 0, which here would be the relay saying it is off
+	// rather than saying nothing — the same trap the chlorinator's `percent`
+	// guards, and worth guarding for the same reason: a level of 0 is a fact,
+	// and "not reported" must not be able to impersonate one.
+	if (typeof raw.subtype === "string" && !raw.subtype.trim()) return null;
+	const n = num(raw.subtype);
+	if (n === null || n < 0) return null;
+	return Math.min(100, Math.round(n > 0 && n <= 4 ? n * DIMMER_STEP : n));
+}
+
 /** Build a device from a flat `{name, state, label?, type?, subtype?}` entry. */
 function buildDevice(name: string, raw: Raw): PoolDevice | null {
 	const state = raw.state ?? raw.status ?? raw.value;
@@ -89,7 +130,8 @@ function buildDevice(name: string, raw: Raw): PoolDevice | null {
 
 	const type = num(raw.type);
 	let kind: DeviceKind;
-	if (type === 2) kind = "light";
+	if (type === AUX_TYPE_COLOR_LIGHT) kind = "light";
+	else if (type === AUX_TYPE_DIMMER) kind = "dimmer";
 	else if (name.endsWith("_temp")) kind = "temperature";
 	else if (name.endsWith("_set_point")) kind = "climate";
 	else if (name.endsWith("_heater")) kind = "climate";
@@ -112,7 +154,12 @@ function buildDevice(name: string, raw: Raw): PoolDevice | null {
 				? str(state)
 				: null,
 		unit: kind === "temperature" || isSetPoint ? "°" : null,
-		dimLevel: num(raw.dim_level),
+		// Only a dimming relay has a level, and only it reads `subtype` as one.
+		// This used to read `dim_level`, which is the ICL zones' field — buildZones
+		// still reads it there, correctly — and which no aux has ever carried, so
+		// the value was permanently null and the percentage the equipment row
+		// prints from it was unreachable code.
+		dimLevel: kind === "dimmer" ? dimmerLevel(raw) : null,
 		address: num(raw.address ?? raw.slot_id),
 		raw,
 	};

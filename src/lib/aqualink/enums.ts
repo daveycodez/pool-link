@@ -182,6 +182,42 @@ export const ICL_CUSTOM_COLOR_ID = 16;
 export const ICL_DIM_STEP = 5;
 
 /**
+ * The aux `type` codes, which say what a relay drives rather than what it is
+ * doing. Only two of the five matter here, and the reason to name them is that
+ * `subtype` is read differently depending on which one is set — a mistake that
+ * cannot be caught by looking at `subtype` alone, since every relay carries one.
+ * This pool's plain relays report `subtype` 0 and 2 while driving nothing but a
+ * waterfall and a jet pump, so an ungated read would show them as brightness.
+ *
+ * 3 is an SJVA (sub-jetting valve actuator) and -1 is the panel's own "unknown";
+ * both are left to fall through to the plain relay path, which is what they were
+ * getting before these names existed.
+ */
+export const AUX_TYPE_DIMMER = 1;
+export const AUX_TYPE_COLOR_LIGHT = 2;
+
+/**
+ * The step a Jandy light dimming relay moves in.
+ *
+ * Quarters, and nothing between them. This is not a UI convention the way
+ * `ICL_DIM_STEP` is — where the API takes any integer and the app merely offers
+ * fives — it is the fixture's whole range. The panel encodes a classic dimmer's
+ * level as one of five mode names ("Off", "25%", "50%", "75%", "100%") rather
+ * than as a number, which is why AqualinkD, driving the same relay over RS-485,
+ * rounds every requested percent to the nearest 25 before it will send one
+ * (`programDeviceLightBrightness` in aq_panel.c), and why iaqualink-py rejects
+ * anything else client-side rather than passing it on. A full-range dimmer does
+ * exist as a separate fixture type, but reaching its in-between levels needs a
+ * different protocol than this one and is documented upstream as locking the
+ * device up often enough to need a panel re-add — so quarters are what this app
+ * offers.
+ *
+ * 0 is one of the five and means off: it opens the relay rather than dimming to
+ * a floor, which is why `turn_off()` upstream is literally a level of 0.
+ */
+export const DIMMER_STEP = 25;
+
+/**
  * ICL spells the three shows out where WaterColors abbreviates them. Same
  * effects, same swatches, so they alias rather than duplicate the stops.
  */

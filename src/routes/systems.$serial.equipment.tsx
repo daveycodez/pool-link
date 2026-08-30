@@ -26,6 +26,7 @@ import type { PoolDevice, SaltCell } from "#/lib/iaqualink/types";
 import {
 	useActuate,
 	useHeatPump,
+	useSetDimmer,
 	useSetPoint,
 	useSwcBoost,
 	useSwcOutput,
@@ -61,6 +62,7 @@ function Equipment() {
 	const heatPumpM = useHeatPump(serial);
 	const swcOutput = useSwcOutput(serial);
 	const swcBoost = useSwcBoost(serial);
+	const setDimmer = useSetDimmer(serial);
 
 	if (pending || loading) return <Loading />;
 	// No session: useRequireSession is already redirecting to /login.
@@ -299,10 +301,15 @@ function Equipment() {
 					</Card>
 				) : null}
 
+				{/* The relays, whatever they turn out to be. A dimming relay gets a
+				    brightness control here and nowhere else — the row itself decides,
+				    on the type the panel reported, so a pad with none of them (which
+				    is this one) renders exactly the switches it always did. */}
 				{rest.map((d) => (
 					<EquipmentRow
 						key={d.id}
 						device={d}
+						onDim={(level) => setDimmer.mutate({ device: d, level })}
 						onToggle={(on) => actuate.mutate({ device: d, on })}
 					/>
 				))}

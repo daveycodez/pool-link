@@ -31,6 +31,7 @@ import {
 	onetouchScreen,
 	pumpForDevice,
 	setDeviceName,
+	setDimmerLevel,
 	setHpmSetPoint,
 	setLightColor,
 	setOnetouch,
@@ -427,6 +428,36 @@ function usePanelCache(serial: string | undefined) {
 					: old,
 			);
 		},
+		/**
+		 * Patch raw fields on one device, rather than only its state.
+		 *
+		 * `setDeviceState` covers everything whose whole change is the state field,
+		 * which until dimmers was everything. A level change moves two fields at
+		 * once — `subtype` carries the level and `state` says whether the relay is
+		 * closed — and writing either alone would leave the row disagreeing with
+		 * itself for a poll: bright and off, or on at nothing.
+		 *
+		 * A bare scalar entry becomes an object here, where `withState` would keep
+		 * it a scalar. That is the only shape a patch of named fields can take, and
+		 * normalize() reads both forms.
+		 */
+		setDeviceFields: (name: string, patch: Raw) => {
+			const merge = (v: unknown): Raw =>
+				v && typeof v === "object" && !Array.isArray(v)
+					? { ...(v as Raw), ...patch }
+					: { ...patch };
+			qc.setQueryData(hk, (old: Raw | undefined) =>
+				old && name in old ? { ...old, [name]: merge(old[name]) } : old,
+			);
+			qc.setQueryData(dk, (old: DevicesScreen | undefined) =>
+				old && name in old.devices
+					? {
+							...old,
+							devices: { ...old.devices, [name]: merge(old.devices[name]) },
+						}
+					: old,
+			);
+		},
 		patchHeatPump: (patch: { on?: boolean; mode?: string }) => {
 			qc.setQueryData(hk, (old: Raw | undefined) => {
 				const hp = old?.heatpump_info;
@@ -662,6 +693,51 @@ export function useSetPoint(serial: string | undefined) {
 			const prev = panel.snapshot();
 			// A set point's shown value reads from the same raw state field.
 			panel.setDeviceState(name, String(value));
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx) panel.restore(ctx.prev);
+		},
+		onSettled: () => panel.invalidate(),
+	});
+}
+
+/**
+ * Set a dimming relay's brightness.
+ *
+ * Modelled on the set point rather than on the lights, and the difference is the
+ * point. A colour light holds because it is pulse-programmed: the panel cuts
+ * power and counts pulses at the fixture, reports transient state for the whole
+ * pad while it does, and never reports the resulting colour — so the hold window
+ * is the only answer available. A dimming relay is none of that. It is a level
+ * output the panel drives directly, it reports what it did, and this app's own
+ * ICL code already draws the same line for the same reason: brightness applies
+ * at once and needs no wait at all. So there is no hold key here on purpose —
+ * that key stops the polls for the entire pad, which a level change has no claim
+ * to — and no settle either.
+ *
+ * If a poll ever turns out to echo a transient level, the fix is a
+ * `settle(PAD_SETTLE_MS)` inside the mutationFn, never a hold.
+ *
+ * Unverified end to end: no dimming relay has ever answered this app. The
+ * optimistic write mirrors the read in normalize(), so if the panel reports the
+ * level somewhere other than `subtype`, the row will snap back on the next poll
+ * rather than lie — which is the failure worth having.
+ */
+export function useSetDimmer(serial: string | undefined) {
+	const panel = usePanelCache(serial);
+	return useMutation({
+		mutationFn: ({ device, level }: { device: PoolDevice; level: number }) =>
+			setDimmerLevel(serial as string, device.name, level),
+		onMutate: async ({ device, level }) => {
+			await panel.cancel();
+			const prev = panel.snapshot();
+			// Both halves of the change, since 0 is off rather than dim: the level
+			// rides `subtype`, which is where normalize() reads it back out.
+			panel.setDeviceFields(device.name, {
+				state: level > 0 ? "1" : "0",
+				subtype: String(level),
+			});
 			return { prev };
 		},
 		onError: (_e, _v, ctx) => {
