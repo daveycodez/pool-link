@@ -10,23 +10,27 @@ export function timeAgo(at: number, now = Date.now()): string {
 }
 
 /**
- * The forward-looking sibling of timeAgo, for the heat-up caption: "about 35
- * min". Its own function because timeAgo is past tense to the bone — it hard
- * codes " ago" and clamps a future instant to "0s ago".
+ * The forward-looking sibling of timeAgo, for the heat-up chip: "25m to go".
+ * Its own function because timeAgo is past tense to the bone — it hard codes
+ * " ago" and clamps a future instant to "0s ago".
+ *
+ * Phrased to match the degree count it alternates with, since they answer the
+ * same question a few minutes apart and reading as one sentence matters more
+ * than either reading well alone.
  *
  * Rounded up, never to nearest, because the two errors are not the same size:
  * arriving to water already warm costs nothing, and walking outside to a cold
  * spa because the line ran out is the failure that leaves the estimate worth
- * less than no estimate. Five-minute steps for the reason the line names a
- * duration rather than a clock time — it is worth about ±25%, and a number
- * ending in a 7 invites a precision it does not have.
+ * less than no estimate. Five-minute steps for the reason it names a duration
+ * rather than a clock time — it is worth about ±25%, and a number ending in a
+ * 7 invites a precision it does not have.
  */
-export function aboutHowLong(ms: number): string {
+export function timeToGo(ms: number): string {
 	const m = Math.max(5, Math.ceil(ms / 300_000) * 5);
-	if (m < 60) return `about ${m} min`;
+	if (m < 60) return `${m}m to go`;
 	const h = Math.floor(m / 60);
 	const rest = m % 60;
-	return rest ? `about ${h} hr ${rest} min` : `about ${h} hr`;
+	return rest ? `${h}h ${rest}m to go` : `${h}h to go`;
 }
 
 /** Serials print grouped in threes on the hardware label: QSS-2B7-8BD-9KE. */

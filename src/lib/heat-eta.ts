@@ -23,7 +23,7 @@
 import { useIsMutating } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { tempRange } from "#/components/temp-stepper";
-import { aboutHowLong } from "#/lib/format";
+import { timeToGo } from "#/lib/format";
 import type { HeatPump, PoolDevice } from "#/lib/iaqualink/types";
 import { PAD_SETTLE_MS } from "#/lib/queries";
 
@@ -413,7 +413,7 @@ export function heatCaption(
 	if (rate === null) return `${Math.round(remaining)}° to go`;
 	// A rate pointing away from the target is a heat-up that has already ended.
 	if (rate <= 0) return "";
-	return aboutHowLong(remaining / rate);
+	return timeToGo(remaining / rate);
 }
 
 /**
