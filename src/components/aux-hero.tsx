@@ -65,11 +65,17 @@ export function AuxHero({
 								setSpeed.mutate({ pumpId: pump.pumpId, speedId: speed.id })
 							}
 							size="sm"
-							// A speed is a setting that outlives being switched off, and
-							// the switch above already says whether the pump is running —
-							// so the selection is marked the same either way rather than
-							// dimmed into looking like a different kind of state.
-							variant={speed.id === active?.id ? "primary" : "tertiary"}
+							// A speed is a setting that outlives being switched off, so
+							// the selection stays visible either way — but primary is
+							// reserved for a speed that is actually driving water, and a
+							// stopped pump dims its selection to secondary.
+							variant={
+								speed.id === active?.id
+									? device.on
+										? "primary"
+										: "secondary"
+									: "tertiary"
+							}
 						>
 							<span className="truncate">{speed.name}</span>
 						</Button>

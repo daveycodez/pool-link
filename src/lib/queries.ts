@@ -455,17 +455,10 @@ export function useActuate(serial: string | undefined) {
 	return useMutation({
 		mutationKey: [...holdKey(serial), "actuate"],
 		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
-			const res = await toggleDevice(
-				serial as string,
-				device.name,
-				device.kind,
-				on,
-				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
-			);
-			// A relay carrying a variable-speed pump does not come on AT a
-			// speed — so once the panel answers the turn-on, the speed is set
-			// explicitly: the one the pump reports active, or its first
-			// configured speed when none is.
+			// Turning on a relay that carries a variable-speed pump is one
+			// request, not two: the speed command carries on_off_action "on",
+			// so sending the known speed — or the first configured one — both
+			// closes the relay and lands the pump where it belongs.
 			if (on) {
 				const pump = pumpForDevice(
 					qc.getQueryData<VspPump[]>(keys.vsp(uid, serial ?? "-")),
@@ -474,8 +467,15 @@ export function useActuate(serial: string | undefined) {
 				const speed =
 					pump && (pump.speeds.find((s) => s.active) ?? pump.speeds[0]);
 				if (pump && speed)
-					await setVspSpeed(serial as string, speed.id, pump.pumpId);
+					return setVspSpeed(serial as string, speed.id, pump.pumpId);
 			}
+			const res = await toggleDevice(
+				serial as string,
+				device.name,
+				device.kind,
+				on,
+				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
+			);
 			// Switching a WaterColors light on IS programming Alpine White: the
 			// fixture comes up at the head of its table, so it rides the same
 			// hold as picking id 1. Off is a bare relay drop, and nothing else
@@ -702,6 +702,7 @@ export function useVspPumps(serial: string | undefined) {
 export function useSetVspSpeed(serial: string | undefined) {
 	const uid = useUserId();
 	const qc = useQueryClient();
+	const panel = usePanelCache(serial);
 	const qk = keys.vsp(uid, serial ?? "-");
 	return useMutation({
 		mutationFn: async ({
@@ -714,6 +715,7 @@ export function useSetVspSpeed(serial: string | undefined) {
 		onMutate: async ({ pumpId, speedId }) => {
 			await qc.cancelQueries({ queryKey: qk });
 			const prev = qc.getQueryData(qk);
+			const prevPanel = panel.snapshot();
 			qc.setQueryData(qk, (old: VspPump[] | undefined) =>
 				old?.map((p) =>
 					p.pumpId === pumpId
@@ -727,10 +729,17 @@ export function useSetVspSpeed(serial: string | undefined) {
 						: p,
 				),
 			);
-			return { prev };
+			// The command carries on_off_action "on", so the pump's relay is
+			// about to close — its switch reads on now rather than a poll later.
+			for (const n of qc
+				.getQueryData<VspPump[]>(qk)
+				?.find((p) => p.pumpId === pumpId)?.auxes ?? [])
+				panel.setDeviceState(`aux_${n}`, "1");
+			return { prev, prevPanel };
 		},
 		onError: (_e, _v, ctx) => {
 			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prevPanel);
 		},
 		// The pump's aux relay may have switched on, so refresh the panel too.
 		onSettled: () => {
