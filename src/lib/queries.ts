@@ -41,7 +41,7 @@ export type IclChange =
 	| { kind: "custom"; zoneId: number; rgbw: [number, number, number, number] };
 
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
-const POLL_MS = 5_000;
+const POLL_MS = 10_000;
 
 /**
  * The panel serialises commands over RS-485 and keeps reporting a transient
@@ -58,7 +58,7 @@ const SETTLE_MS = 5_000;
 const LIGHT_SETTLE_MS = 15_000;
 
 /** Pump speeds are near-static, so they ride a much slower cycle. */
-const VSP_POLL_MS = POLL_MS * 4;
+const VSP_POLL_MS = POLL_MS * 2;
 
 const settle = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
