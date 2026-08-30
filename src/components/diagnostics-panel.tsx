@@ -14,6 +14,7 @@ import {
 	getPhOrpLastCalibration,
 	getPhOrpValues,
 	getScheduleList,
+	getSwcConfig,
 	getUnassignedSerials,
 	getVspAppModelSerials,
 	getVspDefinition,
@@ -53,6 +54,68 @@ const SCREEN_PROBES: ProbeEntry[] = [
 	// command timing out on hardware and reads zones from get_devices instead,
 	// so a hang here is the known answer and not a fault in this app.
 	["get_icl_info", iclGetInfo],
+	// Answers on a panel with a cell paired and rejects on one without, which
+	// is the only way to tell those apart — get_home's swc_info says a cell is
+	// absent either way.
+	["get_swc_config", getSwcConfig],
+];
+
+/**
+ * Every command that changes something, listed and not wired.
+ *
+ * A probe is a button, and a button that fires set_temps against a real pool
+ * is a diagnostics page that reheats someone's spa because they were curious.
+ * So the writes are here as a reference — what the panel accepts, next to the
+ * reads that prove which subsystems answer — and nowhere near an onPress.
+ *
+ * Grouped as the constants are, since that grouping is the subsystem map.
+ */
+const WRITE_COMMANDS: [string, string[]][] = [
+	["Screens", ["set_aux", "set_onetouch", "set_light"]],
+	[
+		"Temperature",
+		[
+			"set_temps",
+			"set_pool_heater",
+			"set_spa_heater",
+			"set_solar_heater",
+			"set_pool_pump",
+			"set_spa_pump",
+		],
+	],
+	["Heat pump", ["enable_disable_hpm", "switch_hpm_mode", "setpoint_hpm_temp"]],
+	["Chlorinator", ["set_swc_config", "control_swc_boost"]],
+	[
+		"Colour lights",
+		[
+			"onoff_iclzone",
+			"set_iclzone_color",
+			"define_iclzone_customcolor",
+			"set_iclzone_dim",
+			"set_iclzone_name",
+			"enable_disable_zoning_mode",
+			"move_lights_to_zone",
+		],
+	],
+	[
+		"Variable speed pumps",
+		[
+			"enable_disable_pump_speedId",
+			"set_aux_speed",
+			"set_vsp_name",
+			"set_vsp_definition",
+			"assign_vsp_serial",
+			"unassign_vsp_serial",
+			"set_speed_name",
+			"set_speedname_value",
+			"enable_pump_speed_value",
+		],
+	],
+	["Scheduling", ["do_schedule_operation"]],
+	[
+		"TruSense",
+		["do1pointphcalibration", "do_2point_phcalibration", "do_orp_calibration"],
+	],
 ];
 
 /**
@@ -252,6 +315,30 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 						</Probes>
 					</Card>
 				</>
+			) : null}
+
+			{serial ? (
+				<Card>
+					<Card.Header>
+						<Card.Title>Write commands</Card.Title>
+						<Card.Description>
+							Every command that changes something, for reference. Deliberately
+							not clickable — these act on the real pool.
+						</Card.Description>
+					</Card.Header>
+					<div className="flex flex-col gap-3">
+						{WRITE_COMMANDS.map(([group, cmds]) => (
+							<div key={group}>
+								<p className="text-xs font-medium uppercase tracking-widest text-muted">
+									{group}
+								</p>
+								<p className="mt-1 font-mono text-[11px] leading-relaxed text-muted">
+									{cmds.join(", ")}
+								</p>
+							</div>
+						))}
+					</div>
+				</Card>
 			) : null}
 
 			<Card>
