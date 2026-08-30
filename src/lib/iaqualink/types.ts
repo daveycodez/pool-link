@@ -106,6 +106,14 @@ export interface PoolDevice {
 export interface PoolSnapshot {
 	serial: string;
 	status: string;
+	/**
+	 * What the panel calls itself — a part number and a model, "B0316823 RS-4
+	 * Combo" on this pool. It is the ASCII tail of the raw RS-485 frame get_home
+	 * echoes back, so it is whatever that panel's firmware happens to write
+	 * there, and null wherever a frame is missing, unreadable, or has no text in
+	 * it at all.
+	 */
+	model: string | null;
 	fetchedAt: number;
 	devices: PoolDevice[];
 	/** Colour-light zones, which are not aux relays. */

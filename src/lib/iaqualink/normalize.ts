@@ -293,6 +293,76 @@ function buildSaltCell(merged: Raw): SaltCell | null {
 }
 
 /**
+ * The shortest printable run this will call a name.
+ *
+ * The packet is overwhelmingly readings, and a reading byte that happens to
+ * land in the printable range is indistinguishable from a letter by type
+ * alone. This pool's own packet carries four of them — 0x50, 0x68, 0x58, 0x59,
+ * which decode as P, h, X, Y and are the pool set point, the spa set point,
+ * the air and the pool temperature — plus a bare 0x20 0x21 among the header
+ * bytes. None survives past two characters, because the readings are 16-bit
+ * and the high byte of a temperature is 0x00, which ends a run. Four sits
+ * above all of them and below the shortest identity Jandy prints — RS-4, RS-8,
+ * iQ20 are the short end of the family — so it separates a name from a
+ * coincidence without a floor that could reject a real panel's answer.
+ */
+const MIN_MODEL_CHARS = 4;
+
+/** NUL: what the decode below puts where printable text stopped. */
+const TEXT_BREAK = String.fromCharCode(0);
+
+/**
+ * The panel's own model string, read out of the raw RS-485 frame that get_home
+ * echoes back in `response` and that nothing else in the app looks at.
+ *
+ * The frame is the pad's reply verbatim, rendered as `AQU='70','0D 00 ...'`,
+ * and its tail is ASCII: this panel spells `B0316823 RS-4 Combo`, a part number
+ * and a model. Everything before it is the readings normalize already parses by
+ * name, so the text is the only part worth taking — and it is taken by looking
+ * for text rather than by offset, since no other panel's frame has been seen
+ * and the one thing that cannot vary is that a name is printable and a reading
+ * mostly is not. Nothing here assumes a length, a position, or the word RS.
+ *
+ * Read off `home` rather than the merged screens on purpose: `response` is a
+ * generic field name that any command's reply could carry, and the devices
+ * screen merging over the home screen would silently swap one frame for
+ * another. The model belongs to the home frame or to nothing.
+ */
+function buildModel(response: unknown): string | null {
+	const packet = str(response);
+	if (!packet) return null;
+
+	// Hex pairs, run by run. A run breaks wherever the string stops being bytes,
+	// which is what keeps the `'70'` command number in the prefix from joining
+	// the frame that follows it. Whitespace between pairs is optional so that a
+	// panel writing the frame unspaced still decodes.
+	let best = "";
+	for (const [run] of packet.matchAll(/[0-9a-f]{2}(?:\s*[0-9a-f]{2})*/gi)) {
+		let text = "";
+		for (const pair of run.match(/[0-9a-f]{2}/gi) ?? []) {
+			const code = Number.parseInt(pair, 16);
+			// Anything outside printable ASCII ends the text rather than joining it:
+			// the NUL padding the name is buried in, and the readings either side.
+			// The break has to be a NUL and not a space: the name has a space in
+			// it, and splitting on that would cut `RS-4 Combo` in half.
+			text +=
+				code >= 0x20 && code <= 0x7e ? String.fromCharCode(code) : TEXT_BREAK;
+		}
+		for (const candidate of text.split(TEXT_BREAK)) {
+			// Ties go to the later run: where a frame carries two names, the
+			// identity is the tail.
+			const trimmed = candidate.trim();
+			if (trimmed.length >= best.length) best = trimmed;
+		}
+	}
+
+	if (best.length < MIN_MODEL_CHARS) return null;
+	// Digits and punctuation alone are a reading that got through on length, not
+	// a name. Every identity a panel prints has letters in it.
+	return /[a-z]/i.test(best) ? best : null;
+}
+
+/**
  * The screen is padded to the panel's maximum, so most entries are empty
  * slots: `status` 0 means never configured, and those are dropped rather than
  * shown as macros with nothing behind them. `state` is which one is running.
@@ -373,6 +443,7 @@ export function normalize(
 	return {
 		serial,
 		status: str(merged.status)?.toLowerCase() ?? "unknown",
+		model: buildModel(home.response),
 		fetchedAt: Date.now(),
 		devices: out,
 		icl: buildZones(icl),
