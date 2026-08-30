@@ -83,10 +83,12 @@ function LoginScreen() {
 							className="w-full"
 							isPending={loginMutation.isPending}
 						>
+							{/* Spinner beside an unchanged label, as better-auth-ui has
+							    it — a label swap makes the button jump width mid-press. */}
 							{({ isPending }) => (
 								<>
 									{isPending ? <Spinner color="current" size="sm" /> : null}
-									{isPending ? "Signing in…" : "Sign in"}
+									Sign in
 								</>
 							)}
 						</Button>
