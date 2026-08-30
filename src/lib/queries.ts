@@ -23,7 +23,6 @@ import {
 	login,
 	logout,
 	onetouchScreen,
-	pumpForDevice,
 	setDeviceName,
 	setHpmSetPoint,
 	setLightColor,
