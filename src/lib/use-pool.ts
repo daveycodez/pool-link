@@ -82,7 +82,20 @@ export function usePool(serial: string) {
 	const byName = new Map(devices.map((d) => [d.name, d]));
 	const pool = byName.get("pool_temp");
 	const spa = byName.get("spa_temp");
-	const spaMode = Boolean(spa?.value) && !pool?.value;
+	const spaPump = byName.get("spa_pump");
+	/**
+	 * The relay decides, not the readings. Spa mode is a valve position, and
+	 * the switch that throws it answers at once — where the temperatures take
+	 * the actuators' thirty seconds to catch up, and on a Combo panel may not
+	 * swap at all. Inferring the mode from which body reported a number left
+	 * the card saying Pool with the spa plainly running, and made a flip that
+	 * should be instant wait on plumbing.
+	 *
+	 * The reading is allowed to lag: `water` is empty for those seconds and
+	 * the hero shows a dash, which is the truth — no water is circulating
+	 * through the spa yet.
+	 */
+	const spaMode = spaPump?.on === true;
 	// "Aux V3" and friends are unconfigured virtual slots the panel always
 	// reports; hide them unless one is somehow on.
 	const genericAux = /^aux\s+v\d+$/i;
@@ -130,7 +143,7 @@ export function usePool(serial: string) {
 		swc: swc.data ?? null,
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
-		spaPump: byName.get("spa_pump"),
+		spaPump,
 		cover: byName.get("cover_pool"),
 		// Kept out of `heaters` because it pairs with no body — it serves
 		// whichever one is circulating, so the hero shows it alongside rather

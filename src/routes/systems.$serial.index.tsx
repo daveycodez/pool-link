@@ -89,6 +89,34 @@ function Pool() {
 	// No session: useRequireSession is already redirecting to /login.
 	if (!signedIn) return null;
 
+	/**
+	 * The hero's Spa switch is one touch. Throwing the valves without the heat
+	 * leaves someone standing in cold water, so switching spa mode on brings
+	 * the spa heater with it when the heater is off — one after the other,
+	 * because the pad works a single RS-485 command at a time.
+	 *
+	 * Only on, and only here. Switching off leaves the heater alone, and the
+	 * equipment page's switches stay what they say they are — the granular
+	 * control is a tap away for anyone who wants the valves without the heat.
+	 */
+	const toggle = (device: PoolDevice, on: boolean) => {
+		const spaHeater = heaters.find((h) => h.name.startsWith("spa"));
+		const alsoHeat =
+			on && device.name === "spa_pump" && spaHeater && !spaHeater.on
+				? spaHeater
+				: null;
+		if (!alsoHeat) {
+			actuate.mutate({ device, on });
+			return;
+		}
+		actuate.mutateAsync({ device, on }).then(
+			() => actuate.mutate({ device: alsoHeat, on: true }),
+			// Failures are already toasted by the mutation cache; the heater
+			// simply does not follow a spa mode that never happened.
+			() => {},
+		);
+	};
+
 	return (
 		<PoolScreen
 			held={held}
@@ -112,7 +140,7 @@ function Pool() {
 			celsius={celsius}
 			poolSet={poolSet}
 			spaSet={spaSet}
-			onToggle={(d, on) => actuate.mutate({ device: d, on })}
+			onToggle={toggle}
 			onSetPoint={(name, value) => setPoint.mutate({ name, value })}
 			onLightColor={(device, effectId) =>
 				lightColor.mutate({
