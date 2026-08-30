@@ -1,5 +1,6 @@
 import {
 	Children,
+	cloneElement,
 	Fragment,
 	isValidElement,
 	useSyncExternalStore,
@@ -40,12 +41,19 @@ function useColumnCount() {
  * several cards in one arrived as a single item — its whole group landing in
  * whichever column that item fell to, however many cards it held.
  */
-function flatten(children: React.ReactNode): React.ReactNode[] {
-	return Children.toArray(children).flatMap((child) =>
-		isValidElement(child) && child.type === Fragment
-			? flatten((child.props as { children?: React.ReactNode }).children)
-			: child,
-	);
+function flatten(children: React.ReactNode, prefix = ""): React.ReactNode[] {
+	return Children.toArray(children).flatMap((child, i) => {
+		// Children.toArray numbers keys from .0 at every level, so recursing into
+		// a fragment restarts the count and collides with the level above it.
+		// The path down makes each one unique again.
+		if (isValidElement(child) && child.type === Fragment) {
+			const inner = (child.props as { children?: React.ReactNode }).children;
+			return flatten(inner, `${prefix}${i}:`);
+		}
+		return isValidElement(child)
+			? cloneElement(child, { key: `${prefix}${child.key ?? i}` })
+			: child;
+	});
 }
 
 /**
