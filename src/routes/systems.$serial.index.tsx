@@ -13,10 +13,11 @@ import { useState } from "react";
 import { AuxHero } from "#/components/aux-hero";
 import { IclHero } from "#/components/icl-hero";
 import { Loading } from "#/components/loading";
+import { OneTouchHero } from "#/components/one-touch-hero";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
-import type { IclZone, PoolDevice } from "#/lib/iaqualink/types";
+import type { IclZone, OneTouchMacro, PoolDevice } from "#/lib/iaqualink/types";
 
 /** The three readings a panel with chemistry automation reports. */
 interface Chem {
@@ -30,6 +31,7 @@ import {
 	useActuate,
 	useIclZone,
 	useLightColor,
+	useOneTouch,
 	useSetPoint,
 } from "#/lib/queries";
 import {
@@ -55,6 +57,7 @@ function Pool() {
 		heaters,
 		spaPump,
 		iclZones,
+		macros,
 		cover,
 		solar,
 		freezing,
@@ -67,6 +70,7 @@ function Pool() {
 	const setPoint = useSetPoint(serial);
 	const lightColor = useLightColor(serial);
 	const iclZone = useIclZone(serial);
+	const oneTouch = useOneTouch(serial);
 
 	if (pending || loading) return <Loading />;
 	// No session: useRequireSession is already redirecting to /login.
@@ -82,6 +86,8 @@ function Pool() {
 			cover={cover}
 			solar={solar}
 			iclZones={iclZones}
+			macros={macros}
+			onRunMacro={(m) => oneTouch.mutate(m.name)}
 			freezing={freezing}
 			hpmFault={hpmFault}
 			onIclChange={(change) => iclZone.mutate(change)}
@@ -116,8 +122,10 @@ function PoolScreen({
 	hpmFault,
 	chem,
 	iclZones,
+	macros,
 	auxes,
 	onIclChange,
+	onRunMacro,
 	celsius,
 	poolSet,
 	spaSet,
@@ -136,7 +144,9 @@ function PoolScreen({
 	chem: Chem;
 	auxes: PoolDevice[];
 	iclZones: IclZone[];
+	macros: OneTouchMacro[];
 	onIclChange: (change: IclChange) => void;
+	onRunMacro: (macro: OneTouchMacro) => void;
 	celsius: boolean;
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
@@ -147,7 +157,7 @@ function PoolScreen({
 }) {
 	return (
 		<div className="space-y-4">
-			<ModeHero
+			<PoolSpaHero
 				celsius={celsius}
 				heater={heaters.find((h) =>
 					spaMode ? h.name.startsWith("spa") : h.name.startsWith("pool"),
@@ -193,16 +203,20 @@ function PoolScreen({
 					/>
 				),
 			)}
+
+			{/* Last: nearly everything a scene does is available above it, and
+			    more directly. It is here for the combinations that are not. */}
+			<OneTouchHero macros={macros} onRun={onRunMacro} />
 		</div>
 	);
 }
 
 /**
- * Experimental hero: one card for both bodies, with the spa pump as the swap.
+ * One card for both bodies, with the spa pump as the swap.
  * The panel only reports a temperature for whichever body is circulating, so
  * flipping this changes which reading exists at all — not just which is shown.
  */
-function ModeHero({
+function PoolSpaHero({
 	water,
 	spaMode,
 	celsius,

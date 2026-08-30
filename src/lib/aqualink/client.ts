@@ -368,10 +368,14 @@ export function sessionMeta() {
 
 export async function snapshot(
 	serial: string,
-): Promise<{ home: Raw; devices: Raw; icl: unknown }> {
-	const [homeResp, devicesResp] = await Promise.all([
+): Promise<{ home: Raw; devices: Raw; icl: unknown; onetouch: unknown }> {
+	const [homeResp, devicesResp, onetouchResp] = await Promise.all([
 		client.sessionRequest(serial, "get_home"),
 		client.sessionRequest(serial, "get_devices"),
+		// The home response says whether macros exist, but waiting to find out
+		// would cost a second round trip. Asking in parallel and tolerating the
+		// refusal is cheaper, and a panel without them answers harmlessly.
+		getOnetouch(serial).catch(() => undefined),
 	]);
 	return {
 		home: mergeScreen(homeResp.home_screen ?? homeResp),
@@ -379,6 +383,7 @@ export async function snapshot(
 		// Colour-light zones ride alongside devices_screen rather than inside
 		// it, so mergeScreen never sees them. No extra request for these.
 		icl: devicesResp.icl_info_list,
+		onetouch: onetouchResp?.onetouch_screen,
 	};
 }
 

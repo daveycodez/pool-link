@@ -95,6 +95,7 @@ export function usePool(serial: string) {
 		// Colour-light zones are their own subsystem, addressed by zone id and
 		// never by an aux relay — so they sit apart from the device list.
 		iclZones: snap.data?.icl ?? [],
+		macros: snap.data?.macros ?? [],
 		// When paired, this becomes the equipment that heats — so it changes how
 		// set points are sent, not just what the equipment page lists.
 		heatPump: snap.data?.heatPump ?? null,

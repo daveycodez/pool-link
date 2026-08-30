@@ -2,6 +2,7 @@ import type {
 	DeviceKind,
 	HeatPump,
 	IclZone,
+	OneTouchMacro,
 	PoolDevice,
 	PoolSnapshot,
 	Raw,
@@ -161,11 +162,41 @@ function buildHeatPump(raw: unknown): HeatPump | null {
 	};
 }
 
+/**
+ * The screen is padded to the panel's maximum, so most entries are empty
+ * slots: `status` 0 means never configured, and those are dropped rather than
+ * shown as macros with nothing behind them. `state` is which one is running.
+ */
+function buildMacros(onetouch: unknown): OneTouchMacro[] {
+	if (!Array.isArray(onetouch)) return [];
+	const flat: Raw = {};
+	for (const row of onetouch) {
+		if (row && typeof row === "object") Object.assign(flat, row);
+	}
+
+	const out: OneTouchMacro[] = [];
+	for (const [name, value] of Object.entries(flat)) {
+		if (!name.startsWith("onetouch_") || !Array.isArray(value)) continue;
+		const attrs: Raw = {};
+		for (const part of value) {
+			if (part && typeof part === "object") Object.assign(attrs, part);
+		}
+		if (str(attrs.status) === "0") continue;
+		out.push({
+			name,
+			label: str(attrs.label) || name,
+			on: isOn(attrs.state),
+		});
+	}
+	return out;
+}
+
 export function normalize(
 	serial: string,
 	home: Raw,
 	devices: Raw,
 	icl?: unknown,
+	onetouch?: unknown,
 ): PoolSnapshot {
 	const merged: Raw = { ...home, ...devices };
 	const out: PoolDevice[] = [];
@@ -189,6 +220,7 @@ export function normalize(
 		devices: out,
 		icl: buildZones(icl),
 		heatPump: buildHeatPump(merged.heatpump_info),
+		macros: buildMacros(onetouch),
 		raw: merged,
 	};
 }

@@ -16,6 +16,18 @@ export type DeviceKind =
 	| "unknown";
 
 /**
+ * A OneTouch macro: one press puts a set of equipment into a configuration the
+ * owner defined on the panel. What it actually does is not knowable from here
+ * — only its name, and whether it is currently the active one.
+ */
+export interface OneTouchMacro {
+	/** `onetouch_3`, which the set command is built from. */
+	name: string;
+	label: string;
+	on: boolean;
+}
+
+/**
  * A paired heat pump module. Absent on most panels, and when present it takes
  * over heating from the relay heaters — which is why it changes how set points
  * are written rather than only adding controls.
@@ -73,5 +85,7 @@ export interface PoolSnapshot {
 	icl: IclZone[];
 	/** Null unless a heat pump is paired. */
 	heatPump: HeatPump | null;
+	/** Configured macros only; the panel pads the list to its maximum. */
+	macros: OneTouchMacro[];
 	raw: Raw;
 }

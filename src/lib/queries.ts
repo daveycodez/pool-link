@@ -20,6 +20,7 @@ import {
 	setDeviceName,
 	setHpmSetPoint,
 	setLightColor,
+	setOnetouch,
 	setTemps,
 	setVspSpeed,
 	snapshot,
@@ -123,8 +124,8 @@ export function useSnapshot(serial: string | undefined) {
 	return useQuery({
 		queryKey: keys.snapshot(serial ?? "-"),
 		queryFn: async () => {
-			const { home, devices, icl } = await snapshot(serial as string);
-			return normalize(serial as string, home, devices, icl);
+			const { home, devices, icl, onetouch } = await snapshot(serial as string);
+			return normalize(serial as string, home, devices, icl, onetouch);
 		},
 		enabled: Boolean(serial),
 		refetchInterval: mutating ? false : POLL_MS,
@@ -222,6 +223,44 @@ export function useSetPoint(serial: string | undefined) {
 					devices: old.devices.map((d) =>
 						d.name === name ? { ...d, value: String(value) } : d,
 					),
+				};
+			});
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+	});
+}
+
+/**
+ * Run a OneTouch macro. The command toggles rather than sets, and the panel
+ * reports one macro at a time as the active configuration — so starting one
+ * ends whichever was running.
+ */
+export function useOneTouch(serial: string | undefined) {
+	const qc = useQueryClient();
+	const qk = keys.snapshot(serial ?? "-");
+	return useMutation({
+		mutationFn: async (name: string) => {
+			const res = await setOnetouch(serial as string, name);
+			// A scene moves several pieces of equipment, so it settles slowly.
+			await settle(LIGHT_SETTLE_MS);
+			return res;
+		},
+		onMutate: async (name) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
+				if (!old) return old;
+				const running = old.macros.find((m) => m.name === name)?.on;
+				return {
+					...old,
+					macros: old.macros.map((m) => ({
+						...m,
+						on: m.name === name ? !running : false,
+					})),
 				};
 			});
 			return { prev };
