@@ -243,14 +243,6 @@ export function heatRate(run: Run, now: number): number | null {
 }
 
 /**
- * Below this the caption stops counting and says so in words. Five minutes is
- * inside the estimate's own error, so "about 5 min" would be arithmetic dressed
- * as a promise — and it is about how long it takes to walk outside and get in,
- * which is the decision this line exists to inform.
- */
-const ALMOST_MS = 5 * 60_000;
-
-/**
  * The line, from a rate and the two temperatures. The rate is a single input so
  * that a measured-last-time rate, if one is ever remembered, slots in here
  * without any of this changing.
@@ -272,12 +264,10 @@ export function heatCaption(
 	// heater reports "enabled" all season next to it, so announcing readiness on
 	// the arithmetic alone would park the word on the card until October.
 	if (remaining <= 0) return rate === null ? "" : "Ready";
-	if (remaining <= 1) return "almost ready";
 	if (rate === null) return `${Math.round(remaining)}° to go`;
 	// A rate pointing away from the target is a heat-up that has already ended.
 	if (rate <= 0) return "";
-	const ms = remaining / rate;
-	return ms < ALMOST_MS ? "almost ready" : aboutHowLong(ms);
+	return aboutHowLong(remaining / rate);
 }
 
 /**
