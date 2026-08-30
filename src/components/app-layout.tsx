@@ -1,6 +1,6 @@
 import { Chip } from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams, useRouter, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import {
 	House,
 	MapPinHouse,
@@ -25,15 +25,25 @@ import { keys, useSession, useSnapshot, useSystems } from "#/lib/queries";
  * The queries below share keys with the routes', so React Query serves them
  * from cache rather than issuing a second round of requests.
  */
+/** `/systems/<serial>` and anything under it. */
+const SYSTEM_PATH = /^\/systems\/([^/]+)/;
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
 	const session = useSession();
 	const signedIn = Boolean(session.data);
 	const systems = useSystems(signedIn);
 	const router = useRouter();
+	const navigate = useNavigate();
 	const qc = useQueryClient();
 
+	const pathname = useRouterState({ select: (st) => st.location.pathname });
+
 	// Present only inside /systems/$serial; undefined on the list and elsewhere.
-	const { serial } = useParams({ strict: false });
+	// Read off the path rather than from useParams: the two update on separate
+	// subscriptions, and a render where the path had moved but the params had
+	// not left this thinking it was on no page at all — long enough to paint
+	// the list's header on the way into a system.
+	const serial = SYSTEM_PATH.exec(pathname)?.[1];
 	const system = systems.data?.find((s) => s.serial === serial);
 	const snap = useSnapshot(serial);
 
@@ -67,7 +77,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
 	// Settings and diagnostics live under /systems/$serial too, but they are not
 	// tab destinations — the bar would show Pool selected while on neither.
-	const pathname = useRouterState({ select: (st) => st.location.pathname });
 	const leaf = pathname.split("/").pop() ?? "";
 	const onTab =
 		Boolean(serial) && leaf !== "settings" && leaf !== "diagnostics";
@@ -99,9 +108,31 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	// needed here: the list and a system page need `systems`, only a system page
 	// needs its snapshot.
 	const needsSystems = pathname === "/" || Boolean(serial);
+	// A single system means the list is a page with one link on it, so the route
+	// sends them straight through. Counting that as loading keeps the header and
+	// the list itself from painting for the instant before the redirect lands.
+	const only =
+		pathname === "/" && signedIn && systems.data?.length === 1
+			? systems.data[0].serial
+			: undefined;
+	const passingThrough = Boolean(only);
+
+	// The redirect lives here rather than in the route because the loading gate
+	// below returns instead of rendering `children` — a route that never mounts
+	// cannot navigate, and the spinner would wait on itself.
+	useEffect(() => {
+		if (only) {
+			navigate({
+				params: { serial: only },
+				replace: true,
+				to: "/systems/$serial",
+			});
+		}
+	}, [only, navigate]);
 	const loading =
 		session.isPending ||
 		(signedIn && needsSystems && systems.isPending) ||
+		passingThrough ||
 		(Boolean(serial) && snap.isPending);
 
 	// /sign-out renders its own spinner, but it has to actually mount to run the

@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
+import { AddSystemRow } from "#/components/add-system";
 import { IconCircle } from "#/components/device-row";
 import { errorMessage } from "#/lib/aqualink/types";
 import { groupSerial } from "#/lib/format";
@@ -199,6 +200,8 @@ export function SystemSerialRow({ serial }: { serial: string }) {
  */
 export function AccountSettingsRows({ serial }: { serial?: string }) {
 	const { theme, setTheme } = useTheme();
+	// Already cached by the layout, so this costs no request of its own.
+	const systems = useSystems(true).data ?? [];
 
 	// next-themes only knows the resolved theme after mount, so render the
 	// control's value once we're on the client to avoid a hydration mismatch.
@@ -256,15 +259,21 @@ export function AccountSettingsRows({ serial }: { serial?: string }) {
 				</Link>
 			)}
 
-			{/* Inside a system the bottom nav only covers Pool/Equipment, so this is
-			    the way back out to the account's other systems. */}
-			{serial ? (
+			{/* Inside a system the bottom nav only covers Pool/Equipment, so this
+			    is the way back out to the account's other systems — but with only
+			    one system there is nothing to go back to, and the header's own
+			    mark already leads there. */}
+			{serial && systems.length > 1 ? (
 				<Link className="card-link" to="/">
 					<SettingsRow Icon={MapPinHouse} title="My Systems">
 						<ChevronRight className="size-5 text-muted" />
 					</SettingsRow>
 				</Link>
 			) : null}
+
+			{/* Account-level, so it sits on both settings pages — a system is
+			    added to the account, not to whichever one is in scope. */}
+			<AddSystemRow />
 
 			<Link className="card-link" to="/sign-out">
 				<SettingsRow Icon={CircleUser} title="Sign out">

@@ -512,6 +512,8 @@ export function useAddDevice() {
 	return useMutation({
 		mutationFn: ({ serial, name }: { serial: string; name: string }) =>
 			addDevice(serial, name),
-		onSuccess: () => qc.invalidateQueries({ queryKey: keys.systems() }),
+		// Awaited, not fired and forgotten: whoever added the system is about to
+		// be shown the list, and it should already have the new one in it.
+		onSuccess: () => qc.refetchQueries({ queryKey: keys.systems() }),
 	});
 }
