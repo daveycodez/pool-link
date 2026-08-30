@@ -13,9 +13,9 @@ export interface SystemSummary {
 	isVSP: boolean;
 	type: string;
 	/**
-	 * The id WebTouch takes as its actionID — the account's device id from
-	 * prm, which is not the pad serial. Falls back to the serial where the
-	 * payload carries no separate id.
+	 * WebTouch's actionID: the location record's `touchLink`, which is not
+	 * the pad serial — webtouch rejects the serial as an expired session.
+	 * Falls back to the serial only if the payload carries no touchLink.
 	 */
 	webtouchId: string;
 }

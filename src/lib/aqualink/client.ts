@@ -276,9 +276,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				status: pick(r.status, r.connectionStatus) || "unknown",
 				isVSP: r.isVSP === "true" || r.isVSP === true,
 				type: pick(r.device_type, r.type, r.model) || "iaqualink",
-				webtouchId:
-					pick(r.device_id, r.deviceId, r.id) ||
-					pick(r.serial_number, r.serial),
+				webtouchId: pick(r.touchLink) || pick(r.serial_number, r.serial),
 			};
 		});
 	}
