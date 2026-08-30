@@ -68,4 +68,5 @@ export const queryClient: QueryClient = new QueryClient({
 // mounted tree keeps the old one — the request layer then reads a cache with
 // no session in it and requests fail "Not authenticated" until a reload.
 // Declining makes Vite do that reload up front, atomically.
-if (import.meta.hot) import.meta.hot.decline();
+if (import.meta.hot)
+	import.meta.hot.accept(() => import.meta.hot?.invalidate());

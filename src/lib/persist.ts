@@ -126,4 +126,5 @@ export async function flushPersisted() {
 }
 
 // Same as query-client.ts: the persister and its subscription are singletons.
-if (import.meta.hot) import.meta.hot.decline();
+if (import.meta.hot)
+	import.meta.hot.accept(() => import.meta.hot?.invalidate());

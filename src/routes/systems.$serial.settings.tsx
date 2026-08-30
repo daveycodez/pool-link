@@ -30,10 +30,10 @@ function SystemSettings() {
 			<SystemNameRow serial={serial} />
 			<SystemSerialRow serial={serial} />
 			<AppearanceRow />
+			<AddSystemRow />
 			<WebTouchRow serial={serial} />
 			<DiagnosticsRow serial={serial} />
 			<MySystemsRow serial={serial} />
-			<AddSystemRow />
 			<SignOutRow />
 		</CardColumns>
 	);
