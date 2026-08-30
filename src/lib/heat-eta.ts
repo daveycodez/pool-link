@@ -44,6 +44,11 @@ export interface Run {
 	last: Step | null;
 	/** The degree crossings, oldest first. Never the anchor. */
 	steps: Step[];
+	/**
+	 * The highest reading this run has seen. A crossing has to beat it, so a
+	 * sensor wobbling either side of a degree cannot bank several in a row.
+	 */
+	peak: number;
 }
 
 export interface Sample {
@@ -219,6 +224,7 @@ export function nextRun(prev: Run | undefined, sample: Sample): Run {
 	const held: Run = prev ?? {
 		id: sample.id,
 		last: null,
+		peak: Number.NEGATIVE_INFINITY,
 		startedAt: sample.at,
 		steps: [],
 	};
@@ -234,23 +240,46 @@ export function nextRun(prev: Run | undefined, sample: Sample): Run {
 	// `spaMode`, which is derived from which body reports a value and so flips
 	// on its own when the pad reports "0" for the idle one.
 	if (held.id !== sample.id)
-		return { id: sample.id, last: step, startedAt: sample.at, steps: [] };
+		return {
+			id: sample.id,
+			last: step,
+			peak: sample.temp,
+			startedAt: sample.at,
+			steps: [],
+		};
 
 	const last = held.last;
 	// The anchor: a reading at unknown depth in a plateau. It dates the run and
 	// catches the first crossing, and it is never one end of a rate.
-	if (!last) return { ...held, last: step };
+	if (!last) return { ...held, last: step, peak: sample.temp };
 
 	if (sample.at - last.at > MAX_GAP_MS)
-		return { ...held, last: step, startedAt: sample.at, steps: [] };
+		return {
+			...held,
+			last: step,
+			peak: sample.temp,
+			startedAt: sample.at,
+			steps: [],
+		};
 	if (Math.abs(sample.temp - last.temp) > MAX_STEP[sample.celsius ? "C" : "F"])
 		return held;
-	if (sample.temp === last.temp) return { ...held, last: step };
+	// Only progress past the high-water mark counts. The reading is a whole
+	// degree over water that is neither still nor evenly mixed — hot water
+	// arrives at the sensor in slugs, so a spa sitting on a boundary reports 98,
+	// 99, 98, 99 within a minute. Every one of those used to be a crossing, and
+	// a rate measured across an up-swing read several times the truth: a spa
+	// climbing at four tenths of a degree a minute claimed a whole one, and
+	// showed five minutes remaining where it needed twelve. Beating the peak is
+	// the only change that means the water actually got warmer.
+	//
+	// Water genuinely falling therefore banks nothing, which is right: it is not
+	// a heat-up. The crossings stop, and the stall check drops the rate.
+	if (sample.temp <= held.peak) return { ...held, last: step };
 
 	const steps = [...held.steps, step]
 		.filter((s) => sample.at - s.at <= RUN_WINDOW_MS)
 		.slice(-MAX_STEPS);
-	return { ...held, last: step, steps };
+	return { ...held, last: step, peak: sample.temp, steps };
 }
 
 /**
