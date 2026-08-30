@@ -2,6 +2,7 @@ import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Waves } from "lucide-react";
 import { useState } from "react";
+import { ThemeToggle } from "#/components/theme-toggle";
 import { useLogin } from "#/lib/queries";
 
 export const Route = createFileRoute("/login")({
@@ -29,7 +30,16 @@ function LoginScreen() {
 	}
 
 	return (
-		<div className="flex flex-1 flex-col items-center justify-center gap-6">
+		<div className="relative flex flex-1 flex-col items-center justify-center gap-6">
+			{/* Out of the flow: this column is centred, so a toggle taking part in
+			    it would push the card off centre by its own height. The header is
+			    hidden on this page — it carries the wordmark, which the card says
+			    better — and this is the one control that still has to be reachable
+			    before anyone signs in. */}
+			<div className="absolute end-0 top-0">
+				<ThemeToggle />
+			</div>
+
 			<div className="flex items-center gap-2.5">
 				<Waves className="size-6 text-accent" />
 				<span className="text-xl font-semibold tracking-tight">Pool Link</span>
