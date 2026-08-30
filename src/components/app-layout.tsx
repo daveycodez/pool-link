@@ -1,7 +1,6 @@
 import { Chip } from "@heroui/react";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import {
-	House,
 	MapPinHouse,
 	Settings,
 	ThermometerSnowflake,
@@ -155,7 +154,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		>
 			{onLogin ? null : (
 				<AppHeader
-					Icon={!signedIn ? Waves : serial ? House : MapPinHouse}
+					Icon={serial || !signedIn ? Waves : MapPinHouse}
 					onBack={pageTitle ? () => router.history.back() : undefined}
 					params={serial ? { serial } : undefined}
 					to={!signedIn ? undefined : serial ? "/systems/$serial" : "/"}
