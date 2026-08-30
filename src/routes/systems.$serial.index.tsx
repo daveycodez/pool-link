@@ -104,20 +104,11 @@ function Pool() {
 	 */
 	const toggle = (device: PoolDevice, on: boolean) => {
 		const spaHeater = heaters.find((h) => h.name.startsWith("spa"));
-		const alsoHeat =
+		const also =
 			on && device.name === "spa_pump" && spaHeater && !spaHeater.on
 				? spaHeater
-				: null;
-		if (!alsoHeat) {
-			actuate.mutate({ device, on });
-			return;
-		}
-		actuate.mutateAsync({ device, on }).then(
-			() => actuate.mutate({ device: alsoHeat, on: true }),
-			// Failures are already toasted by the mutation cache; the heater
-			// simply does not follow a spa mode that never happened.
-			() => {},
-		);
+				: undefined;
+		actuate.mutate({ also, device, on });
 	};
 
 	return (

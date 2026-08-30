@@ -197,7 +197,10 @@ const panelOptions = (quiet: boolean, interval: number) => ({
  * and this is the shape of the lie the official app's progress bar covers.
  */
 type LightHold =
-	| { kind: "actuate"; vars: { device: PoolDevice; on: boolean } }
+	| {
+			kind: "actuate";
+			vars: { device: PoolDevice; on: boolean; also?: PoolDevice };
+	  }
 	| { kind: "color"; vars: { name: string } }
 	| { kind: "icl"; vars: IclChange };
 
@@ -220,11 +223,14 @@ function applyHolds(snap: PoolSnapshot, holds: LightHold[]): PoolSnapshot {
 	let devices = snap.devices;
 	let icl = snap.icl;
 	for (const h of holds) {
-		if (h.kind === "actuate")
+		if (h.kind === "actuate") {
+			// Both relays a single tap commands, or the second one reads as off
+			// until a poll catches up with a command already sent.
+			const names = [h.vars.device.name, h.vars.also?.name];
 			devices = devices.map((d) =>
-				d.name === h.vars.device.name ? { ...d, on: h.vars.on } : d,
+				names.includes(d.name) ? { ...d, on: h.vars.on } : d,
 			);
-		else if (h.kind === "color")
+		} else if (h.kind === "color")
 			devices = devices.map((d) =>
 				d.name === h.vars.name ? { ...d, on: true } : d,
 			);
@@ -477,14 +483,34 @@ export function useActuate(serial: string | undefined) {
 	const panel = usePanelCache(serial);
 	return useMutation({
 		mutationKey: [...holdKey(serial), "actuate"],
-		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
-			const res = await toggleDevice(
-				serial as string,
-				device.name,
-				device.kind,
-				on,
-				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
-			);
+		mutationFn: async ({
+			device,
+			on,
+			also,
+		}: {
+			device: PoolDevice;
+			on: boolean;
+			/**
+			 * A second relay to close straight after this one, inside the same
+			 * mutation. Chaining two mutations instead put the whole settle and
+			 * refetch cascade between the commands — seconds of it — so the spa
+			 * heater lagged the valves badly enough to look broken.
+			 */
+			also?: PoolDevice;
+		}) => {
+			const flip = (d: PoolDevice, state: boolean) =>
+				toggleDevice(
+					serial as string,
+					d.name,
+					d.kind,
+					state,
+					typeof d.raw.subtype === "string" ? d.raw.subtype : "",
+				);
+			const res = await flip(device, on);
+			// One after the other rather than at once: the pad works a single
+			// RS-485 command at a time either way, and sending the second only
+			// once the first is answered keeps them in the order asked for.
+			if (also) await flip(also, on);
 			// Turning on a relay that carries a variable-speed pump is two
 			// commands, always: the relay, then — once the panel has answered —
 			// the speed, because the panel does not restore one on its own.
