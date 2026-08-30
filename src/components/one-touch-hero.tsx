@@ -24,6 +24,14 @@ export function OneTouchHero({
 
 	if (macros.length === 0) return null;
 
+	// The panel's order otherwise, because it is the owner's: these are laid
+	// out at the pad and their sequence there is a choice someone made. All Off
+	// is the exception — it undoes the rest rather than being one of them, so
+	// it belongs after them however the panel happens to list it.
+	const ordered = [...macros].sort(
+		(a, b) => Number(isAllOff(a)) - Number(isAllOff(b)),
+	);
+
 	return (
 		<Card className="p-6">
 			<div className="flex h-6 items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
@@ -35,7 +43,7 @@ export function OneTouchHero({
 			    owner-written and vary in length, so equal widths keep the block
 			    from going ragged. */}
 			<div className="grid grid-cols-2 gap-2">
-				{macros.map((macro) => {
+				{ordered.map((macro) => {
 					const Icon = macroIcon(macro.label);
 					return (
 						<Button
@@ -65,4 +73,15 @@ export function OneTouchHero({
 			</div>
 		</Card>
 	);
+}
+
+/**
+ * Matched on the label rather than a name, because the panel names macros
+ * `onetouch_1` through `onetouch_N` in the order their buttons sit on the pad
+ * and says nothing about what any of them does. "All Off" is what the owner
+ * called it, and the spelling is theirs — so this is loose about spacing and
+ * case and asks for nothing else.
+ */
+function isAllOff(macro: OneTouchMacro): boolean {
+	return macro.label.replace(/\s+/g, "").toLowerCase() === "alloff";
 }
