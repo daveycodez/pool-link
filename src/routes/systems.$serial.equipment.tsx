@@ -1,6 +1,6 @@
 import { Card } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Thermometer } from "lucide-react";
+import { Snowflake, Thermometer } from "lucide-react";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
 import { PumpSpeeds } from "#/components/pump-speeds";
@@ -11,7 +11,7 @@ import {
 } from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useSetTemps } from "#/lib/queries";
-import { usePool, useRequireSession } from "#/lib/use-pool";
+import { isReported, usePool, useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/equipment")({
 	component: Equipment,
@@ -20,7 +20,7 @@ export const Route = createFileRoute("/systems/$serial/equipment")({
 function Equipment() {
 	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
-	const { controls, heaters, poolSet, spaSet, loading, celsius } =
+	const { controls, heaters, poolSet, spaSet, poolChill, loading, celsius } =
 		usePool(serial);
 	const actuate = useActuate(serial);
 	const setTemps = useSetTemps(serial);
@@ -86,6 +86,16 @@ function Equipment() {
 				/>
 			) : null}
 
+			{/* The cooling target sits with the heating one, both being pool
+			    targets — read-only, since no command in the p-api writes it. */}
+			{isReported(poolChill) ? (
+				<ReadingRow
+					device={poolChill}
+					icon={<Snowflake className="size-4" />}
+					title="Pool Chill"
+				/>
+			) : null}
+
 			{spaHeater ? (
 				<EquipmentRow
 					device={spaHeater}
@@ -112,6 +122,34 @@ function Equipment() {
 			{/* Speeds sit last: they refine equipment the switches above turn on. */}
 			<PumpSpeeds serial={serial} />
 		</div>
+	);
+}
+
+/**
+ * A set point the panel reports but offers no command to change. Same row as
+ * the steppers so it reads as part of the set, without a control implying it
+ * can be driven.
+ */
+function ReadingRow({
+	title,
+	device,
+	icon,
+}: {
+	title: string;
+	device: PoolDevice;
+	icon: React.ReactNode;
+}) {
+	return (
+		<Card className="flex-row items-center justify-between gap-4">
+			<div className="flex items-center gap-4">
+				<IconCircle on={false}>{icon}</IconCircle>
+				<Card.Title>{title}</Card.Title>
+			</div>
+			<span className="text-sm tabular-nums text-muted">
+				{device.value ?? "—"}
+				{device.unit ?? "°"}
+			</span>
+		</Card>
 	);
 }
 

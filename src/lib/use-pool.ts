@@ -78,6 +78,7 @@ export function usePool(serial: string) {
 		air: byName.get("air_temp"),
 		poolSet: byName.get("pool_set_point"),
 		spaSet: byName.get("spa_set_point"),
+		poolChill: byName.get("pool_chill_set_point"),
 		heaters: devices.filter(
 			(d) =>
 				d.kind === "climate" &&
