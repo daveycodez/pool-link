@@ -9,12 +9,12 @@ import {
 } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import {
-	CalendarClock,
 	Check,
 	ChevronRight,
 	CircleUser,
 	Copy,
 	ExternalLink,
+	Globe,
 	Hash,
 	LogOut,
 	MapPinHouse,
@@ -279,7 +279,7 @@ export function WebTouchRow({ serial }: { serial: string }) {
 			}}
 			type="button"
 		>
-			<SettingsRow Icon={CalendarClock} title="iAqualink Web">
+			<SettingsRow Icon={Globe} title="WebTouch">
 				<ExternalLink className="size-5 text-muted" />
 			</SettingsRow>
 		</button>

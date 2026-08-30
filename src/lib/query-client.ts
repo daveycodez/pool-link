@@ -63,3 +63,9 @@ export const queryClient: QueryClient = new QueryClient({
 		},
 	}),
 });
+
+// Not hot-swappable: an HMR re-run mints a fresh, empty client while the
+// mounted tree keeps the old one — the request layer then reads a cache with
+// no session in it and requests fail "Not authenticated" until a reload.
+// Declining makes Vite do that reload up front, atomically.
+if (import.meta.hot) import.meta.hot.decline();

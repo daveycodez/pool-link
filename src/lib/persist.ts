@@ -124,3 +124,6 @@ export async function flushPersisted() {
 		timestamp: Date.now(),
 	});
 }
+
+// Same as query-client.ts: the persister and its subscription are singletons.
+if (import.meta.hot) import.meta.hot.decline();

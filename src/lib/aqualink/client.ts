@@ -797,3 +797,7 @@ function pickList(data: Raw): unknown[] {
 	}
 	return [];
 }
+
+// Same as query-client.ts: the singleton holds the in-memory session, and an
+// HMR re-run would split it from the tree still rendering the old module.
+if (import.meta.hot) import.meta.hot.decline();
