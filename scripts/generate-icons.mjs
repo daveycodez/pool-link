@@ -28,8 +28,9 @@ const WAVES = [
  * @param stroke    lucide stroke width, in 24x24 units
  * @param flat      solid accent instead of the gradient; the depth falloff
  *                  costs contrast at tab sizes, where it is invisible anyway
+ * @param bare      no plate behind the mark, for the icon iOS repaints itself
  */
-function icon({ size, coverage, radius, stroke = 2, flat = false }) {
+function icon({ size, coverage, radius, stroke = 2, flat = false, bare = false }) {
 	const scale = (size * coverage) / 24;
 	const offset = (size - 24 * scale) / 2;
 	const r = size * radius;
@@ -44,8 +45,8 @@ function icon({ size, coverage, radius, stroke = 2, flat = false }) {
       <stop offset="1" stop-color="${ACCENT}" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="${BG}"/>
-  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="url(#glow)"/>
+  ${bare ? "" : `<rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="${BG}"/>
+  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="url(#glow)"/>`}
   <g transform="translate(${offset} ${offset}) scale(${scale})"
      fill="none" stroke="${flat ? ACCENT : "url(#w)"}" stroke-width="${stroke}"
      stroke-linecap="round" stroke-linejoin="round">
@@ -57,7 +58,6 @@ ${WAVES.map((d) => `    <path d="${d}"/>`).join("\n")}
 
 const png = (svg, size, { opaque = false } = {}) => {
 	let p = sharp(Buffer.from(svg)).resize(size, size);
-	// iOS composites apple-touch-icons on white if they carry alpha, so flatten.
 	if (opaque) p = p.flatten({ background: BG });
 	return p.png({ compressionLevel: 9 }).toBuffer();
 };
@@ -104,12 +104,36 @@ const anySvg = icon({ size: 512, coverage: 0.64, radius: 0.22 });
 // zone and let the background run to the edge.
 const maskableSvg = icon({ size: 512, coverage: 0.5, radius: 0 });
 
+/**
+ * Home screen on iOS, where the plate is not ours to draw any more.
+ *
+ * Since iOS 18 the system renders a home screen icon three ways — light, dark
+ * and tinted — and it composes the backdrop itself for each. An icon that
+ * carries its own opaque plate opts out of all of it: the dark variant is the
+ * same navy square in front of a wallpaper the system was going to darken
+ * anyway, and the tinted one is a flat monochrome block, because the plate is
+ * most of the luminance it has to work with.
+ *
+ * Handing over transparency instead lets it paint the appropriate ground and
+ * leaves the mark as the only thing with any weight in it. The stroke is
+ * heavier and the mark larger than on the plated icons for the same reason a
+ * favicon's is: standing on its own it has no square around it to be read
+ * against, so it has to hold the space itself.
+ */
+const appleSvg = icon({
+	bare: true,
+	coverage: 0.72,
+	radius: 0,
+	size: 512,
+	stroke: 2.6,
+});
+
 const out = [
 	["public/icons/icon-192.png", await png(anySvg, 192)],
 	["public/icons/icon-512.png", await png(anySvg, 512)],
 	["public/icons/maskable-192.png", await png(maskableSvg, 192)],
 	["public/icons/maskable-512.png", await png(maskableSvg, 512)],
-	["public/icons/apple-touch-icon.png", await png(anySvg, 180, { opaque: true })],
+	["public/icons/apple-touch-icon.png", await png(appleSvg, 180)],
 	[
 		"public/favicon.ico",
 		ico([
