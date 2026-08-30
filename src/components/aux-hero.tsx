@@ -63,7 +63,11 @@ export function AuxHero({
 							className="w-full justify-start text-xs"
 							key={speed.id}
 							onPress={() =>
-								setSpeed.mutate({ pumpId: pump.pumpId, speedId: speed.id })
+								setSpeed.mutate({
+									closeRelay: true,
+									pumpId: pump.pumpId,
+									speedId: speed.id,
+								})
 							}
 							size="sm"
 							// A speed is a setting that outlives being switched off, so

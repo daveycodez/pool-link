@@ -1110,17 +1110,24 @@ export function useSetVspSpeed(serial: string | undefined) {
 		mutationFn: async ({
 			pumpId,
 			speedId,
+			closeRelay,
 		}: {
 			pumpId: number;
 			speedId: number;
+			/**
+			 * Whether a speed on a stopped pump should close its relay first.
+			 *
+			 * Speed alone starts the pump with the relay left open, and an open
+			 * relay is a switch reading off over running water. Correcting that
+			 * is ours, not the panel's — so the hero, which is about the water,
+			 * asks for it, and the equipment page, which mirrors what the
+			 * official app sends, does not.
+			 */
+			closeRelay?: boolean;
 		}) => {
-			// The same two-step as the switch, in the same order: a speed tap
-			// on a stopped pump closes the relay first, then sets the speed.
-			// Speed alone starts the pump with the relay open, and an open
-			// relay is a switch reading off over running water.
-			const pump = qc
-				.getQueryData<VspPump[]>(qk)
-				?.find((p) => p.pumpId === pumpId);
+			const pump = closeRelay
+				? qc.getQueryData<VspPump[]>(qk)?.find((p) => p.pumpId === pumpId)
+				: undefined;
 			const relay = panel
 				.read()
 				?.devices.find(
@@ -1136,7 +1143,7 @@ export function useSetVspSpeed(serial: string | undefined) {
 				);
 			return setVspSpeed(serial as string, speedId, pumpId);
 		},
-		onMutate: async ({ pumpId, speedId }) => {
+		onMutate: async ({ pumpId, speedId, closeRelay }) => {
 			// The pick itself is the memory's best source — recorded before any
 			// poll gets a say, so turning the pump off cannot unlearn it.
 			if (serial) rememberSpeed(serial, pumpId, speedId);
@@ -1157,12 +1164,14 @@ export function useSetVspSpeed(serial: string | undefined) {
 						: p,
 				),
 			);
-			// The command carries on_off_action "on", so the pump's relay is
-			// about to close — its switch reads on now rather than a poll later.
-			for (const n of qc
-				.getQueryData<VspPump[]>(qk)
-				?.find((p) => p.pumpId === pumpId)?.auxes ?? [])
-				panel.setDeviceState(`aux_${n}`, "1");
+			// Only where this mutation is actually closing the relay: without
+			// that command the relay stays open, and pinning its switch on
+			// would be inventing a state the panel never reaches.
+			if (closeRelay)
+				for (const n of qc
+					.getQueryData<VspPump[]>(qk)
+					?.find((p) => p.pumpId === pumpId)?.auxes ?? [])
+					panel.setDeviceState(`aux_${n}`, "1");
 			return { prev, prevPanel };
 		},
 		onError: (_e, _v, ctx) => {
