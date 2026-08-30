@@ -342,6 +342,18 @@ function PoolSpaHero({
 		: waterMemory && updatedAt - waterMemory.at >= TEMP_STALE_MS
 			? timeAgo(waterMemory.at, updatedAt)
 			: "";
+	/**
+	 * Colour only where it means something. A countdown and a degree count are
+	 * information, and tinting them would spend the card's one loud signal on
+	 * "the water is doing what you asked". The two that earn it are the moment
+	 * you can walk outside, and a number that is no longer live — which is the
+	 * same green and amber the header's own chip uses for the same two ideas.
+	 */
+	const tone = !water?.value
+		? ("warning" as const)
+		: caption === "Ready"
+			? ("success" as const)
+			: undefined;
 	// One width for the stack: these switches sit above one another, right
 	// aligned, so any difference between them reads as a mistake.
 	const trackWidth = "w-17";
@@ -388,7 +400,12 @@ function PoolSpaHero({
 						</span>
 						<div className="flex flex-col items-start gap-1.5">
 							{caption ? (
-								<Chip className="whitespace-nowrap" size="sm" variant="soft">
+								<Chip
+									className="whitespace-nowrap"
+									color={tone}
+									size="sm"
+									variant="soft"
+								>
 									{caption}
 								</Chip>
 							) : null}
