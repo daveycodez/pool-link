@@ -66,6 +66,9 @@ const POLL_MS = 10_000;
  * Lights are the one thing that needs this. Everything else reports its new
  * state by the next poll, so those mutations resolve when their call returns
  * and quiet nothing.
+ *
+ * This window covers toggles and ICL changes; a WaterColors effect change
+ * computes its own from the target id — see waterColorsHold below.
  */
 const LIGHT_HOLD_MS = 15_000;
 
@@ -561,6 +564,20 @@ export function useHeatPump(serial: string | undefined) {
 }
 
 /**
+ * How long a WaterColors effect change holds, by target effect id.
+ *
+ * Measured against the official app (Alpine White id 1 ≈ 13s of progress
+ * bar, Spring Green id 5 ≈ 25s, Magenta id 8 ≈ 33s, the water done ~5s
+ * before the bar each time): the durations sit on a straight line in the
+ * target id alone. So the panel is not stepping from the current colour — it
+ * resets the fixture to the head of the table and pulses forward to the
+ * target, which it can do blind, since neither it nor the API ever knows
+ * what colour is running. Fitted to when the water is actually done rather
+ * than to the app's padded bar.
+ */
+const waterColorsHold = (effectId: number) => 5_000 + 3_000 * effectId;
+
+/**
  * Set a light's color effect. Effect ids start at 1 and 0 is "off", so
  * choosing one turns the light on — the pin shows it on throughout the hold.
  */
@@ -583,7 +600,7 @@ export function useLightColor(serial: string | undefined) {
 				subtype,
 				effectId,
 			);
-			await settle(LIGHT_HOLD_MS);
+			await settle(waterColorsHold(effectId));
 			return res;
 		},
 		// As in useActuate: an in-flight poll would land mid-pulse.
