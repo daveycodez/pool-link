@@ -16,27 +16,18 @@ import {
 	Hash,
 	LogOut,
 	MapPinHouse,
-	Monitor,
-	Moon,
 	Pencil,
 	Stethoscope,
-	Sun,
 	SunMoon,
 	Tag,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
-import { AddSystemRow } from "#/components/add-system";
 import { IconCircle } from "#/components/device-row";
+import { THEMES } from "#/components/theme-toggle";
 import { errorMessage } from "#/lib/aqualink/types";
 import { groupSerial } from "#/lib/format";
 import { useSetDeviceName, useSystems } from "#/lib/queries";
-
-const THEMES = [
-	{ id: "system", label: "System", Icon: Monitor },
-	{ id: "light", label: "Light", Icon: Sun },
-	{ id: "dark", label: "Dark", Icon: Moon },
-] as const;
 
 export function SettingsRow({
 	Icon,
@@ -194,14 +185,9 @@ export function SystemSerialRow({ serial }: { serial: string }) {
 	);
 }
 
-/**
- * Account-level rows, shared by both settings pages. `serial` scopes the
- * Diagnostics link to the current system and adds a way back to the list.
- */
-export function AccountSettingsRows({ serial }: { serial?: string }) {
+/** Appearance, as a row. The header carries the same control as a menu. */
+export function AppearanceRow() {
 	const { theme, setTheme } = useTheme();
-	// Already cached by the layout, so this costs no request of its own.
-	const systems = useSystems(true).data ?? [];
 
 	// next-themes only knows the resolved theme after mount, so render the
 	// control's value once we're on the client to avoid a hydration mismatch.
@@ -209,77 +195,85 @@ export function AccountSettingsRows({ serial }: { serial?: string }) {
 	useEffect(() => setMounted(true), []);
 
 	return (
-		<>
-			{/* The row names the setting, so it keeps one icon; the options
-			    carry their own to show what each choice is. `Select.Value`
-			    renders the selected item's children rather than its text, so
-			    the trigger picks up that icon without being told — it only
-			    needs to lay out as a row, which `.select__value` does not. */}
-			<SettingsRow Icon={SunMoon} title="Appearance">
-				<Select
-					aria-label="Appearance"
-					className="w-32"
-					onChange={(v) => setTheme(String(v))}
-					value={mounted ? (theme ?? "system") : "system"}
-					variant="secondary"
-				>
-					<Select.Trigger>
-						<Select.Value className="flex items-center gap-2" />
-						<Select.Indicator />
-					</Select.Trigger>
-					<Select.Popover>
-						<ListBox>
-							{THEMES.map(({ id, label, Icon }) => (
-								<ListBox.Item id={id} key={id} textValue={label}>
-									<Icon className="size-4 shrink-0" />
-									{label}
-									<ListBox.ItemIndicator />
-								</ListBox.Item>
-							))}
-						</ListBox>
-					</Select.Popover>
-				</Select>
+		/* The row names the setting, so it keeps one icon; the options carry
+		   their own to show what each choice is. `Select.Value` renders the
+		   selected item's children rather than its text, so the trigger picks up
+		   that icon without being told — it only needs to lay out as a row,
+		   which `.select__value` does not. */
+		<SettingsRow Icon={SunMoon} title="Appearance">
+			<Select
+				aria-label="Appearance"
+				className="w-32"
+				onChange={(v) => setTheme(String(v))}
+				value={mounted ? (theme ?? "system") : "system"}
+				variant="secondary"
+			>
+				<Select.Trigger>
+					<Select.Value className="flex items-center gap-2" />
+					<Select.Indicator />
+				</Select.Trigger>
+				<Select.Popover>
+					<ListBox>
+						{THEMES.map(({ id, label, Icon }) => (
+							<ListBox.Item id={id} key={id} textValue={label}>
+								<Icon className="size-4 shrink-0" />
+								{label}
+								<ListBox.ItemIndicator />
+							</ListBox.Item>
+						))}
+					</ListBox>
+				</Select.Popover>
+			</Select>
+		</SettingsRow>
+	);
+}
+
+/** Scoped to the system in the URL when there is one. */
+export function DiagnosticsRow({ serial }: { serial?: string }) {
+	return serial ? (
+		<Link
+			className="card-link"
+			params={{ serial }}
+			to="/systems/$serial/diagnostics"
+		>
+			<SettingsRow Icon={Stethoscope} title="Diagnostics">
+				<ChevronRight className="size-5 text-muted" />
 			</SettingsRow>
+		</Link>
+	) : (
+		<Link className="card-link" to="/diagnostics">
+			<SettingsRow Icon={Stethoscope} title="Diagnostics">
+				<ChevronRight className="size-5 text-muted" />
+			</SettingsRow>
+		</Link>
+	);
+}
 
-			{serial ? (
-				<Link
-					className="card-link"
-					params={{ serial }}
-					to="/systems/$serial/diagnostics"
-				>
-					<SettingsRow Icon={Stethoscope} title="Diagnostics">
-						<ChevronRight className="size-5 text-muted" />
-					</SettingsRow>
-				</Link>
-			) : (
-				<Link className="card-link" to="/diagnostics">
-					<SettingsRow Icon={Stethoscope} title="Diagnostics">
-						<ChevronRight className="size-5 text-muted" />
-					</SettingsRow>
-				</Link>
-			)}
+/**
+ * Inside a system the bottom nav only covers Pool/Equipment, so this is the way
+ * back out to the account's other systems — but with only one system there is
+ * nothing to go back to, and the header's own mark already leads there.
+ */
+export function MySystemsRow({ serial }: { serial?: string }) {
+	// Already cached by the layout, so this costs no request of its own.
+	const systems = useSystems(true).data ?? [];
+	if (!serial || systems.length < 2) return null;
 
-			{/* Inside a system the bottom nav only covers Pool/Equipment, so this
-			    is the way back out to the account's other systems — but with only
-			    one system there is nothing to go back to, and the header's own
-			    mark already leads there. */}
-			{serial && systems.length > 1 ? (
-				<Link className="card-link" to="/">
-					<SettingsRow Icon={MapPinHouse} title="My Systems">
-						<ChevronRight className="size-5 text-muted" />
-					</SettingsRow>
-				</Link>
-			) : null}
+	return (
+		<Link className="card-link" to="/">
+			<SettingsRow Icon={MapPinHouse} title="My Systems">
+				<ChevronRight className="size-5 text-muted" />
+			</SettingsRow>
+		</Link>
+	);
+}
 
-			{/* Account-level, so it sits on both settings pages — a system is
-			    added to the account, not to whichever one is in scope. */}
-			<AddSystemRow />
-
-			<Link className="card-link" to="/sign-out">
-				<SettingsRow Icon={CircleUser} title="Sign out">
-					<LogOut className="size-4 text-muted" />
-				</SettingsRow>
-			</Link>
-		</>
+export function SignOutRow() {
+	return (
+		<Link className="card-link" to="/sign-out">
+			<SettingsRow Icon={CircleUser} title="Sign out">
+				<LogOut className="size-4 text-muted" />
+			</SettingsRow>
+		</Link>
 	);
 }

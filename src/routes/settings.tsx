@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AddSystemRow } from "#/components/add-system";
+import { CardColumns } from "#/components/card-columns";
 import { Loading } from "#/components/loading";
-import { AccountSettingsRows } from "#/components/settings-rows";
+import {
+	AppearanceRow,
+	DiagnosticsRow,
+	SignOutRow,
+} from "#/components/settings-rows";
 import { useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/settings")({
@@ -15,8 +21,11 @@ function Settings() {
 	if (!signedIn) return null;
 
 	return (
-		<div className="space-y-4">
-			<AccountSettingsRows />
-		</div>
+		<CardColumns>
+			<AppearanceRow />
+			<DiagnosticsRow />
+			<AddSystemRow />
+			<SignOutRow />
+		</CardColumns>
 	);
 }

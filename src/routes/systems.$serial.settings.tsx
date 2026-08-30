@@ -1,7 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AddSystemRow } from "#/components/add-system";
+import { CardColumns } from "#/components/card-columns";
 import { Loading } from "#/components/loading";
 import {
-	AccountSettingsRows,
+	AppearanceRow,
+	DiagnosticsRow,
+	MySystemsRow,
+	SignOutRow,
 	SystemNameRow,
 	SystemSerialRow,
 } from "#/components/settings-rows";
@@ -20,10 +25,14 @@ function SystemSettings() {
 	if (!signedIn) return null;
 
 	return (
-		<div className="space-y-4">
+		<CardColumns>
 			<SystemNameRow serial={serial} />
 			<SystemSerialRow serial={serial} />
-			<AccountSettingsRows serial={serial} />
-		</div>
+			<AppearanceRow />
+			<DiagnosticsRow serial={serial} />
+			<MySystemsRow serial={serial} />
+			<AddSystemRow />
+			<SignOutRow />
+		</CardColumns>
 	);
 }

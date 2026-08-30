@@ -2,6 +2,7 @@ import { Card, Description, Label, ListBox, Select } from "@heroui/react";
 import { Gauge } from "lucide-react";
 import type { VspPump } from "#/lib/aqualink/client";
 import { useSetVspSpeed, useVspPumps } from "#/lib/queries";
+import { CardColumns } from "./card-columns";
 import { IconCircle } from "./device-row";
 
 /**
@@ -19,25 +20,27 @@ export function PumpSpeeds({ serial }: { serial: string }) {
 	return (
 		<div className="space-y-4">
 			<h2 className="px-1 text-sm font-medium text-muted">Pump Speeds</h2>
-			{pumps.map((pump) => (
-				<Card
-					className="flex-row items-center justify-between gap-4"
-					key={pump.pumpId}
-				>
-					<div className="flex items-center gap-4">
-						<IconCircle on={pump.speeds.some((s) => s.active)}>
-							<Gauge className="size-4" />
-						</IconCircle>
-						<Card.Title>{pump.name}</Card.Title>
-					</div>
-					<PumpSpeedSelect
-						onSelect={(speedId) =>
-							setSpeed.mutate({ pumpId: pump.pumpId, speedId })
-						}
-						pump={pump}
-					/>
-				</Card>
-			))}
+			<CardColumns>
+				{pumps.map((pump) => (
+					<Card
+						className="flex-row items-center justify-between gap-4"
+						key={pump.pumpId}
+					>
+						<div className="flex items-center gap-4">
+							<IconCircle on={pump.speeds.some((s) => s.active)}>
+								<Gauge className="size-4" />
+							</IconCircle>
+							<Card.Title>{pump.name}</Card.Title>
+						</div>
+						<PumpSpeedSelect
+							onSelect={(speedId) =>
+								setSpeed.mutate({ pumpId: pump.pumpId, speedId })
+							}
+							pump={pump}
+						/>
+					</Card>
+				))}
+			</CardColumns>
 		</div>
 	);
 }

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { AuxHero } from "#/components/aux-hero";
+import { CardColumns } from "#/components/card-columns";
 import { IclHero } from "#/components/icl-hero";
 import { Loading } from "#/components/loading";
 import { OneTouchHero } from "#/components/one-touch-hero";
@@ -156,7 +157,7 @@ function PoolScreen({
 	serial: string;
 }) {
 	return (
-		<div className="space-y-4">
+		<CardColumns>
 			<PoolSpaHero
 				celsius={celsius}
 				heater={heaters.find((h) =>
@@ -207,7 +208,7 @@ function PoolScreen({
 			{/* Last: nearly everything a scene does is available above it, and
 			    more directly. It is here for the combinations that are not. */}
 			<OneTouchHero macros={macros} onRun={onRunMacro} />
-		</div>
+		</CardColumns>
 	);
 }
 

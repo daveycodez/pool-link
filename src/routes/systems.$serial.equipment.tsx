@@ -1,6 +1,7 @@
 import { Card, ListBox, Select, Switch } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Heater as HeatPumpIcon, Snowflake, Thermometer } from "lucide-react";
+import { CardColumns } from "#/components/card-columns";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
 import { PumpSpeeds } from "#/components/pump-speeds";
@@ -11,7 +12,12 @@ import {
 } from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useHeatPump, useSetPoint } from "#/lib/queries";
-import { usePool, useRequireSession } from "#/lib/use-pool";
+import {
+	isHidden,
+	isReported,
+	usePool,
+	useRequireSession,
+} from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/equipment")({
 	component: Equipment,
@@ -46,12 +52,17 @@ function Equipment() {
 	const spaHeater = heaters.find((h) => h.name.startsWith("spa"));
 	const poolHeater = heaters.find((h) => h.name.startsWith("pool"));
 	// Circulation and mode lead; everything else keeps the panel's own order.
-	const filterPump = controls.find((d) => d.name === "pool_pump");
-	const spaPump = controls.find((d) => d.name === "spa_pump");
+	// Fixed keys are in the payload whether or not the hardware exists — an
+	// absent solar heater or cover reports "", not nothing — so a row for one
+	// would be a switch that does nothing. The panel reporting a state is what
+	// says the equipment is there.
+	const fitted = controls.filter((d) => isReported(d) && !isHidden(d));
+	const filterPump = fitted.find((d) => d.name === "pool_pump");
+	const spaPump = fitted.find((d) => d.name === "spa_pump");
 	const lead = new Set(["pool_pump", "spa_pump"]);
-	const rest = controls.filter((d) => !lead.has(d.name));
+	const rest = fitted.filter((d) => !lead.has(d.name));
 
-	if (controls.length === 0 && heaters.length === 0 && !spaSet && !poolSet) {
+	if (fitted.length === 0 && heaters.length === 0 && !spaSet && !poolSet) {
 		return (
 			<Card className="text-sm text-muted">
 				No controllable equipment found.
@@ -60,141 +71,147 @@ function Equipment() {
 	}
 
 	return (
-		<div className="space-y-4">
-			{/* Ordered by dependency, not by the API's key order: circulation first,
+		<div className="space-y-6">
+			<CardColumns>
+				{/* Ordered by dependency, not by the API's key order: circulation first,
 			    since nothing else works without it, then each heater paired with the
 			    temperature it targets, then whatever else the panel exposes. */}
-			{filterPump ? (
-				<EquipmentRow
-					device={filterPump}
-					onToggle={(on) => actuate.mutate({ device: filterPump, on })}
-				/>
-			) : null}
+				{filterPump ? (
+					<EquipmentRow
+						device={filterPump}
+						onToggle={(on) => actuate.mutate({ device: filterPump, on })}
+					/>
+				) : null}
 
-			{spaPump ? (
-				<EquipmentRow
-					device={spaPump}
-					onToggle={(on) => actuate.mutate({ device: spaPump, on })}
-				/>
-			) : null}
+				{spaPump ? (
+					<EquipmentRow
+						device={spaPump}
+						onToggle={(on) => actuate.mutate({ device: spaPump, on })}
+					/>
+				) : null}
 
-			{poolHeater ? (
-				<EquipmentRow
-					device={poolHeater}
-					onToggle={(on) => actuate.mutate({ device: poolHeater, on })}
-				/>
-			) : null}
-			{poolSet ? (
-				<TempRow
-					device={poolSet}
-					onChange={commit("pool_set_point")}
-					range={tempRange(celsius)}
-					title="Pool Temp"
-				/>
-			) : null}
+				{isReported(poolHeater) ? (
+					<EquipmentRow
+						device={poolHeater}
+						onToggle={(on) => actuate.mutate({ device: poolHeater, on })}
+					/>
+				) : null}
+				{isReported(poolSet) ? (
+					<TempRow
+						device={poolSet}
+						onChange={commit("pool_set_point")}
+						range={tempRange(celsius)}
+						title="Pool Temp"
+					/>
+				) : null}
 
-			{/* The cooling target sits with the heating one, both being pool
+				{/* The cooling target sits with the heating one, both being pool
 			    targets — read-only, since no command in the p-api writes it.
 			    Shown whether or not the panel reports a value: this page is the
 			    inventory, and it hides nothing. */}
-			{poolChill ? (
-				<TempRow
-					device={poolChill}
-					icon={<Snowflake className="size-4" />}
-					onChange={commit("pool_chill_set_point")}
-					range={tempRange(celsius)}
-					title="Pool Chill"
-				/>
-			) : null}
+				{isReported(poolChill) ? (
+					<TempRow
+						device={poolChill}
+						icon={<Snowflake className="size-4" />}
+						onChange={commit("pool_chill_set_point")}
+						range={tempRange(celsius)}
+						title="Pool Chill"
+					/>
+				) : null}
 
-			{spaHeater ? (
-				<EquipmentRow
-					device={spaHeater}
-					onToggle={(on) => actuate.mutate({ device: spaHeater, on })}
-				/>
-			) : null}
-			{heatPump ? (
-				<Card className="flex-row items-center justify-between gap-4">
-					<div className="flex items-center gap-4">
-						<IconCircle on={heatPump.on}>
-							<HeatPumpIcon className="size-4" />
-						</IconCircle>
-						<div className="min-w-0">
-							<Card.Title>Heat Pump</Card.Title>
-							{heatPump.type ? (
-								<Card.Description>{heatPump.type}</Card.Description>
-							) : null}
+				{isReported(spaHeater) ? (
+					<EquipmentRow
+						device={spaHeater}
+						onToggle={(on) => actuate.mutate({ device: spaHeater, on })}
+					/>
+				) : null}
+				{heatPump ? (
+					<Card className="flex-row items-center justify-between gap-4">
+						<div className="flex items-center gap-4">
+							<IconCircle on={heatPump.on}>
+								<HeatPumpIcon className="size-4" />
+							</IconCircle>
+							<div className="min-w-0">
+								<Card.Title>Heat Pump</Card.Title>
+								{heatPump.type ? (
+									<Card.Description>{heatPump.type}</Card.Description>
+								) : null}
+							</div>
 						</div>
-					</div>
-					<Switch
-						aria-label="Heat pump"
-						isSelected={heatPump.on}
-						onChange={(on) => heatPumpM.mutate({ kind: "power", on })}
-					>
-						<Switch.Content>
-							<Switch.Control>
-								<Switch.Thumb />
-							</Switch.Control>
-						</Switch.Content>
-					</Switch>
-				</Card>
-			) : null}
+						<Switch
+							aria-label="Heat pump"
+							isSelected={heatPump.on}
+							onChange={(on) => heatPumpM.mutate({ kind: "power", on })}
+						>
+							<Switch.Content>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch.Content>
+						</Switch>
+					</Card>
+				) : null}
 
-			{/* Only pumps that can chill offer the choice; a heat-only unit has
+				{/* Only pumps that can chill offer the choice; a heat-only unit has
 			    nothing to switch between. */}
-			{heatPump?.chillAvailable ? (
-				<Card className="flex-row items-center justify-between gap-4">
-					<div className="flex items-center gap-4">
-						<IconCircle on={heatPump.mode === "chill"}>
-							<Snowflake className="size-4" />
-						</IconCircle>
-						<Card.Title>Heat Pump Mode</Card.Title>
-					</div>
-					<Select
-						aria-label="Heat pump mode"
-						className="w-32"
-						onChange={(v) =>
-							v != null && heatPumpM.mutate({ kind: "mode", mode: String(v) })
-						}
-						value={heatPump.mode || null}
-						variant="secondary"
-					>
-						<Select.Trigger>
-							<Select.Value />
-							<Select.Indicator />
-						</Select.Trigger>
-						<Select.Popover>
-							<ListBox>
-								{["heat", "chill"].map((mode) => (
-									<ListBox.Item id={mode} key={mode} textValue={mode}>
-										<span className="capitalize">{mode}</span>
-										<ListBox.ItemIndicator />
-									</ListBox.Item>
-								))}
-							</ListBox>
-						</Select.Popover>
-					</Select>
-				</Card>
-			) : null}
+				{heatPump?.chillAvailable ? (
+					<Card className="flex-row items-center justify-between gap-4">
+						<div className="flex items-center gap-4">
+							<IconCircle on={heatPump.mode === "chill"}>
+								<Snowflake className="size-4" />
+							</IconCircle>
+							<Card.Title>Heat Pump Mode</Card.Title>
+						</div>
+						<Select
+							aria-label="Heat pump mode"
+							className="w-32"
+							onChange={(v) =>
+								v != null && heatPumpM.mutate({ kind: "mode", mode: String(v) })
+							}
+							value={heatPump.mode || null}
+							variant="secondary"
+						>
+							<Select.Trigger>
+								<Select.Value />
+								<Select.Indicator />
+							</Select.Trigger>
+							<Select.Popover>
+								<ListBox>
+									{["heat", "chill"].map((mode) => (
+										<ListBox.Item id={mode} key={mode} textValue={mode}>
+											<span className="capitalize">{mode}</span>
+											<ListBox.ItemIndicator />
+										</ListBox.Item>
+									))}
+								</ListBox>
+							</Select.Popover>
+						</Select>
+					</Card>
+				) : null}
 
-			{spaSet ? (
-				<TempRow
-					device={spaSet}
-					onChange={commit("spa_set_point")}
-					range={tempRange(celsius)}
-					title="Spa Temp"
-				/>
-			) : null}
+				{isReported(spaSet) ? (
+					<TempRow
+						device={spaSet}
+						onChange={commit("spa_set_point")}
+						range={tempRange(celsius)}
+						title="Spa Temp"
+					/>
+				) : null}
 
-			{rest.map((d) => (
-				<EquipmentRow
-					key={d.id}
-					device={d}
-					onToggle={(on) => actuate.mutate({ device: d, on })}
-				/>
-			))}
+				{rest.map((d) => (
+					<EquipmentRow
+						key={d.id}
+						device={d}
+						onToggle={(on) => actuate.mutate({ device: d, on })}
+					/>
+				))}
 
-			{/* Speeds sit last: they refine equipment the switches above turn on. */}
+				{/* Speeds sit last: they refine equipment the switches above turn on. */}
+			</CardColumns>
+
+			{/* Its own section: these set how equipment above runs rather than
+			    whether it runs, and the heading only makes sense over its own
+			    cards. It renders nothing at all on a single-speed pad. */}
 			<PumpSpeeds serial={serial} />
 		</div>
 	);

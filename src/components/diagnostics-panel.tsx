@@ -1,6 +1,7 @@
 import { Button, Card, ScrollShadow } from "@heroui/react";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { CardColumns } from "#/components/card-columns";
 import {
 	account,
 	api,
@@ -108,7 +109,7 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 	}
 
 	return (
-		<div className="space-y-4">
+		<CardColumns>
 			<Card>
 				<Card.Header>
 					<Card.Title>Session</Card.Title>
@@ -200,7 +201,7 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 					</pre>
 				</ScrollShadow>
 			</Card>
-		</div>
+		</CardColumns>
 	);
 }
 

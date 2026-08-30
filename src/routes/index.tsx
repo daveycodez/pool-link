@@ -2,6 +2,7 @@ import { Card, Chip } from "@heroui/react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, House } from "lucide-react";
 import { AddSystemRow } from "#/components/add-system";
+import { CardColumns } from "#/components/card-columns";
 import { IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
 import type { Raw, SystemSummary } from "#/lib/aqualink/types";
@@ -32,12 +33,12 @@ function Systems() {
 	}
 
 	return (
-		<div className="space-y-4">
+		<CardColumns>
 			{list.map((system) => (
 				<SystemCard key={system.serial} system={system} />
 			))}
 			<AddSystemRow />
-		</div>
+		</CardColumns>
 	);
 }
 
