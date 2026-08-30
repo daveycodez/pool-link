@@ -193,8 +193,26 @@ export const ICL_DIM_STEP = 5;
  * both are left to fall through to the plain relay path, which is what they were
  * getting before these names existed.
  */
+export const AUX_TYPE_RELAY = 0;
 export const AUX_TYPE_DIMMER = 1;
 export const AUX_TYPE_COLOR_LIGHT = 2;
+
+/**
+ * What a plain relay's `subtype` says when the panel is padding.
+ *
+ * The devices screen is sent at a fixed width whatever the panel's size, so
+ * most of what it names is a slot with no hardware behind it, and this is how
+ * the panel admits which. Every capture anyone has posted agrees: a padded slot
+ * is `type` 0 with `subtype` 2 under a label of "Aux V<n>", and a relay that
+ * really exists is never 2 — an RS-6 puts the boundary at aux_6 and an RS-4 at
+ * aux_4, each exactly one past its last real auxiliary. The 0 and 1 that real
+ * relays report are something else again, probably a pump assignment, which is
+ * unresolved and does not matter here.
+ *
+ * Only meaningful against `type` 0. On a dimming relay `subtype` is a level, and
+ * a light dimmed to 2% would otherwise read as a slot that does not exist.
+ */
+export const AUX_SUBTYPE_PADDED = 2;
 
 /**
  * The step a Jandy light dimming relay moves in.

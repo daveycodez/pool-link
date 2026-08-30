@@ -1,10 +1,15 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { HPM_FAULTS, IaquaHeaterState } from "#/lib/aqualink/enums";
+import {
+	AUX_SUBTYPE_PADDED,
+	AUX_TYPE_RELAY,
+	HPM_FAULTS,
+	IaquaHeaterState,
+} from "#/lib/aqualink/enums";
 import { presenceOf } from "#/lib/chemistry";
 import { isCelsius } from "#/lib/format";
-import type { PoolDevice } from "#/lib/iaqualink/types";
+import type { PoolDevice, Raw } from "#/lib/iaqualink/types";
 import {
 	lastTemp,
 	rememberTemp,
@@ -84,36 +89,61 @@ function auxIndex(name: string): number | null {
 }
 
 /**
- * The panel's own name for a slot it has no relay behind. Only a fallback now
+ * The panel's own name for a slot it has no relay behind. The last thing asked
  * — see isWiredRelay — and fragile in exactly the way that made it worth
- * replacing: it is matched against a label the owner renames at the panel.
+ * replacing: it is matched against a label the owner renames at the panel. It
+ * is kept because it is the only question a panel that reports neither a relay
+ * count nor a subtype can answer, and there is one of those in the wild.
+ *
+ * Deliberately narrow. "Aux3" and "Aux5" are the panel's default names for real
+ * relays nobody has renamed, and both have been seen on relays that exist, so
+ * only the V form counts.
  */
 const GENERIC_AUX = /^aux\s+v\d+$/i;
 
 /**
  * Whether the panel has hardware behind this relay.
  *
- * The devices screen is padded to the largest panel the protocol addresses, so
+ * The devices screen is padded to a fixed width whatever the panel's size, so
  * most of what it names is nothing: this RS-4 reports 31 addressable relays for
- * the 3 it owns. `relay_count` is the panel saying how many it has, filter pump
- * included, so the auxiliaries run from index 1 to relayCount − 1 and every
- * address past that is padding — whatever it is called. That last part is the
- * whole point of the change: the label used to decide this, so renaming a slot
- * on the panel conjured a relay and naming a real one "Aux V9" erased it.
+ * the 3 it owns. Three things can say which, and they are asked in order of how
+ * hard they are to argue with.
  *
- * When the count is missing or unusable there is nothing else to go on, so this
- * falls back to reading the label, which is the behaviour every panel had
- * before. Both branches are answered generously — a device this cannot place is
+ * `relay_count` first, because it is the hardware speaking. It is the number in
+ * the panel's model name, the filter pump included, so the auxiliaries run from
+ * index 1 to relayCount − 1 and every address past that is padding — whatever
+ * it has been named. Captures from an RS-6 and two RS-4s all put the panel's
+ * first padded slot at exactly that boundary, and AqualinkD builds its own
+ * button list from panel size the same way, three auxiliaries at size 4 and
+ * seven at size 8.
+ *
+ * Then `subtype`, because the count is often not sent at all — several panels
+ * answer `relay_count` with an empty string, including an RS-4 that pads its
+ * screen exactly like this one. A padded slot says `type` 0 and `subtype` 2,
+ * and a real relay never says 2. This is nearly as good as the count and could
+ * arguably lead; it is second only because it describes one slot where the
+ * count describes the panel.
+ *
+ * The label last, and only when neither of those arrived.
+ *
+ * Every branch is answered generously — a device none of them can place is
  * shown — because a phantom row is a nuisance and a missing one is a relay the
  * owner cannot reach.
  */
 export function isWiredRelay(
-	device: { name: string; label: string },
+	device: { name: string; label: string; raw: Raw },
 	relayCount: number | null,
 ): boolean {
-	if (relayCount === null) return !GENERIC_AUX.test(device.label);
-	const index = auxIndex(device.name);
-	return index === null || index < relayCount;
+	if (relayCount !== null) {
+		const index = auxIndex(device.name);
+		return index === null || index < relayCount;
+	}
+	if (
+		num(device.raw.type) === AUX_TYPE_RELAY &&
+		num(device.raw.subtype) === AUX_SUBTYPE_PADDED
+	)
+		return false;
+	return !GENERIC_AUX.test(device.label);
 }
 
 /** Jandy LED WaterColors — the one light family with an effect list here. */
