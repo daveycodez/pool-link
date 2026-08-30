@@ -389,6 +389,7 @@ export function heatCaption(
 	rate: number | null,
 	current: number,
 	target: number,
+	watched = rate !== null,
 ): string {
 	if (!Number.isFinite(current) || !Number.isFinite(target)) return "";
 	const remaining = target - current;
@@ -397,11 +398,17 @@ export function heatCaption(
 	// installs cut out short of the number, so a timer reaching zero is a fact
 	// about arithmetic rather than about water.
 	//
-	// And only when a rate says we watched it climb. Water sitting above its set
-	// point is the ordinary state of a warm pool in summer, not an arrival — the
-	// heater reports "enabled" all season next to it, so announcing readiness on
-	// the arithmetic alone would park the word on the card until October.
-	if (remaining <= 0) return rate === null ? "" : "Ready";
+	// And only when this session watched it climb. Water above its set point is
+	// the ordinary state of a warm pool in summer, not an arrival — the heater
+	// reports "enabled" all season beside it — so the arithmetic alone must not
+	// print the word, or it sits on the card until October.
+	//
+	// A remembered rate does not count as having watched. It says how fast this
+	// body tends to heat, which is true of a pool nobody is heating, and once it
+	// began standing in for an unmeasured climb it started answering this
+	// question too: switching back to a pool already above its target announced
+	// it Ready on the strength of a number from another day.
+	if (remaining <= 0) return watched ? "Ready" : "";
 	// Inside a couple of degrees there is nothing worth counting. A spa in use
 	// drifts a degree or two under its set point and the heater catches it back
 	// up, over and over — a duration there would be a countdown to a number the
@@ -526,5 +533,5 @@ export function useHeatEta({
 	// The target arrives already through a bare `Number()`, which is 0 for the
 	// empty string a panel sends for a set point it does not have — and counting
 	// down to zero degrees would report every warm pool as ready.
-	return heatCaption(rate, shown, sane(target, celsius));
+	return heatCaption(rate, shown, sane(target, celsius), live !== null);
 }
