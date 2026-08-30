@@ -23,6 +23,7 @@ import {
 	login,
 	logout,
 	onetouchScreen,
+	pumpForDevice,
 	setDeviceName,
 	setHpmSetPoint,
 	setLightColor,
@@ -453,6 +454,20 @@ export function useActuate(serial: string | undefined) {
 				on,
 				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
 			);
+			// A relay carrying a variable-speed pump does not come on AT a
+			// speed — so once the panel answers the turn-on, the speed is set
+			// explicitly: the one the pump reports active, or its first
+			// configured speed when none is.
+			if (on) {
+				const pump = pumpForDevice(
+					qc.getQueryData<VspPump[]>(keys.vsp(uid, serial ?? "-")),
+					device.name,
+				);
+				const speed =
+					pump && (pump.speeds.find((s) => s.active) ?? pump.speeds[0]);
+				if (pump && speed)
+					await setVspSpeed(serial as string, speed.id, pump.pumpId);
+			}
 			// Switching a WaterColors light on IS programming Alpine White: the
 			// fixture comes up at the head of its table, so it rides the same
 			// hold as picking id 1. Off is a bare relay drop, and nothing else
