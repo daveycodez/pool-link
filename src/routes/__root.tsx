@@ -55,9 +55,24 @@ export const Route = createRootRoute({
 			},
 			{ rel: "stylesheet", href: appCss },
 			{ rel: "manifest", href: `${base}manifest.webmanifest` },
-			// Browsers that understand SVG favicons take the first; the .ico is
-			// the fallback and also answers bare /favicon.ico requests.
-			{ rel: "icon", type: "image/svg+xml", href: `${base}icon.svg` },
+			// One SVG per theme, chosen by the link's own media query — the only
+			// way a favicon follows the browser's theme that every SVG-capable
+			// browser honours; an @media inside a single SVG is respected by some
+			// and ignored by others. The .ico is the fallback for browsers that
+			// take no SVG at all and answers bare /favicon.ico requests, so it
+			// carries the middle accent that reads on either ground.
+			{
+				href: `${base}icon-light.svg`,
+				media: "(prefers-color-scheme: light)",
+				rel: "icon",
+				type: "image/svg+xml",
+			},
+			{
+				href: `${base}icon-dark.svg`,
+				media: "(prefers-color-scheme: dark)",
+				rel: "icon",
+				type: "image/svg+xml",
+			},
 			{ rel: "icon", sizes: "32x32", href: `${base}favicon.ico` },
 			// iOS ignores sizes other than 180 and applies its own squircle mask.
 			{
