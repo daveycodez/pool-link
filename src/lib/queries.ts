@@ -29,6 +29,7 @@ import {
 	setOnetouch,
 	setTemps,
 	setVspSpeed,
+	stopVspPump,
 	switchHpmMode,
 	toggleDevice,
 } from "#/lib/aqualink/client";
@@ -747,6 +748,46 @@ export function useVspPumps(serial: string | undefined) {
 		// As above: this is the one worth restoring, so it has to survive to be
 		// restored. Pump wiring does not change on its own in the meantime.
 		gcTime: PERSIST_GC_TIME_MS,
+	});
+}
+
+/**
+ * Stop a pump: the same speed command with the off action. There is no
+ * "speed zero" to send — the speed table starts at the pump's own minimum
+ * RPM, and off is a first-class action, not a magic value. The selection
+ * stays marked in the cache (running false, active kept), because the panel
+ * is about to forget it and the grid should not.
+ */
+export function useStopVspPump(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const panel = usePanelCache(serial);
+	const qk = keys.vsp(uid, serial ?? "-");
+	return useMutation({
+		mutationFn: ({ pumpId }: { pumpId: number }) =>
+			stopVspPump(serial as string, pumpId),
+		onMutate: async ({ pumpId }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			const prevPanel = panel.snapshot();
+			qc.setQueryData(qk, (old: VspPump[] | undefined) =>
+				old?.map((p) => (p.pumpId === pumpId ? { ...p, running: false } : p)),
+			);
+			// The relay may or may not be closed; either way it reads off now.
+			for (const n of qc
+				.getQueryData<VspPump[]>(qk)
+				?.find((p) => p.pumpId === pumpId)?.auxes ?? [])
+				panel.setDeviceState(`aux_${n}`, "0");
+			return { prev, prevPanel };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+			if (ctx) panel.restore(ctx.prevPanel);
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: qk });
+			qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") });
+		},
 	});
 }
 

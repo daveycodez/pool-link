@@ -2,7 +2,7 @@ import { Button, Card } from "@heroui/react";
 import { Power } from "lucide-react";
 import { pumpForDevice } from "#/lib/aqualink/client";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import { useSetVspSpeed, useVspPumps } from "#/lib/queries";
+import { useSetVspSpeed, useStopVspPump, useVspPumps } from "#/lib/queries";
 import { DeviceIcon } from "./device-row";
 import { presetIcon } from "./preset-icons";
 import { TrackSwitch } from "./track-switch";
@@ -25,6 +25,7 @@ export function AuxHero({
 }) {
 	const { data: pumps } = useVspPumps(serial);
 	const setSpeed = useSetVspSpeed(serial);
+	const stop = useStopVspPump(serial);
 	const pump = pumpForDevice(pumps, device.name);
 	// The relay's own icon in the thumb, so the switch says what it switches.
 	// Unnamed relays have nothing to show, and fall back to a power symbol.
@@ -54,15 +55,18 @@ export function AuxHero({
 					onIcon={Thumb}
 					onLabel="On"
 					onToggle={(_d, on) => {
-						// Turning this pump on IS setting a speed: the command
-						// carries on_off_action "on", so one request closes the
-						// relay and lands the pump on its last speed — or its
-						// first, when none is known. Only here: the equipment
-						// page's switch stays a bare relay toggle.
+						// A pump's switch speaks VSP, not relay: on is the speed
+						// command carrying its last known speed — or its first —
+						// and off is the same command's off action. Only here:
+						// the equipment page's switch stays a bare relay toggle.
 						const speed = pump && (active ?? pump.speeds[0]);
-						if (on && pump && speed)
-							setSpeed.mutate({ pumpId: pump.pumpId, speedId: speed.id });
-						else onToggle(on);
+						if (pump && speed) {
+							if (on)
+								setSpeed.mutate({ pumpId: pump.pumpId, speedId: speed.id });
+							else stop.mutate({ pumpId: pump.pumpId });
+							return;
+						}
+						onToggle(on);
 					}}
 				/>
 			</div>
