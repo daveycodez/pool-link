@@ -780,6 +780,7 @@ export function useSetVspSpeed(serial: string | undefined) {
 					p.pumpId === pumpId
 						? {
 								...p,
+								running: true,
 								speeds: p.speeds.map((sp) => ({
 									...sp,
 									active: sp.id === speedId,

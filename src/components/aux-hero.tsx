@@ -30,6 +30,10 @@ export function AuxHero({
 	// Unnamed relays have nothing to show, and fall back to a power symbol.
 	const Thumb = presetIcon(device.label) ?? Power;
 	const active = pump?.speeds.find((s) => s.active);
+	// A pump started by a speed command runs without ever closing its relay,
+	// so the relay alone under-reports. Running is either signal: the relay
+	// closed, or the panel reporting an active speed on the vsp screen.
+	const running = device.on || Boolean(pump?.running);
 
 	return (
 		<Card className="p-6">
@@ -44,7 +48,7 @@ export function AuxHero({
 				</div>
 
 				<TrackSwitch
-					device={device}
+					device={pump ? { ...device, on: running } : device}
 					offIcon={Thumb}
 					offLabel="Off"
 					onIcon={Thumb}
@@ -81,7 +85,7 @@ export function AuxHero({
 							// stopped pump dims its selection to secondary.
 							variant={
 								speed.id === active?.id
-									? device.on
+									? running
 										? "primary"
 										: "secondary"
 									: "tertiary"

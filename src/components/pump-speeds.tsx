@@ -27,7 +27,7 @@ export function PumpSpeeds({ serial }: { serial: string }) {
 						key={pump.pumpId}
 					>
 						<div className="flex items-center gap-4">
-							<IconCircle on={pump.speeds.some((s) => s.active)}>
+							<IconCircle on={pump.running}>
 								<Gauge className="size-4" />
 							</IconCircle>
 							<Card.Title>{pump.name}</Card.Title>

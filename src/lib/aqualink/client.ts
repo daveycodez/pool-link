@@ -568,6 +568,13 @@ export function stopVspPump(serial: string, slotId = 1): Promise<Raw> {
 export interface VspPump {
 	/** Pump slot. Doubles as `slot_id` on every VSP command. */
 	pumpId: number;
+	/**
+	 * Whether the panel reported an active speed — its only way of saying the
+	 * pump is running, since a speed-started pump never closes its aux relay.
+	 * Distinct from `speeds[].active`, which the query layer also restores
+	 * from local memory while the pump is off.
+	 */
+	running: boolean;
 	name: string;
 	/** What the panel uses it for, e.g. "Filtration" or "Aux Pump". */
 	app: string;
@@ -618,6 +625,7 @@ export async function listVspPumps(serial: string): Promise<VspPump[]> {
 				name: named.get(pumpId) || `Pump ${pumpId}`,
 				app: String(m.appName ?? ""),
 				...slot,
+				running: slot.speeds.some((s) => s.active),
 			};
 		}),
 	);
