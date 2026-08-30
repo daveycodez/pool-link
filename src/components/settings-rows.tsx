@@ -208,7 +208,10 @@ export function AccountSettingsRows({ serial }: { serial?: string }) {
 	return (
 		<>
 			{/* The row names the setting, so it keeps one icon; the options
-			    carry their own to show what each choice is. */}
+			    carry their own to show what each choice is. `Select.Value`
+			    renders the selected item's children rather than its text, so
+			    the trigger picks up that icon without being told — it only
+			    needs to lay out as a row, which `.select__value` does not. */}
 			<SettingsRow Icon={SunMoon} title="Appearance">
 				<Select
 					aria-label="Appearance"
@@ -218,14 +221,15 @@ export function AccountSettingsRows({ serial }: { serial?: string }) {
 					variant="secondary"
 				>
 					<Select.Trigger>
-						<Select.Value />
+						<Select.Value className="flex items-center gap-2" />
 						<Select.Indicator />
 					</Select.Trigger>
 					<Select.Popover>
 						<ListBox>
-							{THEMES.map((t) => (
-								<ListBox.Item id={t.id} key={t.id} textValue={t.label}>
-									{t.label}
+							{THEMES.map(({ id, label, Icon }) => (
+								<ListBox.Item id={id} key={id} textValue={label}>
+									<Icon className="size-4 shrink-0" />
+									{label}
 									<ListBox.ItemIndicator />
 								</ListBox.Item>
 							))}
