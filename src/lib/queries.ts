@@ -2,6 +2,7 @@ import {
 	skipToken,
 	useIsMutating,
 	useMutation,
+	useMutationState,
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
@@ -50,18 +51,23 @@ export type IclChange =
 const POLL_MS = 10_000;
 
 /**
- * The panel serialises commands over RS-485 and keeps reporting a transient
- * state while it works through one — a light is the worst case, since Jandy
- * WaterColors change effect by pulsing the relay and read as off throughout.
+ * How long a light change holds: its target state stays pinned, and the
+ * panel polls go quiet.
  *
- * So a command is not finished when its HTTP call returns; it is finished when
- * the panel has settled. Every mutation stays pending for that long, which
- * makes `isMutating` the single signal the poll needs.
+ * The quiet is not politeness. The panel serialises commands over RS-485 and
+ * reports transient state for the whole pad while it works one — a poll
+ * during a light's pulse sequence comes back with everything else whacked
+ * too, so mid-hold answers are not usable, for this light or for anything.
+ * Which is also why the window cannot confirm and end early: the API never
+ * exposes a WaterColors fixture's colour (only its relay), and an echo read
+ * mid-sequence proves nothing. The window is the whole answer — the official
+ * app's progress bar is the same trick.
+ *
+ * Lights are the one thing that needs this. Everything else reports its new
+ * state by the next poll, so those mutations resolve when their call returns
+ * and quiet nothing.
  */
-const SETTLE_MS = 5_000;
-
-/** Lights pulse the relay through a sequence, so they take twice as long. */
-const LIGHT_SETTLE_MS = 15_000;
+const LIGHT_HOLD_MS = 15_000;
 
 /** Pump speeds are near-static, so they ride a much slower cycle. */
 const VSP_POLL_MS = POLL_MS * 2;
@@ -136,23 +142,106 @@ export function useSystems(enabled: boolean) {
  * live ones. Split, each keeps its own cadence and its own fate, and they sit
  * under one key prefix so a mutation still refreshes the panel in one line.
  */
-const panelOptions = (mutating: boolean, interval: number) => ({
-	refetchInterval: (mutating ? false : interval) as number | false,
+const panelOptions = (quiet: boolean, interval: number) => ({
+	refetchInterval: (quiet ? false : interval) as number | false,
 	refetchIntervalInBackground: false,
-	// A cycle plus the longest a command can hold the poll. Equal to the
-	// interval, data would turn stale at the very moment the next poll is due —
-	// so the header would read "10s ago" every cycle, on a panel that was
-	// answering perfectly. Stale should mean a poll was actually missed.
-	staleTime: interval + LIGHT_SETTLE_MS,
+	// Double the interval: equal to it, data would turn stale at the very
+	// moment the next poll is due — so the header would read "10s ago" every
+	// cycle, on a panel that was answering perfectly. Stale should mean a poll
+	// was actually missed.
+	staleTime: interval * 2,
 	retry: (count: number, error: unknown) =>
 		error instanceof AqualinkError && error.status === 401 ? false : count < 2,
 });
 
+/**
+ * A pending light change, read straight off the mutation cache. The mutation
+ * key names the serial and which mutation it is; the variables carry the
+ * target state. While one is pending, usePanel pins that light to its target
+ * over whatever the polls report — the panel lies about a light mid-change,
+ * and this is the shape of the lie the official app's progress bar covers.
+ */
+type LightHold =
+	| { kind: "actuate"; vars: { device: PoolDevice; on: boolean } }
+	| { kind: "color"; vars: { name: string } }
+	| { kind: "icl"; vars: IclChange };
+
+const holdKey = (serial: string | undefined) =>
+	["hold", serial ?? "-"] as const;
+
+function usePendingHolds(serial: string | undefined): LightHold[] {
+	return useMutationState({
+		filters: { mutationKey: holdKey(serial), status: "pending" },
+		select: (m) =>
+			({
+				kind: m.options.mutationKey?.[2],
+				vars: m.state.variables,
+			}) as LightHold,
+	});
+}
+
+/** The snapshot with every pending change's target state pinned over it. */
+function applyHolds(snap: PoolSnapshot, holds: LightHold[]): PoolSnapshot {
+	let devices = snap.devices;
+	let icl = snap.icl;
+	for (const h of holds) {
+		if (h.kind === "actuate")
+			devices = devices.map((d) =>
+				d.name === h.vars.device.name ? { ...d, on: h.vars.on } : d,
+			);
+		else if (h.kind === "color")
+			devices = devices.map((d) =>
+				d.name === h.vars.name ? { ...d, on: true } : d,
+			);
+		else {
+			const v = h.vars;
+			icl = icl.map((z) =>
+				z.zoneId !== v.zoneId
+					? z
+					: v.kind === "power"
+						? { ...z, on: v.on }
+						: v.kind === "color"
+							? { ...z, on: true, colorId: v.colorId, dim: v.dim }
+							: v.kind === "brightness"
+								? { ...z, dim: v.dim }
+								: { ...z, on: true, rgbw: v.rgbw },
+			);
+		}
+	}
+	return { ...snap, devices, icl };
+}
+
+/**
+ * Which lights are mid-colour-change, for progress UI. Driven by the same
+ * pending mutations as the pin, so a spinner keyed to this runs exactly as
+ * long as the hold does. On/off holds are deliberately left out: the switch
+ * already shows the toggle, and a spinner would dress a plain flip up as
+ * work — only a colour working its way through the fixture earns one.
+ */
+export function useLightHolds(serial: string | undefined) {
+	const holds = usePendingHolds(serial);
+	return useMemo(() => {
+		const devices = new Set<string>();
+		const zones = new Set<number>();
+		for (const h of holds) {
+			if (h.kind === "color") devices.add(h.vars.name);
+			else if (
+				h.kind === "icl" &&
+				(h.vars.kind === "color" || h.vars.kind === "custom")
+			)
+				zones.add(h.vars.zoneId);
+		}
+		return { devices, zones };
+	}, [holds]);
+}
+
 export function usePanel(serial: string | undefined) {
 	const uid = useUserId();
-	// Mutations stay pending until the panel has settled, so this covers both
-	// the request and the transient state that follows it.
-	const mutating = useIsMutating() > 0;
+	const holds = usePendingHolds(serial);
+	// Poll answers during a light hold are transient for the whole pad, so the
+	// polls sit the hold out. Only light holds quiet them; no other mutation
+	// lives long enough to matter.
+	const quiet = useIsMutating({ mutationKey: holdKey(serial) }) > 0;
 	const ready = Boolean(serial) && Boolean(uid);
 
 	// skipToken rather than `enabled`: it disables the query and removes the
@@ -162,12 +251,12 @@ export function usePanel(serial: string | undefined) {
 	const home = useQuery({
 		queryKey: keys.home(uid, serial ?? "-"),
 		queryFn: ready && serial ? () => homeScreen(serial) : skipToken,
-		...panelOptions(mutating, POLL_MS),
+		...panelOptions(quiet, POLL_MS),
 	});
 	const devices = useQuery({
 		queryKey: keys.devices(uid, serial ?? "-"),
 		queryFn: ready && serial ? () => devicesScreen(serial) : skipToken,
-		...panelOptions(mutating, POLL_MS),
+		...panelOptions(quiet, POLL_MS),
 	});
 	// Macros change when someone edits them at the panel, which is never in the
 	// course of using the app — and this is the one screen worth restoring from
@@ -175,13 +264,13 @@ export function usePanel(serial: string | undefined) {
 	const onetouch = useQuery({
 		queryKey: keys.onetouch(uid, serial ?? "-"),
 		queryFn: ready && serial ? () => onetouchScreen(serial) : skipToken,
-		...panelOptions(mutating, ONETOUCH_POLL_MS),
+		...panelOptions(quiet, ONETOUCH_POLL_MS),
 		// The one screen worth keeping: names rather than readings, so a restore
 		// is still true. It has to outlive maxAge to survive being restored.
 		gcTime: PERSIST_GC_TIME_MS,
 	});
 
-	const data = useMemo(
+	const snapshot = useMemo(
 		() =>
 			home.data && devices.data
 				? normalize(
@@ -194,6 +283,10 @@ export function usePanel(serial: string | undefined) {
 				: undefined,
 		[serial, home.data, devices.data, onetouch.data],
 	);
+	// Pinned over what the polls report: a light mid-change reads as its
+	// target until its mutation resolves, so a mid-pulse "off" never paints.
+	const data =
+		snapshot && holds.length ? applyHolds(snapshot, holds) : snapshot;
 
 	return {
 		data,
@@ -305,22 +398,6 @@ function usePanelCache(serial: string | undefined) {
 				return { ...old, heatpump_info: next };
 			});
 		},
-		patchZone: (zoneId: number, patch: Raw) => {
-			qc.setQueryData(dk, (old: DevicesScreen | undefined) =>
-				old && Array.isArray(old.icl)
-					? {
-							...old,
-							icl: old.icl.map((z: unknown) =>
-								z &&
-								typeof z === "object" &&
-								Number((z as Raw).zoneId) === zoneId
-									? { ...(z as Raw), ...patch }
-									: z,
-							),
-						}
-					: old,
-			);
-		},
 		/** Flip `name`, stopping the rest: the panel runs one macro at a time. */
 		toggleMacro: (name: string) => {
 			const running = read()?.macros.find((m) => m.name === name)?.on;
@@ -349,12 +426,18 @@ function usePanelCache(serial: string | undefined) {
 	};
 }
 
-/** Optimistic actuation: flip the cache instantly, roll back on failure. */
+/**
+ * Actuate a device. No cache surgery: while this is pending, usePanel pins
+ * the device to its target state over whatever the polls report, and the
+ * pending state outlives the refetch below — so the pin hands off to fresh
+ * data with no frame of stale state in between. An error just drops the pin.
+ */
 export function useActuate(serial: string | undefined) {
 	const uid = useUserId();
 	const qc = useQueryClient();
 	const panel = usePanelCache(serial);
 	return useMutation({
+		mutationKey: [...holdKey(serial), "actuate"],
 		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
 			const res = await toggleDevice(
 				serial as string,
@@ -363,28 +446,25 @@ export function useActuate(serial: string | undefined) {
 				on,
 				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
 			);
-			await settle(device.kind === "light" ? LIGHT_SETTLE_MS : SETTLE_MS);
+			// A light pulses its relay before it reads true again, and the pad
+			// reports transient state throughout — so the hold runs its window.
+			// Nothing else lies about itself, so nothing else waits.
+			if (device.kind === "light") await settle(LIGHT_HOLD_MS);
 			return res;
 		},
-		onMutate: async ({ device, on }) => {
-			await panel.cancel();
-			const prev = panel.snapshot();
-			// "1" reads as on through every parser this can touch — isOn for
-			// relays and lights, heaterOn for heaters — and "0" as off for both.
-			panel.setDeviceState(device.name, on ? "1" : "0");
-			return { prev };
-		},
-		onError: (_e, _v, ctx) => {
-			if (ctx) panel.restore(ctx.prev);
-		},
+		// A poll already in flight when the hold starts would land mid-pulse
+		// with the whole pad reading wrong; it is cancelled instead of landed.
+		onMutate: ({ device }) =>
+			device.kind === "light" ? panel.cancel() : undefined,
 		// The pumps too: a relay carrying a variable-speed pump reports its
 		// speed on a separate query with a slower cycle, and leaving that behind
 		// left one button reading its fill from the snapshot and its selection
 		// from data up to a cycle older.
-		onSettled: () => {
-			panel.invalidate();
-			qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") });
-		},
+		onSettled: () =>
+			Promise.all([
+				panel.invalidate(),
+				qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") }),
+			]),
 	});
 }
 
@@ -419,7 +499,6 @@ export function useSetPoint(serial: string | undefined) {
 					name === "pool_set_point" ? String(value) : at("pool_set_point"),
 				);
 			}
-			await settle(SETTLE_MS);
 			return res;
 		},
 		onMutate: async ({ name, value }) => {
@@ -444,12 +523,7 @@ export function useSetPoint(serial: string | undefined) {
 export function useOneTouch(serial: string | undefined) {
 	const panel = usePanelCache(serial);
 	return useMutation({
-		mutationFn: async (name: string) => {
-			const res = await setOnetouch(serial as string, name);
-			// A scene moves several pieces of equipment, so it settles slowly.
-			await settle(LIGHT_SETTLE_MS);
-			return res;
-		},
+		mutationFn: (name: string) => setOnetouch(serial as string, name),
 		onMutate: async (name) => {
 			await panel.cancel();
 			const prev = panel.snapshot();
@@ -467,16 +541,12 @@ export function useOneTouch(serial: string | undefined) {
 export function useHeatPump(serial: string | undefined) {
 	const panel = usePanelCache(serial);
 	return useMutation({
-		mutationFn: async (
+		mutationFn: (
 			v: { kind: "power"; on: boolean } | { kind: "mode"; mode: string },
-		) => {
-			const res =
-				v.kind === "power"
-					? await enableHpm(serial as string, v.on)
-					: await switchHpmMode(serial as string, v.mode);
-			await settle(SETTLE_MS);
-			return res;
-		},
+		) =>
+			v.kind === "power"
+				? enableHpm(serial as string, v.on)
+				: switchHpmMode(serial as string, v.mode),
 		onMutate: async (v) => {
 			await panel.cancel();
 			const prev = panel.snapshot();
@@ -490,10 +560,14 @@ export function useHeatPump(serial: string | undefined) {
 	});
 }
 
-/** Set a light's color effect. */
+/**
+ * Set a light's color effect. Effect ids start at 1 and 0 is "off", so
+ * choosing one turns the light on — the pin shows it on throughout the hold.
+ */
 export function useLightColor(serial: string | undefined) {
 	const panel = usePanelCache(serial);
 	return useMutation({
+		mutationKey: [...holdKey(serial), "color"],
 		mutationFn: async ({
 			name,
 			subtype,
@@ -509,19 +583,11 @@ export function useLightColor(serial: string | undefined) {
 				subtype,
 				effectId,
 			);
-			await settle(LIGHT_SETTLE_MS);
+			await settle(LIGHT_HOLD_MS);
 			return res;
 		},
-		// Effect ids start at 1 and 0 is "off", so choosing one turns the light on.
-		onMutate: async ({ name }) => {
-			await panel.cancel();
-			const prev = panel.snapshot();
-			panel.setDeviceState(name, "1");
-			return { prev };
-		},
-		onError: (_e, _v, ctx) => {
-			if (ctx) panel.restore(ctx.prev);
-		},
+		// As in useActuate: an in-flight poll would land mid-pulse.
+		onMutate: () => panel.cancel(),
 		onSettled: () => panel.invalidate(),
 	});
 }
@@ -535,12 +601,14 @@ export function useLightColor(serial: string | undefined) {
  */
 export function useVspPumps(serial: string | undefined) {
 	const uid = useUserId();
-	const mutating = useIsMutating() > 0;
+	// Quiet during light holds, same as the panel: its answers ride the same
+	// RS-485 line and come back just as transient.
+	const quiet = useIsMutating({ mutationKey: holdKey(serial) }) > 0;
 
 	return useQuery({
 		queryKey: keys.vsp(uid, serial ?? "-"),
 		queryFn: uid && serial ? () => listVspPumps(serial) : skipToken,
-		refetchInterval: mutating ? false : VSP_POLL_MS,
+		refetchInterval: quiet ? false : VSP_POLL_MS,
 		refetchIntervalInBackground: false,
 		staleTime: VSP_POLL_MS * 2,
 		// As above: this is the one worth restoring, so it has to survive to be
@@ -565,11 +633,7 @@ export function useSetVspSpeed(serial: string | undefined) {
 		}: {
 			pumpId: number;
 			speedId: number;
-		}) => {
-			const res = await setVspSpeed(serial as string, speedId, pumpId);
-			await settle(SETTLE_MS);
-			return res;
-		},
+		}) => setVspSpeed(serial as string, speedId, pumpId),
 		onMutate: async ({ pumpId, speedId }) => {
 			await qc.cancelQueries({ queryKey: qk });
 			const prev = qc.getQueryData(qk);
@@ -607,6 +671,7 @@ export function useSetVspSpeed(serial: string | undefined) {
 export function useIclZone(serial: string | undefined) {
 	const panel = usePanelCache(serial);
 	return useMutation({
+		mutationKey: [...holdKey(serial), "icl"],
 		mutationFn: async (v: IclChange) => {
 			const id = v.zoneId;
 			const res =
@@ -624,34 +689,13 @@ export function useIclZone(serial: string | undefined) {
 									v.rgbw[2],
 									v.rgbw[3],
 								);
-			// Colour changes cycle the fixture, so they settle like a light.
-			await settle(v.kind === "brightness" ? SETTLE_MS : LIGHT_SETTLE_MS);
+			// Colour changes cycle the fixture, so they hold like a light.
+			// Brightness applies at once and needs no wait at all.
+			if (v.kind !== "brightness") await settle(LIGHT_HOLD_MS);
 			return res;
 		},
-		onMutate: async (v) => {
-			await panel.cancel();
-			const prev = panel.snapshot();
-			panel.patchZone(
-				v.zoneId,
-				v.kind === "power"
-					? { zoneStatus: v.on ? "on" : "off" }
-					: v.kind === "color"
-						? { zoneStatus: "on", zoneColor: v.colorId, dim_level: v.dim }
-						: v.kind === "brightness"
-							? { dim_level: v.dim }
-							: {
-									zoneStatus: "on",
-									red_val: v.rgbw[0],
-									green_val: v.rgbw[1],
-									blue_val: v.rgbw[2],
-									white_val: v.rgbw[3],
-								},
-			);
-			return { prev };
-		},
-		onError: (_e, _v, ctx) => {
-			if (ctx) panel.restore(ctx.prev);
-		},
+		// As in useActuate: an in-flight poll would land mid-pulse.
+		onMutate: (v) => (v.kind === "brightness" ? undefined : panel.cancel()),
 		onSettled: () => panel.invalidate(),
 	});
 }

@@ -8,6 +8,7 @@ import {
 	Label,
 	parseColor,
 	Slider,
+	Spinner,
 } from "@heroui/react";
 import { Lightbulb, LightbulbOff } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -29,9 +30,12 @@ import { TrackSwitch } from "./track-switch";
  */
 export function IclHero({
 	zone,
+	pending,
 	onChange,
 }: {
 	zone: IclZone;
+	/** A change is in flight and the zone has not confirmed it yet. */
+	pending: boolean;
 	onChange: (change: IclChange) => void;
 }) {
 	// Off is a state, not something to pick — the switch already covers it.
@@ -61,16 +65,23 @@ export function IclHero({
 					</div>
 				</div>
 
-				<TrackSwitch
-					device={{ ...ZONE_AS_DEVICE, label: zone.label, on: zone.on }}
-					offIcon={LightbulbOff}
-					offLabel="Off"
-					onIcon={Lightbulb}
-					onLabel="On"
-					onToggle={(_d, on) =>
-						onChange({ kind: "power", on, zoneId: zone.zoneId })
-					}
-				/>
+				<div className="flex items-center gap-3">
+					{/* Runs for the hold window, while the polls sit out the
+					    panel's transient reporting. */}
+					{pending ? (
+						<Spinner color="current" className="text-muted" size="sm" />
+					) : null}
+					<TrackSwitch
+						device={{ ...ZONE_AS_DEVICE, label: zone.label, on: zone.on }}
+						offIcon={LightbulbOff}
+						offLabel="Off"
+						onIcon={Lightbulb}
+						onLabel="On"
+						onToggle={(_d, on) =>
+							onChange({ kind: "power", on, zoneId: zone.zoneId })
+						}
+					/>
+				</div>
 			</div>
 
 			{/* Brightness leads: it applies whatever colour is running, where a
@@ -113,6 +124,9 @@ export function IclHero({
 						<Button
 							aria-pressed={zone.colorId === id}
 							className="w-full justify-start text-xs"
+							// One colour at a time, as the official app has it — a second
+							// pick mid-change would just queue more work on the pad.
+							isDisabled={pending}
 							key={name}
 							// Brightness rides along, since the panel takes both on one
 							// command and omitting it would reset the zone to full.
@@ -171,6 +185,8 @@ export function IclHero({
 					value={custom}
 				>
 					<ColorPicker.Trigger
+						// Held with the swatches: the custom colour is an effect too.
+						isDisabled={pending}
 						className={`h-9 w-full gap-2 rounded-3xl px-3 text-xs md:h-8 ${
 							isCustom && zone.on
 								? "bg-accent text-accent-foreground"

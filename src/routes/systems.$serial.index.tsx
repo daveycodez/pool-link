@@ -1,4 +1,4 @@
-import { Button, Card, Chip, ColorSwatch } from "@heroui/react";
+import { Button, Card, Chip, ColorSwatch, Spinner } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	Blinds,
@@ -32,6 +32,7 @@ import {
 	useActuate,
 	useIclZone,
 	useLightColor,
+	useLightHolds,
 	useOneTouch,
 	useSetPoint,
 } from "#/lib/queries";
@@ -72,6 +73,7 @@ function Pool() {
 	const lightColor = useLightColor(serial);
 	const iclZone = useIclZone(serial);
 	const oneTouch = useOneTouch(serial);
+	const held = useLightHolds(serial);
 
 	if (pending || loading) return <Loading />;
 	// No session: useRequireSession is already redirecting to /login.
@@ -79,6 +81,7 @@ function Pool() {
 
 	return (
 		<PoolScreen
+			held={held}
 			serial={serial}
 			water={water}
 			spaMode={spaMode}
@@ -112,6 +115,7 @@ function Pool() {
 }
 
 function PoolScreen({
+	held,
 	water,
 	spaMode,
 	heaters,
@@ -134,6 +138,8 @@ function PoolScreen({
 	onSetPoint,
 	onLightColor,
 }: {
+	/** Lights mid-change, so their heroes can show progress. */
+	held: { devices: Set<string>; zones: Set<number> };
 	water: PoolDevice | undefined;
 	spaMode: boolean;
 	heaters: PoolDevice[];
@@ -181,7 +187,12 @@ function PoolScreen({
 			{/* Zones are not relays, so they sit outside the loop below — the
 			    panel lists them separately and so does this. */}
 			{iclZones.map((zone) => (
-				<IclHero key={zone.zoneId} onChange={onIclChange} zone={zone} />
+				<IclHero
+					key={zone.zoneId}
+					onChange={onIclChange}
+					pending={held.zones.has(zone.zoneId)}
+					zone={zone}
+				/>
 			))}
 
 			{/* One card per relay, in the panel's own order. A relay that reports
@@ -194,6 +205,7 @@ function PoolScreen({
 						key={aux.id}
 						onColor={(effectId) => onLightColor(aux, effectId)}
 						onToggle={(on) => onToggle(aux, on)}
+						pending={held.devices.has(aux.name)}
 					/>
 				) : (
 					<AuxHero
@@ -429,10 +441,13 @@ function ChemRow({ chem }: { chem: Chem }) {
  */
 function WaterColorsHero({
 	device,
+	pending,
 	onToggle,
 	onColor,
 }: {
 	device: PoolDevice;
+	/** A change is still working through the fixture's pulse sequence. */
+	pending: boolean;
 	onToggle: (on: boolean) => void;
 	onColor: (effectId: number) => void;
 }) {
@@ -451,14 +466,22 @@ function WaterColorsHero({
 					</div>
 				</div>
 
-				<TrackSwitch
-					device={device}
-					offIcon={LightbulbOff}
-					offLabel="Off"
-					onIcon={Lightbulb}
-					onLabel="On"
-					onToggle={(_d, on) => onToggle(on)}
-				/>
+				<div className="flex items-center gap-3">
+					{/* The panel gives no progress for the pulse sequence, so this
+					    runs for the hold window — the same trick as the official
+					    app's progress bar. */}
+					{pending ? (
+						<Spinner color="current" className="text-muted" size="sm" />
+					) : null}
+					<TrackSwitch
+						device={device}
+						offIcon={LightbulbOff}
+						offLabel="Off"
+						onIcon={Lightbulb}
+						onLabel="On"
+						onToggle={(_d, on) => onToggle(on)}
+					/>
+				</div>
 			</div>
 
 			{/* Two per row, equal width — the names vary a lot in length, and a
@@ -470,6 +493,11 @@ function WaterColorsHero({
 						<Button
 							aria-pressed={picked === name}
 							className="w-full justify-start text-xs"
+							// One colour at a time: stacked effect changes make the pad
+							// pulse through every one of them, and pulse-counting is how
+							// WaterColors drift out of sync. The official app blocks the
+							// same way, behind its progress bar.
+							isDisabled={pending}
 							key={name}
 							// Effect ids start at 1 and 0 is "off", so setting one turns the
 							// light on as well — no separate toggle, which would race the
