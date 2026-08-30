@@ -262,6 +262,9 @@ function PoolSpaHero({
 	onSetPoint: (temp: number) => void;
 }) {
 	const target = Number(setPoint?.value);
+	// One width for the stack: these switches sit above one another, right
+	// aligned, so any difference between them reads as a mistake.
+	const trackWidth = "w-17";
 	return (
 		<Card className="p-6">
 			{/* Two columns, not one row: the switch stack grows downward on its own
@@ -316,10 +319,14 @@ function PoolSpaHero({
 					{isReported(spaPump) ? (
 						<TrackSwitch
 							device={spaPump}
-							offIcon={Waves}
-							offLabel="Pool"
+							// Icon and label both name what the switch controls, like
+							// the heater and cover beside it — the position says on or
+							// off, so swapping either read as a mode picker instead.
+							offIcon={Bubbles}
+							offLabel="Spa"
 							onIcon={Bubbles}
 							onLabel="Spa"
+							trackWidth={trackWidth}
 							onToggle={onToggle}
 							tone="warning"
 						/>
@@ -331,6 +338,7 @@ function PoolSpaHero({
 							offLabel="Heat"
 							onIcon={Flame}
 							onLabel="Heat"
+							trackWidth={trackWidth}
 							onToggle={onToggle}
 							tone="danger"
 						/>
@@ -344,19 +352,23 @@ function PoolSpaHero({
 							offLabel="Heat"
 							onIcon={Sun}
 							onLabel="Heat"
+							trackWidth={trackWidth}
 							onToggle={onToggle}
 							tone="danger"
 						/>
 					) : null}
-					{/* A cover belongs to the pool, so it keeps to that side of the
-					    swap — and only when the panel says one is fitted. */}
-					{!spaMode && isReported(cover) ? (
+					{/* Shown whenever the panel reports a cover, in either mode. Which
+					    water it covers is not ours to assume — combo covers span both
+					    bodies and spa-only installs exist — and even a pool-only cover
+					    is worth closing while someone sits in the spa. */}
+					{isReported(cover) ? (
 						<TrackSwitch
 							device={cover}
 							offIcon={Blinds}
 							offLabel="Cover"
 							onIcon={Blinds}
 							onLabel="Cover"
+							trackWidth={trackWidth}
 							onToggle={onToggle}
 						/>
 					) : null}
@@ -498,6 +510,7 @@ function WaterColorsHero({
 						offLabel="Off"
 						onIcon={Lightbulb}
 						onLabel="On"
+						trackWidth="w-16"
 						onToggle={(_d, on) => {
 							// On resumes the last colour we know — powering up resets
 							// the fixture to Alpine White, and the memory beats the

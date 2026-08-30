@@ -80,6 +80,7 @@ export function IclHero({
 						offLabel="Off"
 						onIcon={Lightbulb}
 						onLabel="On"
+						trackWidth="w-16"
 						onToggle={(_d, on) =>
 							onChange({ kind: "power", on, zoneId: zone.zoneId })
 						}
