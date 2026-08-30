@@ -23,13 +23,13 @@ import {
 	login,
 	logout,
 	onetouchScreen,
+	pumpForDevice,
 	setDeviceName,
 	setHpmSetPoint,
 	setLightColor,
 	setOnetouch,
 	setTemps,
 	setVspSpeed,
-	stopVspPump,
 	switchHpmMode,
 	toggleDevice,
 } from "#/lib/aqualink/client";
@@ -462,6 +462,26 @@ export function useActuate(serial: string | undefined) {
 				on,
 				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
 			);
+			// Turning on a relay that carries a variable-speed pump is two
+			// commands, always: the relay, then — once the panel has answered —
+			// the speed, because the panel does not restore one on its own.
+			// The user's last known speed wins, then whatever the table calls
+			// active, then the first configured speed as the default.
+			if (on) {
+				const pump = pumpForDevice(
+					qc.getQueryData<VspPump[]>(keys.vsp(uid, serial ?? "-")),
+					device.name,
+				);
+				if (pump) {
+					const last = serial && lastPumpSpeed(serial, pump.pumpId);
+					const speedId =
+						pump.speeds.find((s) => s.id === last)?.id ??
+						pump.speeds.find((s) => s.active)?.id ??
+						pump.speeds[0]?.id;
+					if (speedId !== undefined)
+						await setVspSpeed(serial as string, speedId, pump.pumpId);
+				}
+			}
 			// Switching a WaterColors light on IS programming Alpine White: the
 			// fixture comes up at the head of its table, so it rides the same
 			// hold as picking id 1. Off is a bare relay drop, and nothing else
@@ -469,34 +489,76 @@ export function useActuate(serial: string | undefined) {
 			if (device.kind === "light" && on) await settle(waterColorsHold(1));
 			return res;
 		},
-		// A poll already in flight when the hold starts would land mid-pulse
-		// with the whole pad reading wrong; it is cancelled instead of landed.
-		onMutate: ({ device, on }) =>
-			device.kind === "light" && on ? panel.cancel() : undefined,
+		onMutate: async ({ device, on }): Promise<{ vspPrev?: VspPump[] }> => {
+			// A poll already in flight when a light's hold starts would land
+			// mid-pulse with the whole pad reading wrong; cancelled, not landed.
+			if (device.kind === "light" && on) {
+				await panel.cancel();
+				return {};
+			}
+			// Opening a pump's relay stops the pump, but the vsp screen keeps
+			// reporting the active speed until its slower cycle notices — clear
+			// running now, or the switch reads on well after the tap.
+			if (!on) {
+				const vspKey = keys.vsp(uid, serial ?? "-");
+				const pumps = qc.getQueryData<VspPump[]>(vspKey);
+				const pump = pumpForDevice(pumps, device.name);
+				if (pump) {
+					qc.setQueryData(
+						vspKey,
+						pumps?.map((p) =>
+							p.pumpId === pump.pumpId ? { ...p, running: false } : p,
+						),
+					);
+					return { vspPrev: pumps };
+				}
+			}
+			return {};
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.vspPrev)
+				qc.setQueryData(keys.vsp(uid, serial ?? "-"), ctx.vspPrev);
+		},
 		// The pumps too: a relay carrying a variable-speed pump reports its
 		// speed on a separate query with a slower cycle, and leaving that behind
 		// left one button reading its fill from the snapshot and its selection
 		// from data up to a cycle older.
 		onSettled: async (_res, _err, { device, on }) => {
-			const vsp = qc.invalidateQueries({
-				queryKey: keys.vsp(uid, serial ?? "-"),
-			});
+			const vspKey = keys.vsp(uid, serial ?? "-");
 			// Lights release only onto data that agrees with the flip, as the
 			// colour mutation does — a refetch reading the relay mid-transition
 			// would paint the opposite state for a whole poll cycle.
 			if (device.kind === "light") {
 				for (let i = 0; ; i++) {
 					await panel.invalidate();
-					const lit = panel.read()?.devices.find(
-						(d) => d.name === device.name,
-					)?.on;
+					const lit = panel
+						.read()
+						?.devices.find((d) => d.name === device.name)?.on;
 					if (lit === on || lit === undefined || i >= 3) break;
 					await settle(2_000);
 				}
-			} else {
-				await panel.invalidate();
+				await qc.invalidateQueries({ queryKey: vspKey });
+				return;
 			}
-			await vsp;
+			await panel.invalidate();
+			// A stopped pump can keep reporting its speed for a beat, and
+			// releasing onto that would flip the switch back on — so the vsp
+			// refetch retries until the screen agrees the pump stopped.
+			const pump = pumpForDevice(
+				qc.getQueryData<VspPump[]>(vspKey),
+				device.name,
+			);
+			for (let i = 0; ; i++) {
+				await qc.invalidateQueries({ queryKey: vspKey });
+				const still =
+					!on &&
+					pump &&
+					qc
+						.getQueryData<VspPump[]>(vspKey)
+						?.find((p) => p.pumpId === pump.pumpId)?.running;
+				if (!still || i >= 3) break;
+				await settle(2_000);
+			}
 		},
 	});
 }
@@ -693,6 +755,16 @@ const rememberSpeed = (serial: string, pumpId: number, speedId: number) =>
 	remember(lastSpeedKey(serial), pumpId, speedId);
 
 /**
+ * The user's last speed for a pump, straight from memory. The hero resumes
+ * from this rather than from the `active` flags in the data, which a refetch
+ * race can blank or a poll re-teach at exactly the wrong moment.
+ */
+export const lastPumpSpeed = (
+	serial: string,
+	pumpId: number,
+): number | undefined => readMemory(lastSpeedKey(serial))[pumpId];
+
+/**
  * The last effect picked for a WaterColors light. Stronger than the pump
  * memory in one way: the panel never reports this light's colour at all, so
  * this is not a cache of the panel's knowledge — it is the only knowledge.
@@ -752,46 +824,6 @@ export function useVspPumps(serial: string | undefined) {
 }
 
 /**
- * Stop a pump: the same speed command with the off action. There is no
- * "speed zero" to send — the speed table starts at the pump's own minimum
- * RPM, and off is a first-class action, not a magic value. The selection
- * stays marked in the cache (running false, active kept), because the panel
- * is about to forget it and the grid should not.
- */
-export function useStopVspPump(serial: string | undefined) {
-	const uid = useUserId();
-	const qc = useQueryClient();
-	const panel = usePanelCache(serial);
-	const qk = keys.vsp(uid, serial ?? "-");
-	return useMutation({
-		mutationFn: ({ pumpId }: { pumpId: number }) =>
-			stopVspPump(serial as string, pumpId),
-		onMutate: async ({ pumpId }) => {
-			await qc.cancelQueries({ queryKey: qk });
-			const prev = qc.getQueryData(qk);
-			const prevPanel = panel.snapshot();
-			qc.setQueryData(qk, (old: VspPump[] | undefined) =>
-				old?.map((p) => (p.pumpId === pumpId ? { ...p, running: false } : p)),
-			);
-			// The relay may or may not be closed; either way it reads off now.
-			for (const n of qc
-				.getQueryData<VspPump[]>(qk)
-				?.find((p) => p.pumpId === pumpId)?.auxes ?? [])
-				panel.setDeviceState(`aux_${n}`, "0");
-			return { prev, prevPanel };
-		},
-		onError: (_e, _v, ctx) => {
-			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
-			if (ctx) panel.restore(ctx.prevPanel);
-		},
-		onSettled: () => {
-			qc.invalidateQueries({ queryKey: qk });
-			qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") });
-		},
-	});
-}
-
-/**
  * Run a pump at one of its speeds. The command carries `on_off_action: "on"`,
  * so picking a speed starts the pump if it was stopped — the same way choosing
  * a light colour turns the light on.
@@ -808,7 +840,29 @@ export function useSetVspSpeed(serial: string | undefined) {
 		}: {
 			pumpId: number;
 			speedId: number;
-		}) => setVspSpeed(serial as string, speedId, pumpId),
+		}) => {
+			// The same two-step as the switch, in the same order: a speed tap
+			// on a stopped pump closes the relay first, then sets the speed.
+			// Speed alone starts the pump with the relay open, and an open
+			// relay is a switch reading off over running water.
+			const pump = qc
+				.getQueryData<VspPump[]>(qk)
+				?.find((p) => p.pumpId === pumpId);
+			const relay = panel
+				.read()
+				?.devices.find(
+					(d) => pump?.auxes.some((n) => d.name === `aux_${n}`) && !d.on,
+				);
+			if (relay)
+				await toggleDevice(
+					serial as string,
+					relay.name,
+					relay.kind,
+					true,
+					typeof relay.raw.subtype === "string" ? relay.raw.subtype : "",
+				);
+			return setVspSpeed(serial as string, speedId, pumpId);
+		},
 		onMutate: async ({ pumpId, speedId }) => {
 			// The pick itself is the memory's best source — recorded before any
 			// poll gets a say, so turning the pump off cannot unlearn it.
