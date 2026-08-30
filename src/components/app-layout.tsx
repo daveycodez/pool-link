@@ -122,6 +122,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 				<AppHeader
 					Icon={!signedIn ? Waves : serial ? House : MapPinHouse}
 					onBack={pageTitle ? () => router.history.back() : undefined}
+					params={serial ? { serial } : undefined}
+					to={!signedIn ? undefined : serial ? "/systems/$serial" : "/"}
 					title={title}
 				>
 					{signedIn ? (

@@ -1,4 +1,4 @@
-import { Button, Card, ScrollShadow, Tooltip } from "@heroui/react";
+import { Button, Card, ScrollShadow } from "@heroui/react";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -14,8 +14,6 @@ import {
 	getVspSpeeds,
 	listSystems,
 	sessionMeta,
-	setVspSpeed,
-	stopVspPump,
 } from "#/lib/aqualink/client";
 import { AqualinkError } from "#/lib/aqualink/types";
 
@@ -41,9 +39,6 @@ const SCREEN_PROBES: ProbeEntry[] = [
  */
 const VSP_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-/** Speed ids are 1-based and per slot; four covers a typical Jandy setup. */
-const VSP_SPEEDS = [1, 2, 3, 4];
-
 const VSP_PROBES: ProbeEntry[] = [
 	["get_vsp_names", getVspNames],
 	["get_vsp_appmodelserials", getVspAppModelSerials],
@@ -56,25 +51,6 @@ const VSP_PROBES: ProbeEntry[] = [
 	["get_master_device_list (0)", (s) => getMasterDeviceList(s, "0")],
 	["get_master_device_list (1)", (s) => getMasterDeviceList(s, "1")],
 	["get_master_device_list (2)", (s) => getMasterDeviceList(s, "2")],
-];
-
-/**
- * These run the pump. They exist because the speed ids a slot reports are just
- * numbers — the only way to learn which one is "low" is to send it and watch
- * the water.
- */
-const VSP_ACTIONS: ProbeEntry[] = [
-	...VSP_SLOTS.flatMap((slot) =>
-		VSP_SPEEDS.map(
-			(speed): ProbeEntry => [
-				`slot ${slot} → speed ${speed}`,
-				(s) => setVspSpeed(s, speed, slot),
-			],
-		),
-	),
-	...VSP_SLOTS.map(
-		(slot): ProbeEntry => [`slot ${slot} → stop`, (s) => stopVspPump(s, slot)],
-	),
 ];
 
 /**
@@ -200,50 +176,22 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 							))}
 						</Probes>
 					</Card>
-
-					<Card>
-						<Card.Header>
-							<Card.Title>Pump Speeds</Card.Title>
-							<Card.Description>
-								These start and stop the pump for real. Empty slots answer with
-								an error and change nothing.
-							</Card.Description>
-						</Card.Header>
-						<Probes>
-							{VSP_ACTIONS.map(([label, fn]) => (
-								<Probe key={label} onPress={onSerial(label, fn)}>
-									{label}
-								</Probe>
-							))}
-						</Probes>
-					</Card>
 				</>
 			) : null}
 
 			<Card>
 				<Card.Header className="flex-row items-center justify-between gap-4">
 					<Card.Title>{busy || "Response"}</Card.Title>
-					<Tooltip>
-						<Tooltip.Trigger>
-							<Button
-								aria-label="Copy response"
-								isDisabled={out === EMPTY}
-								isIconOnly
-								onPress={copy}
-								size="sm"
-								variant="ghost"
-							>
-								{copied ? (
-									<Check className="size-4" />
-								) : (
-									<Copy className="size-4" />
-								)}
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{copied ? "Copied" : "Copy response"}
-						</Tooltip.Content>
-					</Tooltip>
+					<Button
+						aria-label={copied ? "Response copied" : "Copy response"}
+						isDisabled={out === EMPTY}
+						isIconOnly
+						onPress={copy}
+						size="sm"
+						variant="ghost"
+					>
+						{copied ? <Check /> : <Copy />}
+					</Button>
 				</Card.Header>
 				{/* Wrapping keeps this to one scroll axis despite very long values. */}
 				<ScrollShadow className="max-h-[60vh]">

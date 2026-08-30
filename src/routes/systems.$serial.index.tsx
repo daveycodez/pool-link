@@ -1,4 +1,4 @@
-import { Button, Card, Chip } from "@heroui/react";
+import { Button, Card, Chip, ColorSwatch } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	Blinds,
@@ -14,8 +14,16 @@ import { AuxHero } from "#/components/aux-hero";
 import { Loading } from "#/components/loading";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
-import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
+import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
+
+/** The three readings a panel with chemistry automation reports. */
+interface Chem {
+	salinity: PoolDevice | undefined;
+	orp: PoolDevice | undefined;
+	ph: PoolDevice | undefined;
+}
+
 import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
 import {
 	isJandyLight,
@@ -42,6 +50,7 @@ function Pool() {
 		cover,
 		solar,
 		freezing,
+		chem,
 		auxes,
 		celsius,
 	} = usePool(serial);
@@ -63,6 +72,7 @@ function Pool() {
 			cover={cover}
 			solar={solar}
 			freezing={freezing}
+			chem={chem}
 			auxes={auxes}
 			celsius={celsius}
 			poolSet={poolSet}
@@ -90,6 +100,7 @@ function PoolScreen({
 	cover,
 	solar,
 	freezing,
+	chem,
 	auxes,
 	celsius,
 	poolSet,
@@ -105,6 +116,7 @@ function PoolScreen({
 	cover: PoolDevice | undefined;
 	solar: PoolDevice | undefined;
 	freezing: boolean;
+	chem: Chem;
 	auxes: PoolDevice[];
 	celsius: boolean;
 	poolSet: PoolDevice | undefined;
@@ -133,6 +145,7 @@ function PoolScreen({
 				cover={cover}
 				solar={solar}
 				freezing={freezing}
+				chem={chem}
 				water={water}
 			/>
 
@@ -173,6 +186,7 @@ function ModeHero({
 	cover,
 	solar,
 	freezing,
+	chem,
 	heater,
 	setPoint,
 	onToggle,
@@ -185,6 +199,7 @@ function ModeHero({
 	cover: PoolDevice | undefined;
 	solar: PoolDevice | undefined;
 	freezing: boolean;
+	chem: Chem;
 	heater: PoolDevice | undefined;
 	setPoint: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
@@ -263,9 +278,9 @@ function ModeHero({
 						<TrackSwitch
 							device={solar}
 							offIcon={Sun}
-							offLabel="Solar"
+							offLabel="Heat"
 							onIcon={Sun}
-							onLabel="Solar"
+							onLabel="Heat"
 							onToggle={onToggle}
 							tone="danger"
 						/>
@@ -284,23 +299,76 @@ function ModeHero({
 					) : null}
 				</div>
 			</div>
+
+			<ChemRow chem={chem} />
 		</Card>
 	);
 }
 
 /**
- * Effects that cycle rather than hold one colour. Each swatch blends the two
- * hues the show is built around, so it reads as motion without pretending to
- * be a flat colour. Inferred from the effect names — USA! and Fat Tuesday have
- * fixed schemes; the splashes and Disco Tech are a judgement call.
+ * Where each reading should sit. The panel publishes no targets of its own, so
+ * these are the standard pool-industry bands — right for most pools, and worth
+ * revisiting if a chlorinator disagrees about salt.
  */
-const LIGHT_SHOWS: Record<string, [string, string]> = {
-	"Slow Splash": ["#2a7fff", "#00d4ff"],
-	"Fast Splash": ["#ff5a2a", "#ffd12a"],
-	"USA!": ["#e4032a", "#1f3fbf"],
-	"Fat Tuesday": ["#6a0dad", "#f5c518"],
-	"Disco Tech": ["#ff3ed0", "#00d4ff"],
-};
+const CHEM_BANDS = {
+	ph: { ok: [7.2, 7.8], near: [7.0, 8.0] },
+	orp: { ok: [650, 850], near: [600, 900] },
+	salt: { ok: [2700, 3400], near: [2400, 4000] },
+} as const;
+
+interface Band {
+	readonly ok: readonly [number, number];
+	readonly near: readonly [number, number];
+}
+
+/**
+ * In range takes the accent, drifting amber, out of range red. Green is
+ * deliberately unused: it is the one colour a pool owner does not want to see,
+ * and red/green is the pair most often indistinguishable.
+ */
+function chemTone(value: string, band: Band): "accent" | "warning" | "danger" {
+	const n = Number(value);
+	if (!Number.isFinite(n)) return "accent";
+	if (n >= band.ok[0] && n <= band.ok[1]) return "accent";
+	if (n >= band.near[0] && n <= band.near[1]) return "warning";
+	return "danger";
+}
+
+/**
+ * The readings a panel with chemistry automation reports. Absent probes report
+ * nothing, so the row hides itself rather than leaving a gap under the
+ * temperature — and salinity follows the body on show, since each has its own.
+ */
+function ChemRow({ chem }: { chem: Chem }) {
+	const readings = [
+		{ band: CHEM_BANDS.ph, device: chem.ph, label: "pH", unit: "" },
+		{ band: CHEM_BANDS.orp, device: chem.orp, label: "ORP", unit: "mV" },
+		{
+			band: CHEM_BANDS.salt,
+			device: chem.salinity,
+			label: "Salt",
+			unit: "ppm",
+		},
+	]
+		.map((r) => ({ ...r, value: r.device?.value?.trim() ?? "" }))
+		.filter((r) => r.value !== "");
+
+	if (readings.length === 0) return null;
+
+	return (
+		<div className="flex flex-wrap gap-1.5">
+			{readings.map(({ band, label, unit, value }) => (
+				<Chip color={chemTone(value, band)} key={label} variant="soft">
+					<span className="opacity-70">{label}</span>
+					<span className="tabular-nums">
+						{value}
+						{unit ? ` ${unit}` : ""}
+					</span>
+				</Chip>
+			))}
+		</div>
+	);
+}
 
 /**
  * The panel reports a light's on/off but never its colour, so the swatch grid
@@ -345,35 +413,46 @@ function LightHero({
 			{/* Two per row, equal width — the names vary a lot in length, and a
 			    wrapped row would leave every line ending somewhere different. */}
 			<div className="grid grid-cols-2 gap-2">
-				{effects.map((name) => (
-					<Button
-						aria-pressed={picked === name}
-						className="w-full justify-start text-xs"
-						key={name}
-						// Effect ids start at 1 and 0 is "off", so setting one turns the
-						// light on as well — no separate toggle, which would race the
-						// colour with a plain on command.
-						onPress={() => {
-							setPicked(name);
-							onColor(JANDY_WATERCOLORS[name]);
-						}}
-						size="sm"
-						// Filled while this effect is the one running — but only while
-						// the light is actually on, or an off light would still look
-						// like it had a colour selected.
-						variant={picked === name && device.on ? "primary" : "tertiary"}
-					>
-						<span
-							className="size-4 shrink-0 rounded-full ring-1 ring-black/10 ring-inset dark:ring-white/15"
-							style={{
-								background: LIGHT_SHOWS[name]
-									? `linear-gradient(135deg, ${LIGHT_SHOWS[name][0]}, ${LIGHT_SHOWS[name][1]})`
-									: WATERCOLOR_HEX[name],
+				{effects.map((name) => {
+					const stops = WATERCOLOR_STOPS[name] ?? [];
+					return (
+						<Button
+							aria-pressed={picked === name}
+							className="w-full justify-start text-xs"
+							key={name}
+							// Effect ids start at 1 and 0 is "off", so setting one turns the
+							// light on as well — no separate toggle, which would race the
+							// colour with a plain on command.
+							onPress={() => {
+								setPicked(name);
+								onColor(JANDY_WATERCOLORS[name]);
 							}}
-						/>
-						{name}
-					</Button>
-				))}
+							size="sm"
+							// Filled while this effect is the one running — but only while
+							// the light is actually on, or an off light would still look
+							// like it had a colour selected.
+							variant={picked === name && device.on ? "primary" : "tertiary"}
+						>
+							<ColorSwatch
+								className="shrink-0"
+								color={stops[0]}
+								// The effect name, not a colour name: these run through more than
+								// one hue, and "Fat Tuesday" is what the panel calls it.
+								colorName={name}
+								size="xs"
+								// Matching how the app draws them: the two-stop colours run top
+								// to bottom, the shows sweep left to right. The stop count is
+								// the tell, so the data decides rather than a list of names.
+								style={{
+									background: `linear-gradient(${
+										stops.length > 2 ? "90deg" : "180deg"
+									}, ${stops.join(", ")})`,
+								}}
+							/>
+							{name}
+						</Button>
+					);
+				})}
 			</div>
 		</Card>
 	);

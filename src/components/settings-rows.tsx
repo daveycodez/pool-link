@@ -6,7 +6,6 @@ import {
 	ListBox,
 	Select,
 	TextField,
-	Tooltip,
 } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -22,6 +21,7 @@ import {
 	Pencil,
 	Stethoscope,
 	Sun,
+	SunMoon,
 	Tag,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -172,20 +172,20 @@ export function SystemSerialRow({ serial }: { serial: string }) {
 				<InputGroup>
 					<InputGroup.Input className="w-39 pe-0 font-mono md:w-35" />
 					<InputGroup.Suffix className="pe-0">
-						<Tooltip>
-							<Tooltip.Trigger>
-								<Button
-									aria-label="Copy serial number"
-									isIconOnly
-									onPress={copy}
-									size="sm"
-									variant="ghost"
-								>
-									{copied ? <Check /> : <Copy />}
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>{copied ? "Copied" : "Copy"}</Tooltip.Content>
-						</Tooltip>
+						{/* No tooltip: Tooltip.Trigger renders its own focusable
+						    div, which put a second tab stop around the button —
+						    and the tick already says it copied. */}
+						<Button
+							aria-label={
+								copied ? "Serial number copied" : "Copy serial number"
+							}
+							isIconOnly
+							onPress={copy}
+							size="sm"
+							variant="ghost"
+						>
+							{copied ? <Check /> : <Copy />}
+						</Button>
 					</InputGroup.Suffix>
 				</InputGroup>
 			</TextField>
@@ -205,11 +205,11 @@ export function AccountSettingsRows({ serial }: { serial?: string }) {
 	const [mounted, setMounted] = useState(false);
 	useEffect(() => setMounted(true), []);
 
-	const active = THEMES.find((t) => t.id === theme) ?? THEMES[0];
-
 	return (
 		<>
-			<SettingsRow Icon={active.Icon} title="Appearance">
+			{/* The row names the setting, so it keeps one icon; the options
+			    carry their own to show what each choice is. */}
+			<SettingsRow Icon={SunMoon} title="Appearance">
 				<Select
 					aria-label="Appearance"
 					className="w-32"

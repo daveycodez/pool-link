@@ -90,7 +90,11 @@ function buildDevice(name: string, raw: Raw): PoolDevice | null {
 		label,
 		kind,
 		on: isHeater ? heaterOn(state) : isSetPoint ? false : isOn(state),
-		value: kind === "temperature" || isSetPoint ? str(state) : null,
+		// Sensors carry a reading too — chemistry, not degrees, so no unit.
+		value:
+			kind === "temperature" || kind === "sensor" || isSetPoint
+				? str(state)
+				: null,
 		unit: kind === "temperature" || isSetPoint ? "°" : null,
 		dimLevel: num(raw.dim_level),
 		address: num(raw.address ?? raw.slot_id),

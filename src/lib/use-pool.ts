@@ -79,6 +79,12 @@ export function usePool(serial: string) {
 		poolSet: byName.get("pool_set_point"),
 		spaSet: byName.get("spa_set_point"),
 		poolChill: byName.get("pool_chill_set_point"),
+		// Salinity is per body; ORP and pH are the water's, whichever is up.
+		chem: {
+			salinity: byName.get(spaMode ? "spa_salinity" : "pool_salinity"),
+			orp: byName.get("orp"),
+			ph: byName.get("ph"),
+		},
 		heaters: devices.filter(
 			(d) =>
 				d.kind === "climate" &&
