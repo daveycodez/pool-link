@@ -52,6 +52,14 @@ export type IclChange =
 const POLL_MS = 10_000;
 
 /**
+ * How old data may grow before the header chip stops saying "Live". Well past
+ * the poll cycle, because the chip going stale should mean polls are actually
+ * failing — not that one is due, and not that they are sitting out a light
+ * hold on purpose.
+ */
+const STALE_MS = 30_000;
+
+/**
  * How long a light change holds: its target state stays pinned, and the
  * panel polls go quiet.
  *
@@ -129,8 +137,8 @@ export function useSystems(enabled: boolean) {
 		queryFn: enabled && uid ? () => listSystems() : skipToken,
 		refetchInterval: POLL_MS,
 		refetchIntervalInBackground: false,
-		// Double the interval, so a healthy cycle never reads as stale.
-		staleTime: POLL_MS * 2,
+		// The list page's chip reads this, same bar as the panel's.
+		staleTime: STALE_MS,
 		// Kept as long as the persisted copy is allowed to be, or a restore
 		// would be collected on arrival for being older than the default.
 		gcTime: PERSIST_GC_TIME_MS,
@@ -149,11 +157,11 @@ export function useSystems(enabled: boolean) {
 const panelOptions = (quiet: boolean, interval: number) => ({
 	refetchInterval: (quiet ? false : interval) as number | false,
 	refetchIntervalInBackground: false,
-	// Double the interval: equal to it, data would turn stale at the very
-	// moment the next poll is due — so the header would read "10s ago" every
-	// cycle, on a panel that was answering perfectly. Stale should mean a poll
-	// was actually missed.
-	staleTime: interval * 2,
+	// Stale drives the header chip, and stale should mean something is wrong —
+	// not that a poll is due this instant, and not that the polls are sitting
+	// out a light hold on purpose. 30s absorbs a cycle plus most holds; the
+	// slow screens keep double their own interval.
+	staleTime: Math.max(interval * 2, STALE_MS),
 	retry: (count: number, error: unknown) =>
 		error instanceof AqualinkError && error.status === 401 ? false : count < 2,
 });
