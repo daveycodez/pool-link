@@ -67,8 +67,8 @@ const POLL_MS = 10_000;
  * state by the next poll, so those mutations resolve when their call returns
  * and quiet nothing.
  *
- * This window covers toggles and ICL changes; a WaterColors effect change
- * computes its own from the target id — see waterColorsHold below.
+ * This window covers ICL changes; WaterColors rides waterColorsHold below —
+ * for an effect pick, and for switching on, which programs Alpine White.
  */
 const LIGHT_HOLD_MS = 15_000;
 
@@ -228,7 +228,11 @@ export function useLightHolds(serial: string | undefined) {
 		const zones = new Set<number>();
 		for (const h of holds) {
 			if (h.kind === "color") devices.add(h.vars.name);
-			else if (
+			// Switching on is programming Alpine White, so it spins the same;
+			// switching off is a bare relay drop and does not.
+			else if (h.kind === "actuate" && h.vars.device.kind === "light") {
+				if (h.vars.on) devices.add(h.vars.device.name);
+			} else if (
 				h.kind === "icl" &&
 				(h.vars.kind === "color" || h.vars.kind === "custom")
 			)
@@ -449,25 +453,42 @@ export function useActuate(serial: string | undefined) {
 				on,
 				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
 			);
-			// A light pulses its relay before it reads true again, and the pad
-			// reports transient state throughout — so the hold runs its window.
-			// Nothing else lies about itself, so nothing else waits.
-			if (device.kind === "light") await settle(LIGHT_HOLD_MS);
+			// Switching a WaterColors light on IS programming Alpine White: the
+			// fixture comes up at the head of its table, so it rides the same
+			// hold as picking id 1. Off is a bare relay drop, and nothing else
+			// lies about itself — neither waits.
+			if (device.kind === "light" && on) await settle(waterColorsHold(1));
 			return res;
 		},
 		// A poll already in flight when the hold starts would land mid-pulse
 		// with the whole pad reading wrong; it is cancelled instead of landed.
-		onMutate: ({ device }) =>
-			device.kind === "light" ? panel.cancel() : undefined,
+		onMutate: ({ device, on }) =>
+			device.kind === "light" && on ? panel.cancel() : undefined,
 		// The pumps too: a relay carrying a variable-speed pump reports its
 		// speed on a separate query with a slower cycle, and leaving that behind
 		// left one button reading its fill from the snapshot and its selection
 		// from data up to a cycle older.
-		onSettled: () =>
-			Promise.all([
-				panel.invalidate(),
-				qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") }),
-			]),
+		onSettled: async (_res, _err, { device, on }) => {
+			const vsp = qc.invalidateQueries({
+				queryKey: keys.vsp(uid, serial ?? "-"),
+			});
+			// Lights release only onto data that agrees with the flip, as the
+			// colour mutation does — a refetch reading the relay mid-transition
+			// would paint the opposite state for a whole poll cycle.
+			if (device.kind === "light") {
+				for (let i = 0; ; i++) {
+					await panel.invalidate();
+					const lit = panel.read()?.devices.find(
+						(d) => d.name === device.name,
+					)?.on;
+					if (lit === on || lit === undefined || i >= 3) break;
+					await settle(2_000);
+				}
+			} else {
+				await panel.invalidate();
+			}
+			await vsp;
+		},
 	});
 }
 

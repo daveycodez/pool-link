@@ -482,7 +482,12 @@ function WaterColorsHero({
 						offLabel="Off"
 						onIcon={Lightbulb}
 						onLabel="On"
-						onToggle={(_d, on) => onToggle(on)}
+						onToggle={(_d, on) => {
+							// Powering up resets the fixture to the head of its table,
+							// so "on" is Alpine White and the swatch should say so.
+							if (on) setPicked("Alpine White");
+							onToggle(on);
+						}}
 					/>
 				</div>
 			</div>
