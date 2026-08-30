@@ -552,15 +552,12 @@ function WaterColorsHero({
 								onColor(JANDY_WATERCOLORS[name]);
 							}}
 							size="sm"
-							// Primary is a colour actually lit; the off light keeps its
-							// selection dimmed to secondary, like a stopped pump's speed.
-							variant={
-								marked === name
-									? device.on
-										? "primary"
-										: "secondary"
-									: "tertiary"
-							}
+							// Never primary: the panel does not report this fixture's
+							// colour, so a filled swatch would claim knowledge nobody
+							// has — anyone at the pad or in another app can change it
+							// underneath us. Secondary reads as the hint it is: what
+							// the switch will go to when this light is turned on.
+							variant={marked === name ? "secondary" : "tertiary"}
 						>
 							<ColorSwatch
 								className="shrink-0"
