@@ -14,6 +14,8 @@ import type {
 } from "#/lib/aqualink/client";
 import {
 	addDevice,
+	calibrateOrp,
+	calibratePh1Point,
 	controlSwcBoost,
 	devicesScreen,
 	enableHpm,
@@ -46,7 +48,11 @@ import {
 import { HPM_TEMP_PARAM, SWC_BOOST_HOURS } from "#/lib/aqualink/enums";
 import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
-import { readPhOrp } from "#/lib/chemistry";
+import {
+	type PhOrpCalibration,
+	readPhOrp,
+	readPhOrpCalibration,
+} from "#/lib/chemistry";
 import { clearHeatRuns } from "#/lib/heat-eta";
 import { iclPresent, normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice, PoolSnapshot, Raw } from "#/lib/iaqualink/types";
@@ -131,6 +137,31 @@ const ONETOUCH_POLL_MS = POLL_MS * 6;
  * request it costs stays a rounding error against the panel's real traffic.
  */
 const PHORP_POLL_MS = POLL_MS * 6;
+
+/**
+ * How often to re-read when the probe was last calibrated.
+ *
+ * Fifteen minutes, and it could defensibly be an hour. Calibrating a TruSense is
+ * not something that happens while anyone watches a phone — it is a person
+ * standing at the pad with a test kit, doing it once and then not again for a
+ * season. The date it writes is measured in months by the time anybody reads it,
+ * and `calibrationAge` prints it in months, so a quarter of an hour of staleness
+ * cannot change a single character on screen unless the calibration happened
+ * inside the last day.
+ *
+ * That last case is the one this interval is actually sized for, and it is
+ * already covered twice over: a calibration started from this app invalidates
+ * the key on the way out, and react-query refetches on mount, so anyone who
+ * calibrates at the keypad and then opens their phone sees the truth. What is
+ * left is a tab left open across somebody else's calibration, which is worth a
+ * request every fifteen minutes and nothing like a request a minute.
+ *
+ * The cheapness argument runs the other way from `PHORP_POLL_MS`, too. That one
+ * costs one request; this one costs two, since the dates and the in-progress
+ * status come from different commands — so the slow cadence is buying back the
+ * second request rather than merely being polite with the first.
+ */
+const PHORP_CALIB_POLL_MS = POLL_MS * 90;
 
 const settle = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
@@ -940,6 +971,110 @@ export function usePhOrp(serial: string | undefined, reported: boolean) {
 		queryKey: keys.phorp(uid, serial ?? "-"),
 		queryFn: uid && serial && reported ? () => readPhOrp(serial) : skipToken,
 		...panelOptions(quiet, PHORP_POLL_MS),
+	});
+}
+
+/**
+ * When the probe was last calibrated, gated one step tighter than the probe read
+ * above.
+ *
+ * `fitted` should be true only where `usePhOrp` has already come back and named
+ * a channel present. That is a strictly narrower gate than `usePhOrp`'s own, and
+ * the extra narrowness is the point: `reported` lets through a panel that put a
+ * number on the home screen and then turned out to have no probe behind it,
+ * which is exactly this pool, and asking such a panel when its absent sensor was
+ * last calibrated is two requests a cycle spent on a question with no subject.
+ * An `unknown` presence — the request failed, or the panel does not know the
+ * command — is also not enough, because everything downstream of it is a
+ * calibration control, and a control over hardware nobody has confirmed exists
+ * should not be drawn.
+ *
+ * Deliberately not persisted, and it is the one query where that needed
+ * thinking. Two of its four facts would survive a reload honestly: a calibration
+ * date is configuration in the same way a macro name is, and it is true for
+ * months. The third is not — `status` reports a calibration happening right now,
+ * and a restore insisting one is under way would disable the controls on a pad
+ * where nothing is happening, or worse, clear on a pad where something is. So
+ * this lands where the zones did: the durable half is not worth the live half
+ * riding in with it, and neither is worth a `PERSISTED` entry when the whole
+ * thing refetches on mount anyway.
+ *
+ * An error is not surfaced. It means the panel does not know these commands, or
+ * wants a unit id nobody has documented, and in either case no calibration
+ * control renders and the page is exactly what it was.
+ */
+export function usePhOrpCalibration(
+	serial: string | undefined,
+	fitted: boolean,
+) {
+	const uid = useUserId();
+	const quiet = useIsMutating({ mutationKey: holdKey(serial) }) > 0;
+	return useQuery({
+		queryKey: keys.phorpCalib(uid, serial ?? "-"),
+		queryFn:
+			uid && serial && fitted ? () => readPhOrpCalibration(serial) : skipToken,
+		...panelOptions(quiet, PHORP_CALIB_POLL_MS),
+	});
+}
+
+/**
+ * Calibrate a channel. The only mutation in this app that changes hardware
+ * rather than what hardware is doing.
+ *
+ * Everything else here is a relay, a set point or a name: send it wrong and the
+ * next tap sends it right. A calibration rewrites the reference a sensor
+ * measures against, so getting it wrong does not break anything visibly — it
+ * leaves the probe reporting numbers with the same confidence as before, about a
+ * pool it is now wrong about, until somebody notices the water disagreeing with
+ * a test kit and does the procedure again. That is why the surface is a
+ * confirmation dialog rather than a switch, and why this hook makes no
+ * optimistic write: the panel's own answer is the only thing that knows whether
+ * a calibration happened, and painting "calibrated today" before it agrees would
+ * be the exact species of lie the whole chemistry read exists to stop.
+ *
+ * The unit id comes out of the cached read and nowhere else. Without one there
+ * is no write at all — see `PhOrpCalibration.unitId` for why an invented id is
+ * not an option on a command that rewrites a physical sensor. The same refusal
+ * `useSwcOutput` makes when it has no set point to carry alongside, for a
+ * consequence a good deal harder to undo.
+ *
+ * Two-point pH is missing on purpose, and its absence is the considered outcome
+ * rather than a gap. The physical procedure is documented well enough — Jandy's
+ * manual has the operator soak the sensor in pH 7 buffer, start the calibration,
+ * then swap to pH 4 buffer and start it again, and is explicit that pH 10 is not
+ * used. What is not documented anywhere is the wire half: `do_2point_phcalibration`
+ * carries a `step_no` and no source says how many values it takes, whether it
+ * counts from 0 or 1, what the panel answers while it waits between them, or how
+ * an abandoned sequence is cleared. Two operator actions imply two steps, and
+ * that is an inference, not a capture.
+ *
+ * The failure that inference buys is specific and bad. The two steps are not
+ * interchangeable: one of them tells the probe "what you are sitting in is pH 7"
+ * and the other says "pH 4". Guess the numbering backwards and the app confidently
+ * walks somebody through calibrating a sensor with its two references swapped,
+ * which is a worse-than-uncalibrated probe reached by following instructions.
+ * Half-finishing it — the buffer runs out, the phone locks, the panel goes offline
+ * between steps — leaves the probe in a state nothing here can describe or undo.
+ *
+ * One-point pH and ORP are single commands with no sequence to get wrong, which
+ * is the entire reason they are here and it is not.
+ */
+export function useCalibrate(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.phorpCalib(uid, serial ?? "-");
+	return useMutation({
+		mutationFn: (v: { kind: "ph"; phValue: number } | { kind: "orp" }) => {
+			const current = qc.getQueryData<PhOrpCalibration>(qk);
+			if (!current)
+				throw new AqualinkError("Probe calibration state not loaded yet");
+			return v.kind === "ph"
+				? calibratePh1Point(serial as string, current.unitId, v.phValue)
+				: calibrateOrp(serial as string, current.unitId);
+		},
+		// Both reads again, since a calibration is precisely what moves them, and
+		// the status field is the only way to see one still running.
+		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
 	});
 }
 

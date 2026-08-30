@@ -7,6 +7,7 @@ import {
 	Sparkles,
 	Thermometer,
 } from "lucide-react";
+import { ProbeCalibration } from "#/components/calibration-rows";
 import { CardColumns } from "#/components/card-columns";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
@@ -46,12 +47,14 @@ function Equipment() {
 	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
 	const {
+		chem,
 		controls,
 		heaters,
 		poolSet,
 		spaSet,
 		poolChill,
 		heatPump,
+		probeCalibration,
 		saltCell,
 		swc,
 		loading,
@@ -321,6 +324,18 @@ function Equipment() {
 			    whether it runs, and the heading only makes sense over its own
 			    cards. It renders nothing at all on a single-speed pad. */}
 			<PumpSpeeds serial={serial} />
+
+			{/* Last, and its own section for the same reason the speeds are: this is
+			    maintenance on the instrument rather than control of the pad, and it
+			    is the only place in the app that writes to hardware instead of to
+			    what hardware is doing. It renders nothing unless the panel has said
+			    a probe is fitted, which is nearly never. */}
+			<ProbeCalibration
+				calibration={probeCalibration}
+				orpPresence={chem.orpPresence}
+				phPresence={chem.phPresence}
+				serial={serial}
+			/>
 		</div>
 	);
 }

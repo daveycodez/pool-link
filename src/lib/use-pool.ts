@@ -15,6 +15,7 @@ import {
 	rememberTemp,
 	usePanel,
 	usePhOrp,
+	usePhOrpCalibration,
 	useSession,
 	useSwc,
 	useVspPumps,
@@ -237,6 +238,22 @@ export function usePool(serial: string) {
 		byName.get("ph")?.value || byName.get("orp")?.value,
 	);
 	const phorp = usePhOrp(serial, chemReported);
+	const phPresence = presenceOf(phorp.data?.phStatus);
+	const orpPresence = presenceOf(phorp.data?.orpStatus);
+	/**
+	 * Whether the panel has named at least one channel as a probe that exists.
+	 *
+	 * The gate on the calibration read, and it is intentionally the panel's own
+	 * word rather than the home screen's number. A pad reporting a chemistry
+	 * value it has no sensor behind — this one, until the probe read corrected it
+	 * — has nothing to say about when that sensor was calibrated, and every
+	 * calibration control downstream of this would be a button offering to
+	 * rewrite hardware nobody has confirmed is fitted. `unknown` is on the same
+	 * side as `absent` here, which is the opposite of how the readings treat it
+	 * and the right way round for a control.
+	 */
+	const probeFitted = phPresence === "present" || orpPresence === "present";
+	const phorpCalib = usePhOrpCalibration(serial, probeFitted);
 	const pool = byName.get("pool_temp");
 	const spa = byName.get("spa_temp");
 	const spaPump = byName.get("spa_pump");
@@ -305,9 +322,16 @@ export function usePool(serial: string) {
 			 * no equivalent: the chlorinator reports its own presence on the home
 			 * screen, so its reading needs no second opinion.
 			 */
-			phPresence: presenceOf(phorp.data?.phStatus),
-			orpPresence: presenceOf(phorp.data?.orpStatus),
+			phPresence,
+			orpPresence,
 		},
+		/**
+		 * When each channel was last calibrated, and whether one is being
+		 * calibrated now. Null on every pad without a probe the panel vouches for,
+		 * which is where the equipment page's calibration cards come from and go
+		 * back to — see usePhOrpCalibration for the gate and the cadence.
+		 */
+		probeCalibration: phorpCalib.data ?? null,
 		heaters: devices.filter(
 			(d) =>
 				d.kind === "climate" &&

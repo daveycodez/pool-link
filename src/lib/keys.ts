@@ -38,6 +38,17 @@ export const keys = {
 	 * sitting unseen until the next tick.
 	 */
 	icl: (uid: string, serial: string) => [uid, "panel", serial, "icl"] as const,
+	/**
+	 * When the chemistry probe was last calibrated, and whether it is being
+	 * calibrated now. Separate from `phorp` because the two answer different
+	 * questions on wildly different clocks — presence is wiring and is polled by
+	 * the minute, while a calibration date moves when somebody stands at the pad
+	 * with a bottle in their hand — and a shared entry would drag one to the
+	 * other's cadence. Under the panel prefix like the rest, so a calibration
+	 * this app starts refreshes it without naming it.
+	 */
+	phorpCalib: (uid: string, serial: string) =>
+		[uid, "panel", serial, "phorpCalib"] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,
