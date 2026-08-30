@@ -1,4 +1,10 @@
-import type { DeviceKind, PoolDevice, PoolSnapshot, Raw } from "./types";
+import type {
+	DeviceKind,
+	IclZone,
+	PoolDevice,
+	PoolSnapshot,
+	Raw,
+} from "./types";
 
 /**
  * Physical device taxonomy for Jandy iAqualink (from flz/iaqualink-py
@@ -102,10 +108,39 @@ function buildDevice(name: string, raw: Raw): PoolDevice | null {
 	};
 }
 
+/**
+ * Zones report their own state, so nothing here is inferred: `zoneStatus` says
+ * on or off, `zoneColor` is an id against ICL_EFFECTS, and the RGBW channels
+ * carry whatever a custom colour was set to.
+ */
+function buildZones(icl: unknown): IclZone[] {
+	if (!Array.isArray(icl)) return [];
+	return icl.map((raw) => {
+		const z = raw as Raw;
+		const id = num(z.zoneId) ?? 0;
+		const color = num(z.zoneColor);
+		return {
+			zoneId: id,
+			label: str(z.zoneName) || `Light Zone ${id}`,
+			on: String(z.zoneStatus ?? "").toLowerCase() === "on",
+			colorId: color,
+			colorName: str(z.zoneColorVal) ?? "",
+			dim: num(z.dim_level) ?? 100,
+			rgbw: [
+				num(z.red_val) ?? 0,
+				num(z.green_val) ?? 0,
+				num(z.blue_val) ?? 0,
+				num(z.white_val) ?? 0,
+			] as [number, number, number, number],
+		};
+	});
+}
+
 export function normalize(
 	serial: string,
 	home: Raw,
 	devices: Raw,
+	icl?: unknown,
 ): PoolSnapshot {
 	const merged: Raw = { ...home, ...devices };
 	const out: PoolDevice[] = [];
@@ -127,6 +162,7 @@ export function normalize(
 		status: str(merged.status)?.toLowerCase() ?? "unknown",
 		fetchedAt: Date.now(),
 		devices: out,
+		icl: buildZones(icl),
 		raw: merged,
 	};
 }

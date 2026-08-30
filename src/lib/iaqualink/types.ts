@@ -15,6 +15,23 @@ export type DeviceKind =
 	| "sensor"
 	| "unknown";
 
+/**
+ * One iAquaLink Color Lights zone. Zones are their own subsystem — addressed
+ * by id, not by an aux relay — so they sit beside the devices rather than
+ * among them.
+ */
+export interface IclZone {
+	zoneId: number;
+	label: string;
+	on: boolean;
+	/** Effect id, against ICL_EFFECTS rather than the WaterColors table. */
+	colorId: number | null;
+	colorName: string;
+	/** Percent, in fives. */
+	dim: number;
+	rgbw: [number, number, number, number];
+}
+
 export interface PoolDevice {
 	id: string;
 	/** Physical controller name used to build set_* commands (e.g. aux_3). */
@@ -34,5 +51,7 @@ export interface PoolSnapshot {
 	status: string;
 	fetchedAt: number;
 	devices: PoolDevice[];
+	/** Colour-light zones, which are not aux relays. */
+	icl: IclZone[];
 	raw: Raw;
 }

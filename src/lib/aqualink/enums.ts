@@ -68,6 +68,9 @@ export const WATERCOLOR_STOPS: Record<string, string[]> = {
 	"Emerald Rose": ["#a33018", "#4feaf6"],
 	Magenta: ["#ff3aff", "#a822b1"],
 	Violet: ["#eb9bf3", "#b842c2"],
+	// ICL-only, and the one effect absent from the app screenshots — inferred
+	// from the family's shape rather than sampled.
+	"Ruby Red": ["#f2707a", "#b3121f"],
 	// The shows sweep left to right through several hues rather than holding
 	// two, so these carry as many stops as it took to trace them.
 	"Slow Splash": [
@@ -146,3 +149,49 @@ export const LIGHT_SUBTYPES: Record<number, string> = {
 	5: "ib",
 	6: "hu",
 };
+
+/**
+ * iAquaLink Color Lights effects (flz/iaqualink-py `ICL_EFFECTS`). A different
+ * table from WaterColors above, not a superset: Ruby Red sits at 8 and pushes
+ * everything after it along, so the same name means a different id on each
+ * family. Never reuse one table's ids for the other.
+ */
+export const ICL_EFFECTS: Record<string, number> = {
+	Off: 0,
+	"Alpine White": 1,
+	"Sky Blue": 2,
+	"Cobalt Blue": 3,
+	"Caribbean Blue": 4,
+	"Spring Green": 5,
+	"Emerald Green": 6,
+	"Emerald Rose": 7,
+	"Ruby Red": 8,
+	Magenta: 9,
+	Violet: 10,
+	"Slow Color Splash": 11,
+	"Fast Color Splash": 12,
+	"America The Beautiful": 13,
+	"Fat Tuesday": 14,
+	"Disco Tech": 15,
+};
+
+/** Set through the RGBW command rather than by id, so it is not in the list. */
+export const ICL_CUSTOM_COLOR_ID = 16;
+
+/** The API takes any 0-100, but the app only offers fives — so this does too. */
+export const ICL_DIM_STEP = 5;
+
+/**
+ * ICL spells the three shows out where WaterColors abbreviates them. Same
+ * effects, same swatches, so they alias rather than duplicate the stops.
+ */
+const EFFECT_ALIASES: Record<string, string> = {
+	"Slow Color Splash": "Slow Splash",
+	"Fast Color Splash": "Fast Splash",
+	"America The Beautiful": "USA!",
+};
+
+/** Swatch stops for an effect of either family. */
+export function effectStops(name: string): string[] {
+	return WATERCOLOR_STOPS[EFFECT_ALIASES[name] ?? name] ?? [];
+}

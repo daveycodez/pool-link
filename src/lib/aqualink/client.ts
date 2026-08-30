@@ -368,7 +368,7 @@ export function sessionMeta() {
 
 export async function snapshot(
 	serial: string,
-): Promise<{ home: Raw; devices: Raw }> {
+): Promise<{ home: Raw; devices: Raw; icl: unknown }> {
 	const [homeResp, devicesResp] = await Promise.all([
 		client.sessionRequest(serial, "get_home"),
 		client.sessionRequest(serial, "get_devices"),
@@ -376,6 +376,9 @@ export async function snapshot(
 	return {
 		home: mergeScreen(homeResp.home_screen ?? homeResp),
 		devices: mergeScreen(devicesResp.devices_screen ?? devicesResp),
+		// Colour-light zones ride alongside devices_screen rather than inside
+		// it, so mergeScreen never sees them. No extra request for these.
+		icl: devicesResp.icl_info_list,
 	};
 }
 

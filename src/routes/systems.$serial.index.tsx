@@ -11,11 +11,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { AuxHero } from "#/components/aux-hero";
+import { IclHero } from "#/components/icl-hero";
 import { Loading } from "#/components/loading";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
-import type { PoolDevice } from "#/lib/iaqualink/types";
+import type { IclZone, PoolDevice } from "#/lib/iaqualink/types";
 
 /** The three readings a panel with chemistry automation reports. */
 interface Chem {
@@ -24,7 +25,13 @@ interface Chem {
 	ph: PoolDevice | undefined;
 }
 
-import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
+import type { IclChange } from "#/lib/queries";
+import {
+	useActuate,
+	useIclZone,
+	useLightColor,
+	useSetTemps,
+} from "#/lib/queries";
 import {
 	isJandyLight,
 	isReported,
@@ -47,6 +54,7 @@ function Pool() {
 		spaSet,
 		heaters,
 		spaPump,
+		iclZones,
 		cover,
 		solar,
 		freezing,
@@ -57,6 +65,7 @@ function Pool() {
 	const actuate = useActuate(serial);
 	const setTemps = useSetTemps(serial);
 	const lightColor = useLightColor(serial);
+	const iclZone = useIclZone(serial);
 
 	if (pending || loading) return <Loading />;
 	// No session: useRequireSession is already redirecting to /login.
@@ -71,7 +80,9 @@ function Pool() {
 			spaPump={spaPump}
 			cover={cover}
 			solar={solar}
+			iclZones={iclZones}
 			freezing={freezing}
+			onIclChange={(change) => iclZone.mutate(change)}
 			chem={chem}
 			auxes={auxes}
 			celsius={celsius}
@@ -101,7 +112,9 @@ function PoolScreen({
 	solar,
 	freezing,
 	chem,
+	iclZones,
 	auxes,
+	onIclChange,
 	celsius,
 	poolSet,
 	spaSet,
@@ -118,6 +131,8 @@ function PoolScreen({
 	freezing: boolean;
 	chem: Chem;
 	auxes: PoolDevice[];
+	iclZones: IclZone[];
+	onIclChange: (change: IclChange) => void;
 	celsius: boolean;
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
@@ -149,12 +164,18 @@ function PoolScreen({
 				water={water}
 			/>
 
+			{/* Zones are not relays, so they sit outside the loop below — the
+			    panel lists them separately and so does this. */}
+			{iclZones.map((zone) => (
+				<IclHero key={zone.zoneId} onChange={onIclChange} zone={zone} />
+			))}
+
 			{/* One card per relay, in the panel's own order. A relay that reports
 			    as a Jandy colour light gets the effects hero; everything else is
 			    a switch, so what appears follows the panel rather than this app. */}
 			{auxes.map((aux) =>
 				isJandyLight(aux) ? (
-					<LightHero
+					<WaterColorsHero
 						device={aux}
 						key={aux.id}
 						onColor={(effectId) => onLightColor(aux, effectId)}
@@ -371,12 +392,15 @@ function ChemRow({ chem }: { chem: Chem }) {
 }
 
 /**
- * The panel reports a light's on/off but never its colour, so the swatch grid
- * shows nothing selected until a choice is made in this session. Picking one
+ * A Jandy LED WaterColors light. Its sibling is IclHero: same anatomy, but a
+ * different effect table, and this family has no dimming.
+ *
+ * The panel reports a WaterColors light's on/off but never its colour, so the
+ * swatch grid shows nothing selected until a choice is made in this session. Picking one
  * tints the card's ambient glow, which is the closest the UI can get to
  * showing what the water actually looks like.
  */
-function LightHero({
+function WaterColorsHero({
 	device,
 	onToggle,
 	onColor,

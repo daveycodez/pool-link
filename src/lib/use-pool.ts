@@ -91,6 +91,9 @@ export function usePool(serial: string) {
 				d.name.endsWith("_heater") &&
 				d.name !== "solar_heater",
 		),
+		// Colour-light zones are their own subsystem, addressed by zone id and
+		// never by an aux relay — so they sit apart from the device list.
+		iclZones: snap.data?.icl ?? [],
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),
