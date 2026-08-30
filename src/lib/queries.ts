@@ -4,15 +4,18 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
+import type { VspPump } from "#/lib/aqualink/client";
 import {
 	addDevice,
 	getDeviceStatus,
 	listSystems,
+	listVspPumps,
 	login,
 	logout,
 	setDeviceName,
 	setLightColor,
 	setTemps,
+	setVspSpeed,
 	snapshot,
 	toggleDevice,
 } from "#/lib/aqualink/client";
@@ -38,6 +41,9 @@ const SETTLE_MS = 5_000;
 /** Lights pulse the relay through a sequence, so they take twice as long. */
 const LIGHT_SETTLE_MS = 15_000;
 
+/** Pump speeds are near-static, so they ride a much slower cycle. */
+const VSP_POLL_MS = POLL_MS * 4;
+
 const settle = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -48,6 +54,7 @@ export const keys = {
 	status: (serial: string) => ["status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: () => ["status"] as const,
+	vsp: (serial: string) => ["vsp", serial] as const,
 };
 
 export function useSession() {
@@ -232,6 +239,76 @@ export function useLightColor(serial: string | undefined) {
 			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
 		},
 		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+	});
+}
+
+/**
+ * Variable-speed pumps and their configured speeds.
+ *
+ * Building this costs two requests plus one per installed pump, so it is polled
+ * far more slowly than a snapshot. Speeds only change when someone changes them,
+ * and the mutation below invalidates this — the poll is just drift correction.
+ */
+export function useVspPumps(serial: string | undefined) {
+	const mutating = useIsMutating() > 0;
+
+	return useQuery({
+		queryKey: keys.vsp(serial ?? "-"),
+		queryFn: () => listVspPumps(serial as string),
+		enabled: Boolean(serial),
+		refetchInterval: mutating ? false : VSP_POLL_MS,
+		refetchIntervalInBackground: false,
+		staleTime: VSP_POLL_MS * 2,
+		retry: false,
+	});
+}
+
+/**
+ * Run a pump at one of its speeds. The command carries `on_off_action: "on"`,
+ * so picking a speed starts the pump if it was stopped — the same way choosing
+ * a light colour turns the light on.
+ */
+export function useSetVspSpeed(serial: string | undefined) {
+	const qc = useQueryClient();
+	const qk = keys.vsp(serial ?? "-");
+	return useMutation({
+		mutationFn: async ({
+			pumpId,
+			speedId,
+		}: {
+			pumpId: number;
+			speedId: number;
+		}) => {
+			const res = await setVspSpeed(serial as string, speedId, pumpId);
+			await settle(SETTLE_MS);
+			return res;
+		},
+		onMutate: async ({ pumpId, speedId }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			qc.setQueryData(qk, (old: VspPump[] | undefined) =>
+				old?.map((p) =>
+					p.pumpId === pumpId
+						? {
+								...p,
+								speeds: p.speeds.map((sp) => ({
+									...sp,
+									active: sp.id === speedId,
+								})),
+							}
+						: p,
+				),
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		// The pump's aux relay may have switched on, so refresh the panel too.
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: qk });
+			qc.invalidateQueries({ queryKey: keys.snapshot(serial ?? "-") });
+		},
 	});
 }
 

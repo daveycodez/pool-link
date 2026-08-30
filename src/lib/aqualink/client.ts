@@ -535,6 +535,86 @@ export function stopVspPump(serial: string, slotId = 1): Promise<Raw> {
 	});
 }
 
+/** One variable-speed pump the panel has an actual pump wired to. */
+export interface VspPump {
+	/** Pump slot. Doubles as `slot_id` on every VSP command. */
+	pumpId: number;
+	name: string;
+	/** What the panel uses it for, e.g. "Filtration" or "Aux Pump". */
+	app: string;
+	min: number;
+	max: number;
+	speeds: VspSpeed[];
+}
+
+export interface VspSpeed {
+	id: number;
+	name: string;
+	rpm: number;
+	/** The speed the pump is set to right now. */
+	active: boolean;
+}
+
+const rows = (v: unknown): Raw[] => (Array.isArray(v) ? (v as Raw[]) : []);
+
+/**
+ * The panel reports twenty pump slots whether or not anything is plugged in.
+ * An empty slot answers with `appId: 0` and no serial, and its speed table is
+ * the factory default — so `appId` is what separates a real pump from a stub,
+ * not the name, which is "PumpN" for both configured and unconfigured slots.
+ */
+export async function listVspPumps(serial: string): Promise<VspPump[]> {
+	const [names, models] = await Promise.all([
+		getVspNames(serial),
+		getVspAppModelSerials(serial),
+	]);
+
+	const named = new Map<number, string>();
+	for (const n of rows(names.vsp_names)) {
+		named.set(Number(n.pumpId), String(n.pumpName ?? ""));
+	}
+
+	const installed = rows(models.vsp_app_model_serials).filter(
+		(m) => Number(m.appId) !== 0,
+	);
+
+	return Promise.all(
+		installed.map(async (m) => {
+			const pumpId = Number(m.pumpId);
+			const { min, max, speeds } = await getPumpSpeeds(serial, pumpId);
+			return {
+				pumpId,
+				name: named.get(pumpId) || `Pump ${pumpId}`,
+				app: String(m.appName ?? ""),
+				min,
+				max,
+				speeds,
+			};
+		}),
+	);
+}
+
+/**
+ * A slot always returns eight speeds. The ones the owner never configured keep
+ * the panel's placeholder name ("Speed4"), so those are dropped — unless that
+ * would empty the list, in which case the raw eight are better than nothing.
+ */
+async function getPumpSpeeds(serial: string, pumpId: number) {
+	const raw = await getVspSpeeds(serial, pumpId);
+	const all: VspSpeed[] = rows(raw.vsp_speedInfo).map((s) => ({
+		id: Number(s.speedid),
+		name: String(s.speedName ?? ""),
+		rpm: Number(s.speedvalue),
+		active: s.enabled === "true",
+	}));
+	const named = all.filter((s) => !/^Speed\d+$/.test(s.name));
+	return {
+		min: Number(raw.minSpeed),
+		max: Number(raw.maxSpeed),
+		speeds: named.length > 0 ? named : all,
+	};
+}
+
 // -- Heat pump module --
 
 export function enableHpm(serial: string, on: boolean): Promise<Raw> {

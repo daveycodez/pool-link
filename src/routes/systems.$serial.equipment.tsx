@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Thermometer } from "lucide-react";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
+import { PumpSpeeds } from "#/components/pump-speeds";
 import { POOL_RANGE, SPA_RANGE, TempStepper } from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useSetTemps } from "#/lib/queries";
@@ -102,6 +103,9 @@ function Equipment() {
 					onToggle={(on) => actuate.mutate({ device: d, on })}
 				/>
 			))}
+
+			{/* Speeds sit last: they refine equipment the switches above turn on. */}
+			<PumpSpeeds serial={serial} />
 		</div>
 	);
 }

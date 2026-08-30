@@ -14,27 +14,67 @@ import {
 	getVspSpeeds,
 	listSystems,
 	sessionMeta,
+	setVspSpeed,
+	stopVspPump,
 } from "#/lib/aqualink/client";
 import { AqualinkError } from "#/lib/aqualink/types";
 
 /** Placeholder shown before any probe has run. */
 const EMPTY = "—";
 
+/** A labelled call against one system. */
+type ProbeEntry = [string, (serial: string) => Promise<unknown>];
+
 /** Every read command the p-api exposes for one system, grouped by subsystem. */
-const SCREEN_PROBES: [string, (serial: string) => Promise<unknown>][] = [
+const SCREEN_PROBES: ProbeEntry[] = [
 	["device status", getDeviceStatus],
 	["get_home", getHome],
 	["get_devices", getDevices],
 	["get_onetouch", getOnetouch],
 ];
 
-const VSP_PROBES: [string, (serial: string) => Promise<unknown>][] = [
+/**
+ * Slots are pump positions on the panel, not aux relays. An empty slot answers
+ * with the factory-default speed table rather than an error, so the only way to
+ * tell it apart from a real pump is appmodelserials — probe the range and
+ * compare.
+ */
+const VSP_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+/** Speed ids are 1-based and per slot; four covers a typical Jandy setup. */
+const VSP_SPEEDS = [1, 2, 3, 4];
+
+const VSP_PROBES: ProbeEntry[] = [
 	["get_vsp_names", getVspNames],
-	["get_vsp_speedauxinfo", (s) => getVspSpeeds(s)],
 	["get_vsp_appmodelserials", getVspAppModelSerials],
+	...VSP_SLOTS.map(
+		(slot): ProbeEntry => [
+			`get_vsp_speedauxinfo (slot ${slot})`,
+			(s) => getVspSpeeds(s, slot),
+		],
+	),
 	["get_master_device_list (0)", (s) => getMasterDeviceList(s, "0")],
 	["get_master_device_list (1)", (s) => getMasterDeviceList(s, "1")],
 	["get_master_device_list (2)", (s) => getMasterDeviceList(s, "2")],
+];
+
+/**
+ * These run the pump. They exist because the speed ids a slot reports are just
+ * numbers — the only way to learn which one is "low" is to send it and watch
+ * the water.
+ */
+const VSP_ACTIONS: ProbeEntry[] = [
+	...VSP_SLOTS.flatMap((slot) =>
+		VSP_SPEEDS.map(
+			(speed): ProbeEntry => [
+				`slot ${slot} → speed ${speed}`,
+				(s) => setVspSpeed(s, speed, slot),
+			],
+		),
+	),
+	...VSP_SLOTS.map(
+		(slot): ProbeEntry => [`slot ${slot} → stop`, (s) => stopVspPump(s, slot)],
+	),
 ];
 
 /**
@@ -154,6 +194,23 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 						</Card.Header>
 						<Probes>
 							{VSP_PROBES.map(([label, fn]) => (
+								<Probe key={label} onPress={onSerial(label, fn)}>
+									{label}
+								</Probe>
+							))}
+						</Probes>
+					</Card>
+
+					<Card>
+						<Card.Header>
+							<Card.Title>Pump Speeds</Card.Title>
+							<Card.Description>
+								These start and stop the pump for real. Empty slots answer with
+								an error and change nothing.
+							</Card.Description>
+						</Card.Header>
+						<Probes>
+							{VSP_ACTIONS.map(([label, fn]) => (
 								<Probe key={label} onPress={onSerial(label, fn)}>
 									{label}
 								</Probe>
