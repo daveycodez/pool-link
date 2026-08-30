@@ -3,13 +3,15 @@
 export {
 	AqualinkClient,
 	account,
+	devicesScreen,
+	homeScreen,
 	listSystems,
 	login,
 	logout,
+	onetouchScreen,
 	sessionMeta,
 	setLightColor,
 	setTemps,
-	snapshot,
 	toggleDevice,
 } from "./client";
 export * from "./constants";

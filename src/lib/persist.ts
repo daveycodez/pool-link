@@ -31,6 +31,14 @@ const BUSTER = "1";
  */
 const PERSISTED = new Set(["systems", "vsp"]);
 
+/**
+ * The panel's screens are separate queries under one prefix, and only one of
+ * them is safe to keep: macros are names, where the home and devices screens
+ * are water temperature and which relays are closed. A restored reading would
+ * be a lie the app cannot detect, so those two are never written.
+ */
+const PERSISTED_PANEL = new Set(["onetouch"]);
+
 const persister = createAsyncStoragePersister({
 	key: KEY,
 	// The prerender has no IndexedDB, and reaching for it there hangs the build
@@ -63,7 +71,9 @@ export const persistOptions = {
 			// Successful only, as the library's own default insists — a restored
 			// error would present as data the app never fetched.
 			defaultShouldDehydrateQuery(query) &&
-			PERSISTED.has(String(query.queryKey[0])),
+			(query.queryKey[0] === "panel"
+				? PERSISTED_PANEL.has(String(query.queryKey[2]))
+				: PERSISTED.has(String(query.queryKey[0]))),
 	},
 	maxAge: PERSIST_MAX_AGE_MS,
 	persister,

@@ -3,7 +3,22 @@ import { useEffect } from "react";
 import { HPM_FAULTS } from "#/lib/aqualink/enums";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import { useSession, useSnapshot, useVspPumps } from "#/lib/queries";
+import { usePanel, useSession, useVspPumps } from "#/lib/queries";
+
+/**
+ * Relays to leave out of both screens, matched on the label the panel reports.
+ *
+ * Install-specific by nature — rename the relay and it comes back, and someone
+ * else's relay of the same name would be hidden too. It is here because it was
+ * asked for; the durable shape is a list the owner edits rather than one the
+ * code carries.
+ */
+const HIDDEN_LABELS = new Set(["bomb karen"]);
+
+/** Whether a device is one the screens should show at all. */
+export function isHidden(device: { label: string }): boolean {
+	return HIDDEN_LABELS.has(device.label.trim().toLowerCase());
+}
 
 /** Jandy LED WaterColors — the one light family with an effect list here. */
 const JANDY_SUBTYPE = 4;
@@ -54,7 +69,7 @@ export function useRequireSession() {
  * second from cache, so the split costs no extra requests.
  */
 export function usePool(serial: string) {
-	const snap = useSnapshot(serial);
+	const snap = usePanel(serial);
 	// Started here rather than inside the cards that need it, so the two run
 	// together and the screen has everything before it draws anything.
 	const pumps = useVspPumps(serial);
@@ -120,7 +135,10 @@ export function usePool(serial: string) {
 		// named or positioned by this app, so a pool with different equipment
 		// gets different cards.
 		auxes: devices.filter(
-			(d) => d.name.startsWith("aux_") && (d.on || !genericAux.test(d.label)),
+			(d) =>
+				d.name.startsWith("aux_") &&
+				!isHidden(d) &&
+				(d.on || !genericAux.test(d.label)),
 		),
 		// Equipment is the granular view: every actionable device the panel
 		// exposes, including ones the pool screen surfaces its own way. Only the

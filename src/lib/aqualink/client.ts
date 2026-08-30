@@ -379,25 +379,31 @@ export function sessionMeta() {
 	return client.sessionMeta();
 }
 
-export async function snapshot(
+/** Home screen: temperatures, set points and the fixed-key equipment state. */
+export async function homeScreen(serial: string): Promise<Raw> {
+	const res = await client.sessionRequest(serial, "get_home");
+	return mergeScreen(res.home_screen ?? res);
+}
+
+/**
+ * Devices screen: the aux relays, plus the colour-light zones that ride
+ * alongside `devices_screen` rather than inside it, where mergeScreen would
+ * never see them.
+ */
+export async function devicesScreen(
 	serial: string,
-): Promise<{ home: Raw; devices: Raw; icl: unknown; onetouch: unknown }> {
-	const [homeResp, devicesResp, onetouchResp] = await Promise.all([
-		client.sessionRequest(serial, "get_home"),
-		client.sessionRequest(serial, "get_devices"),
-		// The home response says whether macros exist, but waiting to find out
-		// would cost a second round trip. Asking in parallel and tolerating the
-		// refusal is cheaper, and a panel without them answers harmlessly.
-		getOnetouch(serial).catch(() => undefined),
-	]);
+): Promise<{ devices: Raw; icl: unknown }> {
+	const res = await client.sessionRequest(serial, "get_devices");
 	return {
-		home: mergeScreen(homeResp.home_screen ?? homeResp),
-		devices: mergeScreen(devicesResp.devices_screen ?? devicesResp),
-		// Colour-light zones ride alongside devices_screen rather than inside
-		// it, so mergeScreen never sees them. No extra request for these.
-		icl: devicesResp.icl_info_list,
-		onetouch: onetouchResp?.onetouch_screen,
+		devices: mergeScreen(res.devices_screen ?? res),
+		icl: res.icl_info_list,
 	};
+}
+
+/** OneTouch macros. A panel without them answers harmlessly. */
+export async function onetouchScreen(serial: string): Promise<unknown> {
+	const res = await getOnetouch(serial).catch(() => undefined);
+	return res?.onetouch_screen;
 }
 
 export async function toggleDevice(

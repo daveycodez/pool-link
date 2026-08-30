@@ -14,8 +14,9 @@ import { useEffect, useState } from "react";
 import { AppHeader, IconBtn } from "#/components/app-header";
 import { BottomNav } from "#/components/bottom-nav";
 import { Loading } from "#/components/loading";
+import { ThemeToggle } from "#/components/theme-toggle";
 import { isCelsius, timeAgo } from "#/lib/format";
-import { keys, useSession, useSnapshot, useSystems } from "#/lib/queries";
+import { keys, usePanel, useSession, useSystems } from "#/lib/queries";
 
 /**
  * Page chrome for every route. The header lives here so /login gets the
@@ -45,7 +46,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	// the list's header on the way into a system.
 	const serial = SYSTEM_PATH.exec(pathname)?.[1];
 	const system = systems.data?.find((s) => s.serial === serial);
-	const snap = useSnapshot(serial);
+	const snap = usePanel(serial);
 
 	// On a system the chip tracks that system's live snapshot; on the list it
 	// tracks the account's system list, which is the only thing being fetched.
@@ -143,7 +144,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
 	return (
 		<div
-			className={`mx-auto flex min-h-svh w-full max-w-md animate-in flex-col px-4 pt-[max(0.5rem,env(safe-area-inset-top))] duration-200 fade-in ${
+			// Landscape puts the notch and the home indicator on the sides, so the
+			// horizontal padding is a floor rather than a fixed value — 1rem when
+			// there is no inset, the inset when it is larger.
+			className={`mx-auto flex min-h-svh w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] duration-200 fade-in ${
 				onTab
 					? "pb-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]"
 					: "pb-6"
@@ -187,6 +191,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 										/>
 									</IconBtn>
 								) : null}
+								<ThemeToggle />
 								{/* Two settings pages: a system's adds renaming, the account's
 							    does not. */}
 								{onSettings ? null : serial ? (
