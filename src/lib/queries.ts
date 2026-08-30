@@ -8,6 +8,10 @@ import type { VspPump } from "#/lib/aqualink/client";
 import {
 	addDevice,
 	getDeviceStatus,
+	iclSetBrightness,
+	iclSetColor,
+	iclSetCustomColor,
+	iclZoneOnOff,
 	listSystems,
 	listVspPumps,
 	login,
@@ -23,6 +27,13 @@ import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
 import { normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice } from "#/lib/iaqualink/types";
+
+/** What can be asked of a zone. Colour carries brightness, as the API does. */
+export type IclChange =
+	| { kind: "power"; zoneId: number; on: boolean }
+	| { kind: "color"; zoneId: number; colorId: number; dim: number }
+	| { kind: "brightness"; zoneId: number; dim: number }
+	| { kind: "custom"; zoneId: number; rgbw: [number, number, number, number] };
 
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
 const POLL_MS = 5_000;
@@ -108,8 +119,8 @@ export function useSnapshot(serial: string | undefined) {
 	return useQuery({
 		queryKey: keys.snapshot(serial ?? "-"),
 		queryFn: async () => {
-			const { home, devices } = await snapshot(serial as string);
-			return normalize(serial as string, home, devices);
+			const { home, devices, icl } = await snapshot(serial as string);
+			return normalize(serial as string, home, devices, icl);
 		},
 		enabled: Boolean(serial),
 		refetchInterval: mutating ? false : POLL_MS,
@@ -259,7 +270,6 @@ export function useVspPumps(serial: string | undefined) {
 		refetchInterval: mutating ? false : VSP_POLL_MS,
 		refetchIntervalInBackground: false,
 		staleTime: VSP_POLL_MS * 2,
-		retry: false,
 	});
 }
 
@@ -312,6 +322,65 @@ export function useSetVspSpeed(serial: string | undefined) {
 	});
 }
 
+/**
+ * Colour-light zones. One mutation for all of it, because the panel treats
+ * colour and brightness as the same command and a zone's state comes back the
+ * same way whichever was sent.
+ */
+export function useIclZone(serial: string | undefined) {
+	const qc = useQueryClient();
+	const qk = keys.snapshot(serial ?? "-");
+	return useMutation({
+		mutationFn: async (v: IclChange) => {
+			const id = v.zoneId;
+			const res =
+				v.kind === "power"
+					? await iclZoneOnOff(serial as string, id, v.on)
+					: v.kind === "color"
+						? await iclSetColor(serial as string, id, v.colorId, v.dim)
+						: v.kind === "brightness"
+							? await iclSetBrightness(serial as string, id, v.dim)
+							: await iclSetCustomColor(
+									serial as string,
+									id,
+									v.rgbw[0],
+									v.rgbw[1],
+									v.rgbw[2],
+									v.rgbw[3],
+								);
+			// Colour changes cycle the fixture, so they settle like a light.
+			await settle(v.kind === "brightness" ? SETTLE_MS : LIGHT_SETTLE_MS);
+			return res;
+		},
+		onMutate: async (v) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
+				if (!old) return old;
+				return {
+					...old,
+					icl: old.icl.map((z) =>
+						z.zoneId !== v.zoneId
+							? z
+							: v.kind === "power"
+								? { ...z, on: v.on }
+								: v.kind === "color"
+									? { ...z, on: true, colorId: v.colorId }
+									: v.kind === "brightness"
+										? { ...z, dim: v.dim }
+										: { ...z, on: true, rgbw: v.rgbw },
+					),
+				};
+			});
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+	});
+}
+
 /** Rename the system in the iAqualink account, then refresh the system list. */
 export function useSetDeviceName(serial: string | undefined) {
 	const qc = useQueryClient();
@@ -333,7 +402,6 @@ export function useDeviceStatus(serial: string) {
 		refetchIntervalInBackground: false,
 		staleTime: POLL_MS * 2,
 		refetchOnWindowFocus: false,
-		retry: false,
 	});
 }
 

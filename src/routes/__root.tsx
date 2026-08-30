@@ -79,11 +79,29 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		() =>
 			new QueryClient({
 				defaultOptions: {
-					queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 5_000 },
+					queries: {
+						// Retry count is the library default. Only the backoff cap is
+						// ours: theirs tops out at 30s, six times the poll interval,
+						// and a query will not start its next scheduled poll while a
+						// retry is still pending — so a blip could hold the screen on
+						// half-minute-old data when polling again would have been
+						// fresher. Capped near one interval, the poll is the retry.
+						retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+						refetchOnWindowFocus: false,
+						staleTime: 5_000,
+					},
 				},
 				// Every query and mutation reports through here, so nothing needs a
 				// per-call error handler.
-				queryCache: new QueryCache({ onError: toastError }),
+				queryCache: new QueryCache({
+					onError: (error, query) => {
+						// A poll that fails behind data we already hold changes nothing
+						// on screen and the next one will likely succeed. The header's
+						// updated-at is the honest signal for that, not a toast.
+						if (query.state.data !== undefined) return;
+						toastError(error);
+					},
+				}),
 				mutationCache: new MutationCache({ onError: toastError }),
 			}),
 	);
