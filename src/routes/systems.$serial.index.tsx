@@ -7,7 +7,7 @@ import {
 	Lightbulb,
 	LightbulbOff,
 	Sun,
-	Waves,
+	WavesLadder,
 } from "lucide-react";
 import { useState } from "react";
 import { AuxHero } from "#/components/aux-hero";
@@ -373,7 +373,7 @@ function PoolSpaHero({
 						{spaMode ? (
 							<Bubbles className="size-4 text-warning" />
 						) : (
-							<Waves className="size-4 text-accent" />
+							<WavesLadder className="size-4 text-accent" />
 						)}
 						{spaMode ? "Spa" : "Pool"}
 						{/* The panel overrides equipment while this is on, so it is
