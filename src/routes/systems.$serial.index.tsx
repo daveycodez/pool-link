@@ -1,6 +1,13 @@
 import { Button, Card } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Bubbles, Flame, Lightbulb, LightbulbOff, Waves } from "lucide-react";
+import {
+	Blinds,
+	Bubbles,
+	Flame,
+	Lightbulb,
+	LightbulbOff,
+	Waves,
+} from "lucide-react";
 import { useState } from "react";
 import { AuxHero } from "#/components/aux-hero";
 import { Loading } from "#/components/loading";
@@ -9,7 +16,12 @@ import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
-import { isJandyLight, usePool, useRequireSession } from "#/lib/use-pool";
+import {
+	isJandyLight,
+	isReported,
+	usePool,
+	useRequireSession,
+} from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/")({
 	component: Pool,
@@ -26,6 +38,7 @@ function Pool() {
 		spaSet,
 		heaters,
 		spaPump,
+		cover,
 		auxes,
 		celsius,
 	} = usePool(serial);
@@ -44,6 +57,7 @@ function Pool() {
 			spaMode={spaMode}
 			heaters={heaters}
 			spaPump={spaPump}
+			cover={cover}
 			auxes={auxes}
 			celsius={celsius}
 			poolSet={poolSet}
@@ -68,6 +82,7 @@ function PoolScreen({
 	heaters,
 	serial,
 	spaPump,
+	cover,
 	auxes,
 	celsius,
 	poolSet,
@@ -80,6 +95,7 @@ function PoolScreen({
 	spaMode: boolean;
 	heaters: PoolDevice[];
 	spaPump: PoolDevice | undefined;
+	cover: PoolDevice | undefined;
 	auxes: PoolDevice[];
 	celsius: boolean;
 	poolSet: PoolDevice | undefined;
@@ -105,6 +121,7 @@ function PoolScreen({
 				setPoint={spaMode ? spaSet : poolSet}
 				spaMode={spaMode}
 				spaPump={spaPump}
+				cover={cover}
 				water={water}
 			/>
 
@@ -142,6 +159,7 @@ function ModeHero({
 	spaMode,
 	celsius,
 	spaPump,
+	cover,
 	heater,
 	setPoint,
 	onToggle,
@@ -151,6 +169,7 @@ function ModeHero({
 	spaMode: boolean;
 	celsius: boolean;
 	spaPump: PoolDevice | undefined;
+	cover: PoolDevice | undefined;
 	heater: PoolDevice | undefined;
 	setPoint: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
@@ -164,8 +183,10 @@ function ModeHero({
 			<div className="flex items-start justify-between gap-4">
 				<div>
 					<div className="flex h-6 items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
+						{/* Spa carries the same warning tone as the switch that selects
+						    it, so the card's state reads at a glance. */}
 						{spaMode ? (
-							<Bubbles className="size-4 text-accent" />
+							<Bubbles className="size-4 text-warning" />
 						) : (
 							<Waves className="size-4 text-accent" />
 						)}
@@ -192,7 +213,7 @@ function ModeHero({
 				</div>
 
 				<div className="flex flex-col items-end gap-3">
-					{spaPump ? (
+					{isReported(spaPump) ? (
 						<TrackSwitch
 							device={spaPump}
 							offIcon={Waves}
@@ -203,7 +224,7 @@ function ModeHero({
 							tone="warning"
 						/>
 					) : null}
-					{heater ? (
+					{isReported(heater) ? (
 						<TrackSwitch
 							device={heater}
 							offIcon={Flame}
@@ -212,6 +233,18 @@ function ModeHero({
 							onLabel="Heat"
 							onToggle={onToggle}
 							tone="danger"
+						/>
+					) : null}
+					{/* A cover belongs to the pool, so it keeps to that side of the
+					    swap — and only when the panel says one is fitted. */}
+					{!spaMode && isReported(cover) ? (
+						<TrackSwitch
+							device={cover}
+							offIcon={Blinds}
+							offLabel="Cover"
+							onIcon={Blinds}
+							onLabel="Cover"
+							onToggle={onToggle}
 						/>
 					) : null}
 				</div>

@@ -10,6 +10,21 @@ const JANDY_SUBTYPE = 4;
 const num = (v: unknown) => (v == null ? Number.NaN : Number(v));
 
 /**
+ * Whether the panel reports this device at all. Fixed keys are always present
+ * in the payload whether or not the hardware exists — an absent pool cover
+ * comes back as "", not missing — so an empty state means "not installed"
+ * rather than "off". Only the hero uses this; equipment shows everything the
+ * panel names, installed or not.
+ */
+export function isReported(
+	device: PoolDevice | undefined,
+): device is PoolDevice {
+	if (!device) return false;
+	const state = device.raw.state ?? device.raw.status ?? device.raw.value;
+	return state != null && String(state).trim() !== "";
+}
+
+/**
  * A colour light this app can actually drive. `type 2` means some colour
  * light; the subtype names the brand, and the brand decides which effect ids
  * apply. Anything else is left as a plain relay rather than given a hero wired
@@ -72,6 +87,7 @@ export function usePool(serial: string) {
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),
+		cover: byName.get("cover_pool"),
 		// Every aux relay the panel reports, in its own order — lights included,
 		// since the screen decides per relay which card to draw. Nothing here is
 		// named or positioned by this app, so a pool with different equipment
