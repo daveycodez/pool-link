@@ -4,8 +4,9 @@ import {
 	Flame,
 	Lightbulb,
 	SlidersHorizontal,
-	WavesArrowDown,
+	Wind,
 	Zap,
+	ZodiacAquarius,
 } from "lucide-react";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 
@@ -29,8 +30,8 @@ export function IconCircle({
 }
 
 export function DeviceIcon({ device }: { device: PoolDevice }) {
-	if (device.name === "aux_1") return <WavesArrowDown className="size-4" />;
-	if (device.name === "aux_2") return <Droplets className="size-4" />;
+	if (device.name === "aux_1") return <ZodiacAquarius className="size-4" />;
+	if (device.name === "aux_2") return <Wind className="size-4" />;
 	switch (device.kind) {
 		case "light":
 			return <Lightbulb className="size-4" />;

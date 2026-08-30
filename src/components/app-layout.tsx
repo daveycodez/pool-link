@@ -1,7 +1,15 @@
 import { Chip } from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useRouter, useRouterState } from "@tanstack/react-router";
-import { House, MapPinHouse, RefreshCw, Settings, Waves } from "lucide-react";
+import {
+	House,
+	MapPinHouse,
+	RefreshCw,
+	Settings,
+	ThermometerSnowflake,
+	ThermometerSun,
+	Waves,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppHeader, IconBtn } from "#/components/app-header";
 import { BottomNav } from "#/components/bottom-nav";
@@ -32,6 +40,18 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	// On a system the chip tracks that system's live snapshot; on the list it
 	// tracks the account's system list, which is the only thing being fetched.
 	const source = serial ? snap : systems;
+	// Air belongs to neither body, so the hero has no natural place for it
+	// once that card is about swapping between pool and spa.
+	const air = snap.data?.devices.find((d) => d.name === "air_temp");
+	// `unit` is only "°" — the scale itself is on the raw home payload, and the
+	// warm/cold threshold has to follow it.
+	const celsius =
+		String(snap.data?.raw?.temp_scale ?? "F").toUpperCase() === "C";
+	const airValue = Number(air?.value);
+	const AirIcon =
+		Number.isFinite(airValue) && airValue >= (celsius ? 21 : 70)
+			? ThermometerSun
+			: ThermometerSnowflake;
 	// On the list, each card's online state is its own query — refreshing the
 	// list alone would leave every chip showing whatever it last saw.
 	const refresh = () => {
@@ -107,6 +127,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 				>
 					{signedIn ? (
 						<>
+							{serial && air?.value ? (
+								<span className="me-1 flex items-center gap-1.5 text-xs text-muted">
+									<AirIcon className="size-4 text-accent" />
+									<span className="tabular-nums">
+										{air.value}
+										{air.unit ?? "°"}
+									</span>
+								</span>
+							) : null}
 							{hasLive ? (
 								<Chip color={live ? "success" : "warning"} variant="soft">
 									{live ? "Live" : age}

@@ -75,7 +75,7 @@ export function SystemNameRow({ serial }: { serial: string }) {
 				variant="secondary"
 			>
 				<InputGroup>
-					<InputGroup.Input className="w-28" />
+					<InputGroup.Input className="w-39 pe-0 md:w-35" />
 					<InputGroup.Suffix className="pe-0">
 						<AlertDialog>
 							<Button
@@ -85,7 +85,7 @@ export function SystemNameRow({ serial }: { serial: string }) {
 								size="sm"
 								variant="ghost"
 							>
-								<Pencil className="size-4" />
+								<Pencil />
 							</Button>
 							<AlertDialog.Backdrop>
 								<AlertDialog.Container>
@@ -170,7 +170,7 @@ export function SystemSerialRow({ serial }: { serial: string }) {
 				variant="secondary"
 			>
 				<InputGroup>
-					<InputGroup.Input className="w-36 font-mono" />
+					<InputGroup.Input className="w-39 pe-0 font-mono md:w-35" />
 					<InputGroup.Suffix className="pe-0">
 						<Tooltip>
 							<Tooltip.Trigger>
@@ -181,11 +181,7 @@ export function SystemSerialRow({ serial }: { serial: string }) {
 									size="sm"
 									variant="ghost"
 								>
-									{copied ? (
-										<Check className="size-4" />
-									) : (
-										<Copy className="size-4" />
-									)}
+									{copied ? <Check /> : <Copy />}
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>{copied ? "Copied" : "Copy"}</Tooltip.Content>
