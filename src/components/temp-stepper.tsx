@@ -34,11 +34,19 @@ export function TempStepper({
 	range,
 	onCommit,
 	className,
+	label = "Target temperature",
 }: {
 	value: number;
 	range: TempRange;
 	onCommit: (temp: number) => void;
 	className?: string;
+	/**
+	 * What a screen reader calls this. Everything else about the control is
+	 * already unit-agnostic — a bounded integer, debounced to the value someone
+	 * settles on — so the chlorinator's output percent reuses it wholesale, and
+	 * only the announced name has to stop saying temperature.
+	 */
+	label?: string;
 }) {
 	// Held locally while taps are still coming in, so the number moves with
 	// every press even though only the last one is sent.
@@ -60,7 +68,7 @@ export function TempStepper({
 
 	return (
 		<NumberField
-			aria-label="Target temperature"
+			aria-label={label}
 			className={className}
 			isDisabled={!Number.isFinite(value)}
 			maxValue={range.max}

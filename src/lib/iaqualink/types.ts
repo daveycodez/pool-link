@@ -46,6 +46,33 @@ export interface HeatPump {
 }
 
 /**
+ * A paired salt water chlorinator (Jandy AquaPure / TruClear). Absent on most
+ * panels, and unlike a relay it has no on and off: the cell runs at a percent
+ * of the filter pump's run time, so what the panel reports is production, not
+ * a circuit. That is why it sits beside the devices like the heat pump rather
+ * than among them — there is no switch here for a device list to hold.
+ *
+ * Everything is nullable or empty-tolerant on purpose. This is built from a
+ * `swc_info` object whose full shape has never been seen from a panel that
+ * pairs a cell, so any field may be missing, and a missing field must read as
+ * "not reported" rather than as a number.
+ */
+export interface SaltCell {
+	/** Live output percent per body, which is not the same as the set point. */
+	poolOutput: number | null;
+	spaOutput: number | null;
+	/** standby | running | boosting | boostpaused | offline, lowercased. */
+	poolStatus: string;
+	spaStatus: string;
+	/** The panel's low-salt warning: below its floor the cell stops producing. */
+	lowSalt: boolean;
+	/** Whether a boost cycle is running, from the flat `swc_boost` key. */
+	boosting: boolean;
+	/** Configured percent, when get_home carries it alongside the object. */
+	setPoint: number | null;
+}
+
+/**
  * One iAquaLink Color Lights zone. Zones are their own subsystem — addressed
  * by id, not by an aux relay — so they sit beside the devices rather than
  * among them.
@@ -85,6 +112,8 @@ export interface PoolSnapshot {
 	icl: IclZone[];
 	/** Null unless a heat pump is paired. */
 	heatPump: HeatPump | null;
+	/** Null unless the panel says a salt cell is paired. */
+	saltCell: SaltCell | null;
 	/** Configured macros only; the panel pads the list to its maximum. */
 	macros: OneTouchMacro[];
 	raw: Raw;

@@ -8,11 +8,13 @@
 import {
 	API_KEY,
 	accountUrl,
+	CMD_CONTROL_SWC_BOOST,
 	CMD_ENABLE_DISABLE_HPM,
 	CMD_GET_DEVICES,
 	CMD_GET_HOME,
 	CMD_GET_MASTER_DEVICE_LIST,
 	CMD_GET_ONETOUCH,
+	CMD_GET_SWC_CONFIG,
 	CMD_GET_VSP_APPMODELSERIALS,
 	CMD_GET_VSP_NAMES,
 	CMD_GET_VSP_SPEED,
@@ -20,6 +22,7 @@ import {
 	CMD_ICL_SET_COLOR,
 	CMD_ICL_SET_CUSTOM_COLOR,
 	CMD_SET_ONETOUCH,
+	CMD_SET_SWC_CONFIG,
 	CMD_SET_VSP_SPEED,
 	CMD_SETPOINT_HPM_TEMP,
 	CMD_SWITCH_HPM_MODE,
@@ -710,6 +713,146 @@ export function switchHpmMode(serial: string, mode: string): Promise<Raw> {
 /** Unlike set_temps, only the changed set point is sent — no seeding. */
 export function setHpmSetPoint(serial: string, temps: Payload): Promise<Raw> {
 	return client.sessionRequest(serial, CMD_SETPOINT_HPM_TEMP, temps);
+}
+
+// -- Salt water chlorinator --
+
+/** What `boostcontrol` takes. Hours and circuit only mean anything on start. */
+export type SwcBoostControl = "start" | "stop" | "pause" | "resume";
+
+/**
+ * The chlorinator's configuration, as all three SWC commands report it — the
+ * two writes echo back exactly what the read returns, so nothing downstream has
+ * to predict the result of a write or wait a poll to learn it.
+ */
+export interface SwcConfig {
+	/** Configured output percent per body, 0-100. Two values, never one. */
+	poolSetPoint: number;
+	spaSetPoint: number;
+	/** "" when no boost is running, otherwise "on" or "paused". */
+	boostStatus: string;
+	boostOn: boolean;
+	/** How long a started boost runs for, in hours. */
+	boostHours: number;
+	/** What is left of a running boost. Zero when none is. */
+	remainingMinutes: number;
+	/** "pool" or "spillover" — which circuit a boost chlorinates. */
+	boostMode: string;
+	/**
+	 * Whether the panel offers a choice of which circuit a boost chlorinates.
+	 *
+	 * `boostDipSwitch` reports switch 3 on the power centre bezel, and the
+	 * AquaLink RS manual is specific about what it does: with it on, the Boost
+	 * Setup menu offers a MODE alongside the hours; with it off, "then only TIME
+	 * is displayed". So this gates the `boostmode` parameter and nothing else —
+	 * boost itself works either way, and gating the whole control on it would
+	 * take a working feature away from every pad without spillover plumbing.
+	 *
+	 * False when the field is missing, which is the safe direction: not sending
+	 * `boostmode` leaves the panel running the mode it was configured with.
+	 */
+	boostModeAvailable: boolean;
+}
+
+const percent = (v: unknown): number | null => {
+	const n = Number(v);
+	// A blank field parses as 0, which for an output set point is not "unknown"
+	// but "stop producing" — and it would be written straight back on the next
+	// change to the other body. Empty has to stay empty all the way up.
+	if (v === "" || v == null || !Number.isFinite(n)) return null;
+	return Math.min(100, Math.max(0, Math.round(n)));
+};
+
+const whole = (v: unknown): number => {
+	const n = Number(v);
+	return Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+};
+
+/**
+ * Shape a command's answer, or null if it is not a configuration at all.
+ *
+ * The set points are the test. A body without them — an error the pool chose
+ * to send with a 200, a panel that does not know the command, a shape nobody
+ * has captured — must not become a SwcConfig, because the very next write
+ * would send both of its zeroes to a working cell.
+ */
+function readSwcConfig(raw: Raw): SwcConfig | null {
+	const pool = percent(raw.poolSWCSP);
+	const spa = percent(raw.spaSWCSP);
+	if (pool === null) return null;
+
+	const status = String(raw.boostStatus ?? "")
+		.trim()
+		.toLowerCase();
+	return {
+		poolSetPoint: pool,
+		// A cell on a pool-only pad reports no spa side; echoing its own value
+		// back is the only write that cannot change something we cannot see.
+		spaSetPoint: spa ?? 0,
+		boostStatus: status,
+		// Paused is still a boost — it holds its remaining time and resumes —
+		// so a switch that read only "on" would offer to start one already running.
+		boostOn: status === "on" || status === "paused",
+		boostHours: whole(raw.boostHrsVal),
+		remainingMinutes:
+			whole(raw.remainingBoostHrs) * 60 + whole(raw.remainingBoostMins),
+		boostMode: String(raw.boostMode ?? "")
+			.trim()
+			.toLowerCase(),
+		boostModeAvailable:
+			String(raw.boostDipSwitch ?? "")
+				.trim()
+				.toLowerCase() === "on",
+	};
+}
+
+/** Read the chlorinator's set points and boost state. */
+export async function getSwcConfig(serial: string): Promise<SwcConfig> {
+	const raw = await client.sessionRequest(serial, CMD_GET_SWC_CONFIG);
+	const config = readSwcConfig(raw);
+	if (!config)
+		throw new AqualinkError(
+			"No chlorinator configuration reported",
+			undefined,
+			raw,
+		);
+	return config;
+}
+
+/**
+ * Set one body's output percent, carrying the other unchanged.
+ *
+ * Both parameters ride every write — the panel takes the pair, not one of them
+ * — so the untouched side must be a real current value and never a blank or a
+ * guess. Exactly the trap set_temps has with its two bodies, and the caller
+ * seeds it the same way.
+ */
+export async function setSwcOutput(
+	serial: string,
+	poolPercent: number,
+	spaPercent: number,
+): Promise<SwcConfig | null> {
+	return readSwcConfig(
+		await client.sessionRequest(serial, CMD_SET_SWC_CONFIG, {
+			poolswcsp: String(percent(poolPercent) ?? 0),
+			spaswcsp: String(percent(spaPercent) ?? 0),
+		}),
+	);
+}
+
+/** Start, stop, pause or resume a boost. Only a start carries hours and mode. */
+export async function controlSwcBoost(
+	serial: string,
+	control: SwcBoostControl,
+	hours?: number,
+	mode?: string,
+): Promise<SwcConfig | null> {
+	const params: Payload = { boostcontrol: control };
+	if (hours !== undefined) params.boosthrs = String(Math.round(hours));
+	if (mode) params.boostmode = mode;
+	return readSwcConfig(
+		await client.sessionRequest(serial, CMD_CONTROL_SWC_BOOST, params),
+	);
 }
 
 // -- ICL light zones --

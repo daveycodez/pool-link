@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { HPM_FAULTS } from "#/lib/aqualink/enums";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import { usePanel, useSession, useVspPumps } from "#/lib/queries";
+import { usePanel, useSession, useSwc, useVspPumps } from "#/lib/queries";
 
 /**
  * Relays to leave out of both screens, matched on the label the panel reports.
@@ -73,6 +73,10 @@ export function usePool(serial: string) {
 	// Started here so it runs with the panel rather than after the first paint;
 	// the cards that use it read it through their own hook.
 	const vsp = useVspPumps(serial);
+	// Only fetched when the home screen reports a paired cell, so a panel
+	// without one never sends the request at all — see useSwc.
+	const saltCell = snap.data?.saltCell ?? null;
+	const swc = useSwc(serial, Boolean(saltCell));
 
 	const devices = snap.data?.devices ?? [];
 	const byName = new Map(devices.map((d) => [d.name, d]));
@@ -117,6 +121,13 @@ export function usePool(serial: string) {
 		// When paired, this becomes the equipment that heats — so it changes how
 		// set points are sent, not just what the equipment page lists.
 		heatPump: snap.data?.heatPump ?? null,
+		// Two halves of one thing, and they fail apart: the cell's presence and
+		// live production come off the home screen every panel answers, while its
+		// set points and boost timer come from a command no panel here has ever
+		// been seen to accept. Null config with a non-null cell is the ordinary
+		// case for a panel that rejects it, not an error state.
+		saltCell,
+		swc: swc.data ?? null,
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),

@@ -47,6 +47,20 @@ export const CMD_ENABLE_DISABLE_HPM = "enable_disable_hpm";
 export const CMD_SWITCH_HPM_MODE = "switch_hpm_mode";
 export const CMD_SETPOINT_HPM_TEMP = "setpoint_hpm_temp";
 
+/**
+ * Salt water chlorinator. Not in flz/iaqualink-py's master branch — these come
+ * from its protocol reference and its unmerged SWC branch, and no capture from
+ * a panel that pairs a cell exists to check them against, which is why every
+ * consumer of them is written to tolerate a rejection.
+ *
+ * The shape to know: output is two set points and never one, and
+ * `set_swc_config` carries both on every write — the same trap `set_temps` has
+ * with its two bodies. Boost is a timer with four verbs, not a flag.
+ */
+export const CMD_GET_SWC_CONFIG = "get_swc_config";
+export const CMD_SET_SWC_CONFIG = "set_swc_config";
+export const CMD_CONTROL_SWC_BOOST = "control_swc_boost";
+
 /** IntelliCenter-style light zones. */
 export const CMD_ICL_ONOFF = "onoff_iclzone";
 export const CMD_ICL_SET_COLOR = "set_iclzone_color";

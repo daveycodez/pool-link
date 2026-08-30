@@ -223,6 +223,43 @@ export const HPM_FAULTS: Record<string, string> = {
 	"-1": "Unknown fault",
 };
 
+/**
+ * The step the chlorinator's output stepper moves in.
+ *
+ * The cloud command takes any integer 0-100, but the hardware underneath does
+ * not. AqualinkD, which drives the same AquaPure through the panel's own keypad
+ * over RS-485, quantises every requested percent to a multiple of five
+ * (`roundTo(rtn, 5)` in aq_programmer.c) for every panel family it supports,
+ * and its OneTouch driver literally counts `(target - current) / 5` keypresses
+ * — five is the size of one press on the pad. Jandy goes coarser still and
+ * tells owners to tune in tens. Five is therefore the finest step that is real
+ * everywhere, and a panel that rounds anyway tells on itself: the stepper shows
+ * the value the panel echoed back, not the one it was sent.
+ */
+export const SWC_PERCENT_STEP = 5;
+
+/**
+ * How long a boost runs when this app starts one.
+ *
+ * Twenty-four hours is not an arbitrary maximum picked from the range the
+ * command accepts — it is what Boost means on an AquaPure. Jandy's manual
+ * defines it as 100% production for 24 hours, after which the cell returns to
+ * its previous setting, and the panel reports 24 as `boostHrsVal` out of the
+ * box. Shortening it would make this app's boost a different operation from
+ * the one on the pad. Worth knowing: those hours count chlorinator run time,
+ * not wall clock, so a pool on a pump timer takes days to spend them.
+ */
+export const SWC_BOOST_HOURS = 24;
+
+/** `swcPoolStatus` / `swcSpaStatus` wire values; anything else shows raw. */
+export const SWC_STATUS_LABELS: Record<string, string> = {
+	standby: "Standby",
+	running: "Generating",
+	boosting: "Boosting",
+	boostpaused: "Boost paused",
+	offline: "Offline",
+};
+
 /** Set-point name -> the parameter `setpoint_hpm_temp` wants for it. */
 export const HPM_TEMP_PARAM: Record<string, string> = {
 	pool_set_point: "poolheatsetpointtemp",

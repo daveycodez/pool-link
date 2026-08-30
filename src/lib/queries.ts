@@ -7,12 +7,18 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
-import type { VspPump } from "#/lib/aqualink/client";
+import type {
+	SwcBoostControl,
+	SwcConfig,
+	VspPump,
+} from "#/lib/aqualink/client";
 import {
 	addDevice,
+	controlSwcBoost,
 	devicesScreen,
 	enableHpm,
 	getDeviceStatus,
+	getSwcConfig,
 	homeScreen,
 	iclSetBrightness,
 	iclSetColor,
@@ -28,12 +34,13 @@ import {
 	setHpmSetPoint,
 	setLightColor,
 	setOnetouch,
+	setSwcOutput,
 	setTemps,
 	setVspSpeed,
 	switchHpmMode,
 	toggleDevice,
 } from "#/lib/aqualink/client";
-import { HPM_TEMP_PARAM } from "#/lib/aqualink/enums";
+import { HPM_TEMP_PARAM, SWC_BOOST_HOURS } from "#/lib/aqualink/enums";
 import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
 import { clearHeatRuns } from "#/lib/heat-eta";
@@ -670,6 +677,131 @@ export function useHeatPump(serial: string | undefined) {
 			if (ctx) panel.restore(ctx.prev);
 		},
 		onSettled: () => panel.invalidate(),
+	});
+}
+
+/**
+ * The salt chlorinator's configuration: a fourth panel screen, and the only
+ * one that is conditional.
+ *
+ * `present` is the home screen's answer, and it gates the fetch rather than the
+ * render — most panels have no cell, and an unconditional query would buy every
+ * one of them a rejected request per cycle forever. It also rides the slow
+ * cadence: output percent and boost hours move when a person moves them, so
+ * polling this at the live rate would only ever find its own last write.
+ *
+ * The command is unverified against real hardware, so a panel that does not
+ * know it simply leaves this in error and no control renders — which is why the
+ * card upstream takes its status from get_home instead of from here.
+ */
+export function useSwc(serial: string | undefined, present: boolean) {
+	const uid = useUserId();
+	const quiet = useIsMutating({ mutationKey: holdKey(serial) }) > 0;
+	return useQuery({
+		queryKey: keys.swc(uid, serial ?? "-"),
+		queryFn: uid && serial && present ? () => getSwcConfig(serial) : skipToken,
+		...panelOptions(quiet, ONETOUCH_POLL_MS),
+	});
+}
+
+/**
+ * Set one body's chlorine output.
+ *
+ * `set_swc_config` carries both set points on every write, so the untouched one
+ * is read back out of the cache first — the same trap set_temps has, and a
+ * worse one to fall into: a blank there does not leave the spa alone, it stops
+ * the cell producing for it. Without a cached config there is nothing honest to
+ * send for the other body, so the write does not happen at all.
+ *
+ * No hold and no settle. Those exist for lights, which the panel pulses over
+ * RS-485 while misreporting the whole pad; this is a number the panel stores.
+ * It needs no optimistic guess either — the command echoes the entire
+ * configuration back, so the panel's own answer seeds the cache.
+ */
+export function useSwcOutput(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.swc(uid, serial ?? "-");
+	return useMutation({
+		mutationFn: ({ body, value }: { body: "pool" | "spa"; value: number }) => {
+			const current = qc.getQueryData<SwcConfig>(qk);
+			if (!current)
+				throw new AqualinkError("Chlorinator settings not loaded yet");
+			return setSwcOutput(
+				serial as string,
+				body === "pool" ? value : current.poolSetPoint,
+				body === "spa" ? value : current.spaSetPoint,
+			);
+		},
+		onMutate: async ({ body, value }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData<SwcConfig>(qk);
+			qc.setQueryData(
+				qk,
+				(old: SwcConfig | undefined) =>
+					old && {
+						...old,
+						[body === "pool" ? "poolSetPoint" : "spaSetPoint"]: value,
+					},
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		// Only when the echo actually parsed as a configuration: a shape this app
+		// does not recognise leaves the optimistic value standing rather than
+		// replacing it with zeroes read out of a body that held none.
+		onSuccess: (config) => {
+			if (config) qc.setQueryData(qk, config);
+		},
+		// Only the home screen: the echo already carried the configuration, so
+		// re-reading it would be asking a question just answered — but what the
+		// cell is currently producing lives in get_home's swc_info, which the
+		// write does not touch.
+		onSettled: () =>
+			qc.invalidateQueries({ queryKey: keys.home(uid, serial ?? "-") }),
+	});
+}
+
+/**
+ * Start, stop, pause or resume a boost — the cell's superchlorinate cycle,
+ * which is a day at full production rather than a setting. Worth knowing
+ * before offering it: Jandy's manual says boost overrides schedules, ALL OFF,
+ * and manual operation of the filter pump, so starting one starts the pump.
+ *
+ * Only a start carries the hours and the circuit; the other three verbs act on
+ * a cycle that already named both, so sending them again could only disagree
+ * with it.
+ */
+export function useSwcBoost(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.swc(uid, serial ?? "-");
+	return useMutation({
+		mutationFn: (control: SwcBoostControl) => {
+			if (control !== "start")
+				return controlSwcBoost(serial as string, control);
+			const current = qc.getQueryData<SwcConfig>(qk);
+			return controlSwcBoost(
+				serial as string,
+				"start",
+				// The panel's own configured duration wins; the AquaPure default is
+				// the fallback, so a panel reporting none still gets a whole cycle.
+				current?.boostHours || SWC_BOOST_HOURS,
+				// Only where the panel has a mode to choose at all — see
+				// boostModeAvailable. Elsewhere the parameter is left off entirely
+				// rather than asserted, and the panel boosts the way it is wired.
+				current?.boostModeAvailable ? current.boostMode : undefined,
+			);
+		},
+		onSuccess: (config) => {
+			if (config) qc.setQueryData(qk, config);
+		},
+		// As above: the countdown came back in the echo, but the cell's status on
+		// the home screen changes with it and has to be re-read.
+		onSettled: () =>
+			qc.invalidateQueries({ queryKey: keys.home(uid, serial ?? "-") }),
 	});
 }
 

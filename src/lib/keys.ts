@@ -19,6 +19,11 @@ export const keys = {
 		[uid, "panel", serial, "devices"] as const,
 	onetouch: (uid: string, serial: string) =>
 		[uid, "panel", serial, "onetouch"] as const,
+	/**
+	 * The chlorinator's configuration — a fourth panel screen, so it sits under
+	 * the same prefix and one panel invalidation still refreshes everything.
+	 */
+	swc: (uid: string, serial: string) => [uid, "panel", serial, "swc"] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,

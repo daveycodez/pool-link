@@ -6,6 +6,7 @@ import type {
 	PoolDevice,
 	PoolSnapshot,
 	Raw,
+	SaltCell,
 } from "./types";
 
 /**
@@ -34,6 +35,13 @@ const KNOWN_LABELS: Record<string, string> = {
 };
 
 function knownKind(name: string): DeviceKind | null {
+	// The chlorinator's keys are a percentage subsystem, read by buildSaltCell,
+	// and none of them is a device. This guard is what stops `swc_set_point`
+	// falling through to the suffix rule below and becoming a climate device —
+	// an unlabelled row reporting a chlorine percentage in degrees, on any panel
+	// that reports the key. It has to come first: the suffix rules match on
+	// shape alone and cannot tell a percent from a temperature.
+	if (name.startsWith("swc_")) return null;
 	if (name.endsWith("_temp")) return "temperature";
 	if (name.endsWith("_set_point")) return "climate";
 	if (name.endsWith("_heater")) return "climate";
@@ -163,6 +171,81 @@ function buildHeatPump(raw: unknown): HeatPump | null {
 }
 
 /**
+ * A panel's own word for "no", in every spelling one has been seen using. The
+ * home screen mixes JSON booleans with the strings it renders them as, so a
+ * bare truthiness test reads `"false"` and `"0"` as yes.
+ */
+function isNo(v: unknown): boolean {
+	return (
+		!v || ["false", "0", "no", "off", ""].includes(String(v).toLowerCase())
+	);
+}
+
+/**
+ * Case-insensitive field read.
+ *
+ * `heatpump_info` already proves the panel does not spell a subsystem object's
+ * keys the same way twice — get_home says `isheatpumpPresent`, the write
+ * commands echo `isHPMPresent` — and `swc_info` has never been captured from a
+ * panel that actually pairs a cell, so which casing arrives is not knowable
+ * from here. Every read of that object goes through this rather than guessing.
+ */
+function field(obj: Raw, name: string): unknown {
+	if (name in obj) return obj[name];
+	const wanted = name.toLowerCase();
+	for (const key of Object.keys(obj)) {
+		if (key.toLowerCase() === wanted) return obj[key];
+	}
+	return undefined;
+}
+
+/**
+ * A salt cell, but only when the panel says one is paired.
+ *
+ * `swc_info` is on the home screen whether or not a cell exists — a panel
+ * without one answers `{"isswcPresent": false}` — so the object being there
+ * proves nothing, and only an affirmative flag counts. Returning null for
+ * anything else is the whole gate: every chlorinator control downstream hangs
+ * off this, and a panel with no cell must come out of normalize() looking
+ * exactly as it did before any of this existed.
+ *
+ * The two fallbacks are deliberately narrow. A `swc_info` with no presence
+ * flag at all is read on its contents, since an object carrying a live output
+ * came from somewhere; and the flat `swc_set_point` is consulted only when
+ * `swc_info` is missing entirely, because a panel that answered false has
+ * already given its answer and must not be argued with.
+ */
+function buildSaltCell(merged: Raw): SaltCell | null {
+	const raw = merged.swc_info;
+	const info =
+		raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Raw) : null;
+
+	const flag = info ? field(info, "isswcPresent") : undefined;
+	const present =
+		flag !== undefined
+			? !isNo(flag)
+			: info
+				? num(field(info, "swcPoolValue")) !== null ||
+					Boolean(str(field(info, "swcPoolStatus")))
+				: num(merged.swc_set_point) !== null;
+	if (!present) return null;
+
+	const src = info ?? {};
+	const status = (name: string) =>
+		str(field(src, name))?.trim().toLowerCase() ?? "";
+
+	return {
+		poolOutput: num(field(src, "swcPoolValue")),
+		spaOutput: num(field(src, "swcSpaValue")),
+		poolStatus: status("swcPoolStatus"),
+		spaStatus: status("swcSpaStatus"),
+		lowSalt: isOn(merged.swc_low),
+		boosting: isOn(merged.swc_boost),
+		setPoint: num(merged.swc_set_point),
+	};
+}
+
+/**
  * The screen is padded to the panel's maximum, so most entries are empty
  * slots: `status` 0 means never configured, and those are dropped rather than
  * shown as macros with nothing behind them. `state` is which one is running.
@@ -220,6 +303,7 @@ export function normalize(
 		devices: out,
 		icl: buildZones(icl),
 		heatPump: buildHeatPump(merged.heatpump_info),
+		saltCell: buildSaltCell(merged),
 		macros: buildMacros(onetouch),
 		raw: merged,
 	};
