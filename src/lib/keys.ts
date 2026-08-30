@@ -31,6 +31,13 @@ export const keys = {
 	 */
 	phorp: (uid: string, serial: string) =>
 		[uid, "panel", serial, "phorp"] as const,
+	/**
+	 * The colour-light zones as their own read. A sixth panel screen, under the
+	 * same prefix so a zone mutation's one `panel` invalidation still reaches it
+	 * — which is what lets this ride a slow cadence without a zone change
+	 * sitting unseen until the next tick.
+	 */
+	icl: (uid: string, serial: string) => [uid, "panel", serial, "icl"] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,

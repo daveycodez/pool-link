@@ -1119,15 +1119,28 @@ export async function controlSwcBoost(
  * The zone list as a read of its own.
  *
  * Zones normally arrive folded into `get_devices` as `icl_info_list`, which is
- * how `devicesScreen` gets them and why the app has never needed this command.
- * The standalone read carries more: the RGBW channels behind a zone set to
- * Custom Color, which the abbreviated copy omits entirely — so a custom colour
- * is currently unreadable, only writable.
+ * how `devicesScreen` gets them. What only this read can say is `zoneCount` —
+ * the panel's own count of configured zones, which the folded copy has no field
+ * for, leaving "no zones" and "the panel did not mention any" indistinguishable
+ * from an empty array.
  *
- * Handle with care. Upstream's ICL work records that this command *times out on
- * hardware*, and reading zones from `get_devices` instead is a divergence they
- * accepted for that reason. It is wired to a probe rather than to the app so
- * that the cost of finding out is one deliberate click.
+ * Whether it says anything else the copy does not is unsettled, and the two
+ * halves of upstream disagree. Its protocol reference tables the `get_devices`
+ * copy without the RGBW channels a zone set to Custom Color needs; its test
+ * fixture and its parser both carry RGBW on that copy, and its implementation
+ * notes call the two "redundant data — no zone data is lost". The fixture is
+ * synthetic, so neither side is a capture. `buildZones` takes the union rather
+ * than picking a winner.
+ *
+ * On the timeout: upstream's code comment says flatly "get_icl_info times out
+ * on hardware", but its PR and implementation notes both soften that to *some*
+ * hardware, and no source names the pad, the duration, or whether it hangs or
+ * errors. Upstream never shipped the call at all — there is no command constant
+ * for it — so the warning is a reason they declined to find out rather than a
+ * measurement. Against this panel it answered in well under a second. That is
+ * one pad, and a pad with no zones; a pad that does hang is still possible,
+ * which is why the query that calls this is gated, slow, and never something
+ * the screen waits on.
  */
 export function iclGetInfo(serial: string): Promise<Raw> {
 	return client.sessionRequest(serial, CMD_ICL_GET_INFO);

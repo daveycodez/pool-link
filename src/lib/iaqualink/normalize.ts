@@ -166,31 +166,137 @@ function buildDevice(name: string, raw: Raw): PoolDevice | null {
 }
 
 /**
- * Zones report their own state, so nothing here is inferred: `zoneStatus` says
- * on or off, `zoneColor` is an id against ICL_EFFECTS, and the RGBW channels
- * carry whatever a custom colour was set to.
+ * A zone the panel reports but no light is wired into.
+ *
+ * `zoneStatus` is a three-value enum — on, off, absent — and only the first two
+ * describe a zone that exists. Upstream's protocol reference is explicit that
+ * absent means "zone has no assigned lights, exclude from display", and the
+ * standalone read makes plain why the rule is needed: this panel answers
+ * `get_icl_info` with four fully-formed zones named "Light Zone 1" through
+ * "Light Zone 4", every one of them absent, on a pad with no colour lights at
+ * all. The list is padded to the panel's maximum the same way the OneTouch
+ * screen is, so length is not a count of anything.
  */
-function buildZones(icl: unknown): IclZone[] {
-	if (!Array.isArray(icl)) return [];
-	return icl.map((raw) => {
-		const z = raw as Raw;
+const ZONE_ABSENT = "absent";
+
+/**
+ * The zone list, from whichever of the panel's two publications of it arrived.
+ *
+ * Zones ride along with `get_devices` as `icl_info_list`, and the same list is
+ * also readable on its own through `get_icl_info`. Upstream calls the two
+ * redundant and reads only the first; its own protocol reference disagrees,
+ * tabling the `get_devices` copy without the RGBW channels that a zone set to
+ * Custom Color needs. Nobody has resolved that against live hardware, so this
+ * takes the union rather than a side: the `get_devices` copy leads because it
+ * arrives on the live poll, and the standalone read fills in any field the copy
+ * did not carry. A key the copy reports is never overwritten — the merge is by
+ * key presence, not by value, so a channel that is genuinely 0 stays 0.
+ *
+ * `zoneCount` exists only on the standalone read and is the one thing the copy
+ * cannot say: it separates "no zones are configured" from "the panel did not
+ * mention any". It is used as a cap and never as a floor. Upstream documents
+ * the field in one line and reads it nowhere, so whether it counts assigned
+ * zones or every padded slot is not established — this pad reports 0 against
+ * four padded entries, which fits the first reading and is a single
+ * observation. The cap therefore may not delete a zone the live copy is
+ * actively reporting as present, because a wrong count must not be able to take
+ * working controls off the screen.
+ *
+ * Not read here: `icl_custom_color_info`, which `get_home` carries alongside
+ * `is_icl_present`. Upstream's own fixture pins its shape — an array of
+ * `{zoneId, red_val, green_val, blue_val, white_val}`, the channels
+ * string-encoded — but it is the same RGBW already read per zone above, and
+ * `mergeScreen` flattens a home-screen array into one object, so by the time
+ * the home screen reaches here an entry per zone has already collapsed into a
+ * single last-one-wins object. Parsing it would mean bypassing that flattening
+ * to recover data this function already has. Unverified either way: the field
+ * is empty on the only pad anyone has read it from.
+ */
+function buildZones(icl: unknown, info?: unknown): IclZone[] {
+	const copy = Array.isArray(icl) ? icl : [];
+
+	const envelope =
+		info && typeof info === "object" && !Array.isArray(info)
+			? (info as Raw)
+			: null;
+	const standalone = Array.isArray(envelope?.icl_info_list)
+		? envelope.icl_info_list
+		: [];
+	const count = envelope ? num(envelope.zoneCount) : null;
+
+	const entry = (v: unknown): Raw =>
+		v && typeof v === "object" && !Array.isArray(v) ? (v as Raw) : {};
+
+	// The copy leads; the standalone read stands in only when the copy is empty.
+	// Emptiness is the copy's own answer here — this pad returns `[]` where the
+	// standalone read pads to four — so an empty copy is not a padded one.
+	const fromCopy = copy.length > 0;
+	const base = fromCopy ? copy : standalone;
+	const fill = new Map(
+		standalone.map((v) => [num(entry(v).zoneId) ?? 0, entry(v)] as const),
+	);
+
+	const zones: IclZone[] = [];
+	for (const raw of base) {
+		const z = entry(raw);
 		const id = num(z.zoneId) ?? 0;
-		const color = num(z.zoneColor);
-		return {
+		// Fields the copy did not carry, taken from the standalone read. Keyed on
+		// the zone id rather than on position: neither list is promised in order.
+		const extra = fromCopy ? (fill.get(id) ?? {}) : {};
+		const read = (key: string): unknown => (key in z ? z[key] : extra[key]);
+
+		if (String(read("zoneStatus") ?? "").toLowerCase() === ZONE_ABSENT)
+			continue;
+
+		zones.push({
 			zoneId: id,
-			label: str(z.zoneName) || `Light Zone ${id}`,
-			on: String(z.zoneStatus ?? "").toLowerCase() === "on",
-			colorId: color,
-			colorName: str(z.zoneColorVal) ?? "",
-			dim: num(z.dim_level) ?? 100,
+			label: str(read("zoneName")) || `Light Zone ${id}`,
+			on: String(read("zoneStatus") ?? "").toLowerCase() === "on",
+			colorId: num(read("zoneColor")),
+			colorName: str(read("zoneColorVal")) ?? "",
+			dim: num(read("dim_level")) ?? 100,
 			rgbw: [
-				num(z.red_val) ?? 0,
-				num(z.green_val) ?? 0,
-				num(z.blue_val) ?? 0,
-				num(z.white_val) ?? 0,
+				num(read("red_val")) ?? 0,
+				num(read("green_val")) ?? 0,
+				num(read("blue_val")) ?? 0,
+				num(read("white_val")) ?? 0,
 			] as [number, number, number, number],
-		};
-	});
+		});
+	}
+
+	// Only over the standalone read's own padded list. Against the live copy the
+	// count is corroboration, not authority — see above.
+	return !fromCopy && count !== null && count >= 0 && count < zones.length
+		? zones.slice(0, count)
+		: zones;
+}
+
+/**
+ * Whether the panel says colour-light zones exist at all, which is what gates
+ * the standalone read from being sent.
+ *
+ * Written as a list of noes rather than a list of yeses on purpose. The only
+ * value anyone has read from a live pad is `"absent"`, and upstream's fixture
+ * carries `"present"`; a gate spelled as "is it the word present" would answer
+ * no to every spelling nobody has seen yet, and silently withhold the read from
+ * the pools it exists for. Spelled as "is it one of the noes", an unrecognised
+ * answer costs one request that the panel rejects — the same bargain `useSwc`
+ * makes — while every known way of saying no still says no. A panel that omits
+ * the key entirely has not claimed to have zones, and gets no request.
+ */
+const ICL_ABSENT = new Set([
+	"absent",
+	"false",
+	"0",
+	"no",
+	"none",
+	"off",
+	"not present",
+]);
+
+export function iclPresent(home: Raw | undefined): boolean {
+	const v = str(home?.is_icl_present)?.trim().toLowerCase() ?? "";
+	return v !== "" && !ICL_ABSENT.has(v);
 }
 
 /**
@@ -424,6 +530,10 @@ export function normalize(
 	devices: Raw,
 	icl?: unknown,
 	onetouch?: unknown,
+	// Last rather than beside `icl`, so every existing five-argument call site
+	// keeps its meaning: this read is conditional and often absent, and a panel
+	// that never sends it must normalize exactly as it did before it existed.
+	iclInfo?: unknown,
 ): PoolSnapshot {
 	const merged: Raw = { ...home, ...devices };
 	const out: PoolDevice[] = [];
@@ -446,7 +556,7 @@ export function normalize(
 		model: buildModel(home.response),
 		fetchedAt: Date.now(),
 		devices: out,
-		icl: buildZones(icl),
+		icl: buildZones(icl, iclInfo),
 		heatPump: buildHeatPump(merged.heatpump_info),
 		saltCell: buildSaltCell(merged),
 		macros: buildMacros(onetouch),

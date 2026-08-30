@@ -75,16 +75,17 @@ export const CMD_ICL_SET_COLOR = "set_iclzone_color";
 export const CMD_ICL_SET_CUSTOM_COLOR = "define_iclzone_customcolor";
 
 /**
- * The zone list as its own read, rather than the abbreviated copy that rides
- * along with `get_devices`. It carries what the copy drops — the RGBW channels
- * behind a custom colour, and a `zoneCount` — so it is the only way to learn
- * what a zone set to Custom is actually showing.
+ * The zone list as its own read, rather than the copy that rides along with
+ * `get_devices`. The one field it certainly adds is `zoneCount`, the panel's
+ * own count of configured zones — without it an empty `icl_info_list` cannot be
+ * told apart from a panel that said nothing. Whether it also carries RGBW the
+ * copy omits is genuinely unsettled; see `iclGetInfo` for both sides of it.
  *
- * Upstream deliberately does not call it: their ICL branch notes "get_icl_info
- * times out on hardware", and their implementation notes list the separate read
- * as an accepted divergence for exactly that reason. So this is a probe first
- * and a data source second — if it hangs on a real pad, that is the documented
- * behaviour and not a bug here, and `get_devices` remains the way zones are read.
+ * Upstream declines to call it, citing a timeout on hardware — hedged to *some*
+ * hardware everywhere but their code comment, and never measured, since they
+ * never shipped the call. It answered this panel in well under a second, so it
+ * is now a real data source and not only a probe. `get_devices` still carries
+ * live zone state; this rides a slow cadence beside it and is never waited on.
  */
 export const CMD_ICL_GET_INFO = "get_icl_info";
 
