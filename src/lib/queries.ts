@@ -573,12 +573,11 @@ export function useHeatPump(serial: string | undefined) {
  * first colour, so Alpine White (id 1) needs no pulses at all and the count
  * is id − 1. The panel does all this blind every time, since neither it nor
  * the API ever knows what colour is running — which is why the duration
- * depends only on the target. 6s base, then 1.75s per id — settled by
- * trial against the pool: Cobalt (id 3) ~12s, Spring Green (id 5) ~15s,
- * Magenta (id 8) ~20s, each within a quarter-second of this line.
+ * depends only on the target. 6s base, then 1.5s per id — settled by
+ * trial against the pool.
  */
 const WATERCOLORS_RESET_MS = 6_000;
-const WATERCOLORS_STEP_MS = 1_750;
+const WATERCOLORS_STEP_MS = 1_500;
 const waterColorsHold = (effectId: number) =>
 	WATERCOLORS_RESET_MS + WATERCOLORS_STEP_MS * effectId;
 
