@@ -100,7 +100,18 @@ export const CMD_ICL_GET_INFO = "get_icl_info";
  */
 export const CMD_ICL_SET_DIM = "set_iclzone_dim";
 
-/** Rename a zone. Unverified — no capture of this command exists. */
+/**
+ * Rename a zone. Unverified — no capture of this command exists.
+ *
+ * The one write in this group the app sends, and the reason it is the one is
+ * that its blast radius is a string. A zone called the wrong thing is fixed by
+ * renaming it again, from the same control, with nothing in the water having
+ * moved; every other unexercised ICL write below changes which fixture answers
+ * to what. The reference gives the parameter as `name_val`, which is a spelling
+ * no other command on this pad uses — `set_vsp_name` takes `pump_name` and
+ * `set_speed_name` takes `speed_name` — so it is the single most likely thing
+ * here to be wrong, and a panel that rejects it rejects it harmlessly.
+ */
 export const CMD_ICL_SET_NAME = "set_iclzone_name";
 
 /**
@@ -110,10 +121,26 @@ export const CMD_ICL_SET_NAME = "set_iclzone_name";
  * per-fixture DCT inventory appears — which lights exist, which zone each one
  * sits in — so the data is genuinely interesting, but it cannot be had without
  * writing, and that is why it is not a diagnostics probe. Unverified.
+ *
+ * Not reachable from any screen, and the reason is narrower than the risk: the
+ * mode has no read. `get_icl_info` reports zones and says nothing about
+ * `zoning_mode_status`, and no other command carries the field, so a switch for
+ * this would have to paint some position before it knew one — and the only way
+ * to learn the real one would be to flip it. A control whose current state is
+ * discoverable only by changing it is not a control.
  */
 export const CMD_ICL_ZONING_MODE = "enable_disable_zoning_mode";
 
-/** Reassign one fixture to a different zone. Unverified. */
+/**
+ * Reassign one fixture to a different zone. Unverified, and not reachable.
+ *
+ * `dct_id` and `light_id` address a physical light through the transmitter it
+ * hangs off, and that id space appears in exactly one place: the `DCT_info_list`
+ * that comes back from `enable_disable_zoning_mode`. Since that command is not
+ * sent, nothing in this app has ever held a real `dct_id`, and the ids cannot be
+ * guessed — the wrong pair moves a light the owner did not name into a zone he
+ * did not choose, and the app would have no way to tell him which.
+ */
 export const CMD_ICL_MOVE_LIGHTS = "move_lights_to_zone";
 
 /**

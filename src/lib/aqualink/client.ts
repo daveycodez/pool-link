@@ -57,6 +57,7 @@ import {
 	USER_ID_URL,
 } from "./constants";
 import { decodeJwtClaims, jwtExpiry } from "./crypto";
+import { ICL_ZONE_NAME_MAX } from "./enums";
 import {
 	clearSession,
 	loadSession,
@@ -1224,7 +1225,24 @@ export function iclSetZoneDim(
 	});
 }
 
-/** Rename a zone as the panel and every app will show it. Unverified. */
+/**
+ * Rename a zone as the panel and every app will show it.
+ *
+ * The zone hero sends this, which makes it the only ICL write here that has
+ * never been captured and is still reachable from a screen. That is a
+ * deliberate line: what this command can get wrong is a label, and the same
+ * control that set it sets it again. Everything else unexercised in this group
+ * changes which fixture answers to what.
+ *
+ * Two things are unverified rather than one. `name_val` is the reference's
+ * spelling and matches nothing else on this pad — `set_vsp_name` takes
+ * `pump_name`, `set_speed_name` takes `speed_name` — so a rejection is a real
+ * possibility, and it is a harmless one. And nothing anywhere states a maximum
+ * length; the caller trims and `ICL_ZONE_NAME_MAX` explains the bound the app
+ * imposes on its own initiative. A name is trimmed here rather than only in the
+ * form, because whitespace is the one thing a panel is certain to keep and an
+ * owner is certain not to have meant.
+ */
 export function iclSetZoneName(
 	serial: string,
 	zoneId: number,
@@ -1232,7 +1250,7 @@ export function iclSetZoneName(
 ): Promise<Raw> {
 	return client.sessionRequest(serial, CMD_ICL_SET_NAME, {
 		zone_id: String(zoneId),
-		name_val: name,
+		name_val: name.trim().slice(0, ICL_ZONE_NAME_MAX),
 	});
 }
 
@@ -1245,6 +1263,13 @@ export function iclSetZoneName(
  * is no read-only way to obtain it — the command that reports it is the command
  * that regroups every fixture on the pad. That is why it is not a probe.
  * Unverified.
+ *
+ * Nothing calls this, and the deciding reason is not the risk but the absence of
+ * a read. No command reports `zoning_mode_status` — `get_icl_info` returns zones
+ * and nothing else — so a switch wired to this would have to render some
+ * position before it could know one, and the only way to discover the real one
+ * would be to flip it and read the answer. Regrouping every fixture on a pad to
+ * find out how they are currently grouped is not a thing to offer.
  */
 export function iclZoningMode(serial: string, on: boolean): Promise<Raw> {
 	return client.sessionRequest(serial, CMD_ICL_ZONING_MODE, {
@@ -1252,7 +1277,17 @@ export function iclZoningMode(serial: string, on: boolean): Promise<Raw> {
 	});
 }
 
-/** Move one fixture into a different zone. Ids come from `DCT_info_list`. */
+/**
+ * Move one fixture into a different zone. Ids come from `DCT_info_list`.
+ *
+ * Also uncalled, and for a reason that follows from the one above rather than
+ * standing on its own: `dct_id` and `light_id` live in an id space that exists
+ * nowhere but the `enable_disable_zoning_mode` response. With that command
+ * unsent, no part of this app has ever held a real pair, and there is nothing to
+ * infer them from — a zone knows its own id and says nothing about the fixtures
+ * inside it. Sending a guessed pair reassigns somebody's light and gives the app
+ * no way to say which one moved or to put it back.
+ */
 export function iclMoveLight(
 	serial: string,
 	dctId: number,

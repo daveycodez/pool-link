@@ -1,22 +1,26 @@
 import {
+	AlertDialog,
 	Button,
 	Card,
 	ColorArea,
 	ColorPicker,
 	ColorSlider,
 	ColorSwatch,
+	InputGroup,
 	Label,
 	parseColor,
 	Slider,
 	Spinner,
+	TextField,
 } from "@heroui/react";
-import { Lightbulb, LightbulbOff } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Lightbulb, LightbulbOff, Pencil } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
 	effectStops,
 	ICL_CUSTOM_COLOR_ID,
 	ICL_DIM_STEP,
 	ICL_EFFECTS,
+	ICL_ZONE_NAME_MAX,
 } from "#/lib/aqualink/enums";
 import type { IclZone } from "#/lib/iaqualink/types";
 import type { IclChange } from "#/lib/queries";
@@ -45,6 +49,12 @@ export function IclHero({
 	const custom = parseColor(`rgb(${r}, ${g}, ${b})`);
 	const isCustom = zone.colorId === ICL_CUSTOM_COLOR_ID;
 
+	// Null while the dialog has never been opened, so the field falls back to the
+	// zone's own name — and so a rename that lands mid-edit is not overwritten by
+	// a draft nobody is typing.
+	const [draft, setDraft] = useState<string | null>(null);
+	const name = (draft ?? zone.label).trim();
+
 	// Dragging reports continuously, and every report would be a command the
 	// panel works through in turn — so only what the drag settles on is sent.
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -66,6 +76,74 @@ export function IclHero({
 				</div>
 
 				<div className="flex items-center gap-3">
+					{/* Beside the switch rather than beside the title, which is where
+					    the eye goes for it and where SystemNameRow already puts a
+					    rename — at the trailing edge of the thing being named. The
+					    title row is a fixed six units tall so the zone and WaterColors
+					    cards line up beside each other, and a button does not fit in
+					    it without being argued down to a size the component does not
+					    offer. */}
+					<AlertDialog>
+						<Button
+							aria-label={`Rename ${zone.label}`}
+							// Held with everything else: renaming is harmless to a fixture
+							// mid-sequence, but the invalidation that follows it is not —
+							// it would pull the whole pad while the panel is still
+							// reporting transient state for it.
+							isDisabled={pending}
+							isIconOnly
+							onPress={() => setDraft(zone.label)}
+							size="sm"
+							variant="ghost"
+						>
+							<Pencil />
+						</Button>
+						<AlertDialog.Backdrop>
+							<AlertDialog.Container>
+								<AlertDialog.Dialog>
+									<AlertDialog.Header>
+										<AlertDialog.Heading>Rename zone</AlertDialog.Heading>
+									</AlertDialog.Header>
+									<AlertDialog.Body>
+										<TextField
+											aria-label="Zone name"
+											autoFocus
+											fullWidth
+											onChange={setDraft}
+											value={draft ?? zone.label}
+											variant="secondary"
+										>
+											<InputGroup>
+												<InputGroup.Input
+													maxLength={ICL_ZONE_NAME_MAX}
+													placeholder={`Light Zone ${zone.zoneId}`}
+												/>
+											</InputGroup>
+										</TextField>
+										{/* No inline error: every mutation that rejects already
+										    raises a toast, and this command is likelier to reject
+										    than most — its parameter name has never been seen on
+										    a wire. */}
+									</AlertDialog.Body>
+									<AlertDialog.Footer>
+										<Button slot="close" variant="tertiary">
+											Cancel
+										</Button>
+										<Button
+											isDisabled={!name || name === zone.label}
+											onPress={() =>
+												onChange({ kind: "rename", name, zoneId: zone.zoneId })
+											}
+											slot="close"
+										>
+											Save
+										</Button>
+									</AlertDialog.Footer>
+								</AlertDialog.Dialog>
+							</AlertDialog.Container>
+						</AlertDialog.Backdrop>
+					</AlertDialog>
+
 					{/* Runs for the hold window, while the polls sit out the
 					    panel's transient reporting. */}
 					{pending ? (

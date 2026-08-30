@@ -182,6 +182,29 @@ export const ICL_CUSTOM_COLOR_ID = 16;
 export const ICL_DIM_STEP = 5;
 
 /**
+ * How long a zone name this app will send.
+ *
+ * Nothing documents a limit. `set_iclzone_name` has never been captured, the
+ * protocol reference gives `name_val` as "New zone name string" and stops, and
+ * no other client implements the command at all — so this number is the app's
+ * own restraint and not a fact about the panel, which is exactly why it is
+ * written down here rather than left implicit in a form.
+ *
+ * Sixteen, because that is the width the AquaLink RS itself works in: its
+ * RS-485 message lines are sixteen characters, which is what the panel's own
+ * display can render, and every name this pad has ever reported fits inside it
+ * with room to spare — "Light Zone 1" is twelve, "Waterfall" nine, "Jet Pump"
+ * eight. A longer name would most likely come back truncated by the panel or
+ * refused outright, and both of those are worse than a form that would not let
+ * it be typed: a truncated name is a rename that looks like it worked.
+ *
+ * If a real panel turns out to accept more, this costs an owner some characters
+ * on a label, and raising it is a one-line change. The other direction — a name
+ * the panel silently cut in half — is the one that misleads.
+ */
+export const ICL_ZONE_NAME_MAX = 16;
+
+/**
  * The aux `type` codes, which say what a relay drives rather than what it is
  * doing. Only two of the five matter here, and the reason to name them is that
  * `subtype` is read differently depending on which one is set — a mistake that

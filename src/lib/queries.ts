@@ -24,6 +24,7 @@ import {
 	iclSetBrightness,
 	iclSetColor,
 	iclSetCustomColor,
+	iclSetZoneName,
 	iclZoneOnOff,
 	listSystems,
 	listVspPumps,
@@ -52,12 +53,21 @@ import type { PoolDevice, PoolSnapshot, Raw } from "#/lib/iaqualink/types";
 import { keys } from "#/lib/keys";
 import { PERSIST_GC_TIME_MS } from "#/lib/persist";
 
-/** What can be asked of a zone. Colour carries brightness, as the API does. */
+/**
+ * What can be asked of a zone. Colour carries brightness, as the API does.
+ *
+ * `rename` is the odd one: the other four move light, and this one moves a
+ * label. It rides the same union anyway because it is the same zone, addressed
+ * the same way, invalidating the same screens — and because keeping it separate
+ * would mean a second mutation hook whose only difference from this one is that
+ * it does not need the hold.
+ */
 export type IclChange =
 	| { kind: "power"; zoneId: number; on: boolean }
 	| { kind: "color"; zoneId: number; colorId: number; dim: number }
 	| { kind: "brightness"; zoneId: number; dim: number }
-	| { kind: "custom"; zoneId: number; rgbw: [number, number, number, number] };
+	| { kind: "custom"; zoneId: number; rgbw: [number, number, number, number] }
+	| { kind: "rename"; zoneId: number; name: string };
 
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
 const POLL_MS = 10_000;
@@ -274,7 +284,15 @@ function applyHolds(snap: PoolSnapshot, holds: LightHold[]): PoolSnapshot {
 							? { ...z, on: true, colorId: v.colorId, dim: v.dim }
 							: v.kind === "brightness"
 								? { ...z, dim: v.dim }
-								: { ...z, on: true, rgbw: v.rgbw },
+								: // A rename touches the label and nothing else — the light was
+									// not asked to do anything, so no other field may move. It is
+									// pinned for the same reason the rest are: the new name
+									// reaches the screen only once get_devices carries it, and a
+									// title that snaps back to the old one for a round trip reads
+									// as a rename that failed.
+									v.kind === "rename"
+									? { ...z, label: v.name }
+									: { ...z, on: true, rgbw: v.rgbw },
 			);
 		}
 	}
@@ -1381,6 +1399,12 @@ export function useSetVspSpeed(serial: string | undefined) {
  * Colour-light zones. One mutation for all of it, because the panel treats
  * colour and brightness as the same command and a zone's state comes back the
  * same way whichever was sent.
+ *
+ * A rename joins them but does not behave like them. `set_iclzone_name` is
+ * configuration: it changes what a zone is called and asks no fixture to do
+ * anything, so there is no pulse sequence to sit out, nothing transient for a
+ * poll to catch, and nothing to wait fifteen seconds for. It gets the
+ * invalidation the others get and none of the machinery around it.
  */
 export function useIclZone(serial: string | undefined) {
 	const panel = usePanelCache(serial);
@@ -1395,24 +1419,43 @@ export function useIclZone(serial: string | undefined) {
 						? await iclSetColor(serial as string, id, v.colorId, v.dim)
 						: v.kind === "brightness"
 							? await iclSetBrightness(serial as string, id, v.dim)
-							: await iclSetCustomColor(
-									serial as string,
-									id,
-									v.rgbw[0],
-									v.rgbw[1],
-									v.rgbw[2],
-									v.rgbw[3],
-								);
+							: v.kind === "rename"
+								? await iclSetZoneName(serial as string, id, v.name)
+								: await iclSetCustomColor(
+										serial as string,
+										id,
+										v.rgbw[0],
+										v.rgbw[1],
+										v.rgbw[2],
+										v.rgbw[3],
+									);
 			// Colour changes cycle the fixture, so they hold like a light.
-			// Brightness applies at once and needs no wait at all.
-			if (v.kind !== "brightness") await settle(LIGHT_HOLD_MS);
+			// Brightness applies at once and needs no wait at all, and a rename
+			// never reached the fixture in the first place.
+			if (!QUIET_ICL_CHANGES.has(v.kind)) await settle(LIGHT_HOLD_MS);
 			return res;
 		},
-		// As in useActuate: an in-flight poll would land mid-pulse.
-		onMutate: (v) => (v.kind === "brightness" ? undefined : panel.cancel()),
+		// As in useActuate: an in-flight poll would land mid-pulse. The two changes
+		// that do not disturb the pad have no poll to protect from.
+		onMutate: (v) =>
+			QUIET_ICL_CHANGES.has(v.kind) ? undefined : panel.cancel(),
 		onSettled: () => panel.invalidate(),
 	});
 }
+
+/**
+ * The zone changes that neither hold nor silence the polls.
+ *
+ * Everything else this mutation sends starts a sequence the fixture works
+ * through — a colour is programmed by pulsing the relay, and switching a zone on
+ * programs one — and while that runs the panel reports transient state for the
+ * whole pad, which is what the hold and the cancelled polls exist to hide.
+ * Brightness and a rename do neither: one is a level the driver applies as it
+ * arrives, the other never leaves the controller. Holding either would put a
+ * spinner and fifteen dead seconds on a change that finished before the response
+ * came back.
+ */
+const QUIET_ICL_CHANGES = new Set<IclChange["kind"]>(["brightness", "rename"]);
 
 /** Rename the system in the iAqualink account, then refresh the system list. */
 export function useSetDeviceName(serial: string | undefined) {
