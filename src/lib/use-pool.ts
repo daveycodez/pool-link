@@ -1,9 +1,17 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+
 import { HPM_FAULTS } from "#/lib/aqualink/enums";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import { usePanel, useSession, useSwc, useVspPumps } from "#/lib/queries";
+import {
+	lastTemp,
+	rememberTemp,
+	usePanel,
+	useSession,
+	useSwc,
+	useVspPumps,
+} from "#/lib/queries";
 
 /**
  * Relays to leave out of both screens, matched on the label the panel reports.
@@ -96,6 +104,15 @@ export function usePool(serial: string) {
 	 * through the spa yet.
 	 */
 	const spaMode = spaPump?.on === true;
+	// Named for the body rather than the mode, so the two memories never cross.
+	const bodyKey = spaMode ? "spa_temp" : "pool_temp";
+	const liveTemp = (spaMode ? spa : pool)?.value ?? "";
+	// In an effect rather than in the body: writing to storage while rendering
+	// is a side effect, and this one is worth doing exactly once per reading.
+	useEffect(() => {
+		if (liveTemp) rememberTemp(serial, bodyKey, liveTemp);
+	}, [serial, bodyKey, liveTemp]);
+
 	// "Aux V3" and friends are unconfigured virtual slots the panel always
 	// reports; hide them unless one is somehow on.
 	const genericAux = /^aux\s+v\d+$/i;
@@ -111,6 +128,12 @@ export function usePool(serial: string) {
 		spaMode,
 		celsius: isCelsius(snap.data?.raw),
 		water: spaMode ? spa : pool,
+		/**
+		 * What this body last read, for the seconds after a mode flip and the
+		 * minutes after a panel goes quiet — null while a live reading exists,
+		 * and null again once the remembered one is too old to mean anything.
+		 */
+		waterMemory: liveTemp ? null : lastTemp(serial, bodyKey),
 		air: byName.get("air_temp"),
 		poolSet: byName.get("pool_set_point"),
 		spaSet: byName.get("spa_set_point"),

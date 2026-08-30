@@ -937,6 +937,76 @@ export const rememberLightEffect = (
 	effectId: number,
 ): void => remember(lastLightKey(serial), deviceName, effectId);
 
+const lastTempKey = (serial: string) => `pool-link:temp-last:${serial}`;
+
+/**
+ * Past this a remembered reading is thrown away rather than shown, and the
+ * hero goes back to a dash, which claims nothing at all.
+ *
+ * The two bodies keep their heat on completely different terms. A pool is tens
+ * of thousands of gallons with a day's thermal inertia, so a reading taken
+ * this morning still describes the afternoon. A spa is a few hundred gallons
+ * that sheds an hour of heat the way a pool sheds a day — off the heater it is
+ * measurably cooler within one, so an hour is as far as a spa number can be
+ * carried before it is telling someone about water that no longer exists.
+ */
+const TEMP_MEMORY_MAX_AGE_MS: Record<string, number> = {
+	pool_temp: 6 * 60 * 60_000,
+	spa_temp: 60 * 60_000,
+};
+
+/**
+ * Past this the reading has to admit its age. Inside half an hour the water
+ * has barely moved and the number is as good as live; past it, showing a
+ * temperature without saying when it was taken is the one thing persist.ts
+ * refuses to do — "a restored reading would be a lie the app cannot detect".
+ * Detected and declared, it is not a lie.
+ */
+export const TEMP_STALE_MS = 30 * 60_000;
+
+/** A reading the panel gave us once, and when. */
+export interface RememberedTemp {
+	value: string;
+	at: number;
+}
+
+/**
+ * The panel reports a temperature only for the body that is circulating, so
+ * flipping to the spa blanks the pool and leaves the hero with a dash where a
+ * number was. The last one each body gave stands in until it goes stale.
+ */
+export function rememberTemp(serial: string, body: string, value: string) {
+	try {
+		const all = JSON.parse(
+			localStorage.getItem(lastTempKey(serial)) ?? "{}",
+		) as Record<string, RememberedTemp>;
+		localStorage.setItem(
+			lastTempKey(serial),
+			JSON.stringify({ ...all, [body]: { value, at: Date.now() } }),
+		);
+	} catch {
+		// No storage; the hero falls back to a dash, as it did before.
+	}
+}
+
+export function lastTemp(serial: string, body: string): RememberedTemp | null {
+	try {
+		const one = (
+			JSON.parse(localStorage.getItem(lastTempKey(serial)) ?? "{}") as Record<
+				string,
+				RememberedTemp
+			>
+		)[body];
+		if (typeof one?.value !== "string" || typeof one?.at !== "number")
+			return null;
+		const maxAge =
+			TEMP_MEMORY_MAX_AGE_MS[body] ?? TEMP_MEMORY_MAX_AGE_MS.spa_temp;
+		return Date.now() - one.at > maxAge ? null : one;
+	} catch {
+		return null;
+	}
+}
+
 /**
  * Fetched pumps, with forgotten speeds restored from local memory. A pump
  * that reports a speed teaches the memory; one that reports none — off, in

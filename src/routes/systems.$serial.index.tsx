@@ -18,6 +18,7 @@ import { OneTouchHero } from "#/components/one-touch-hero";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
+import { timeAgo } from "#/lib/format";
 import { useHeatEta } from "#/lib/heat-eta";
 import type {
 	HeatPump,
@@ -33,10 +34,11 @@ interface Chem {
 	ph: PoolDevice | undefined;
 }
 
-import type { IclChange } from "#/lib/queries";
+import type { IclChange, RememberedTemp } from "#/lib/queries";
 import {
 	lastLightEffect,
 	rememberLightEffect,
+	TEMP_STALE_MS,
 	useActuate,
 	useIclZone,
 	useLightColor,
@@ -63,6 +65,7 @@ function Pool() {
 		snap,
 		spaMode,
 		water,
+		waterMemory,
 		poolSet,
 		spaSet,
 		heaters,
@@ -122,6 +125,7 @@ function Pool() {
 			held={held}
 			serial={serial}
 			water={water}
+			waterMemory={waterMemory}
 			spaMode={spaMode}
 			heaters={heaters}
 			heatPump={heatPump}
@@ -157,6 +161,7 @@ function Pool() {
 function PoolScreen({
 	held,
 	water,
+	waterMemory,
 	spaMode,
 	heaters,
 	heatPump,
@@ -183,6 +188,8 @@ function PoolScreen({
 	/** Lights mid-change, so their heroes can show progress. */
 	held: { devices: Set<string>; zones: Set<number> };
 	water: PoolDevice | undefined;
+	/** Stands in for the reading when the panel reports none. */
+	waterMemory: RememberedTemp | null;
 	spaMode: boolean;
 	heaters: PoolDevice[];
 	heatPump: HeatPump | null;
@@ -230,6 +237,7 @@ function PoolScreen({
 				hpmFault={hpmFault}
 				chem={chem}
 				water={water}
+				waterMemory={waterMemory}
 			/>
 
 			{/* Zones are not relays, so they sit outside the loop below — the
@@ -280,6 +288,7 @@ function PoolScreen({
  */
 function PoolSpaHero({
 	water,
+	waterMemory,
 	spaMode,
 	celsius,
 	serial,
@@ -297,6 +306,7 @@ function PoolSpaHero({
 	onSetPoint,
 }: {
 	water: PoolDevice | undefined;
+	waterMemory: RememberedTemp | null;
 	spaMode: boolean;
 	celsius: boolean;
 	serial: string;
@@ -326,6 +336,16 @@ function PoolSpaHero({
 		updatedAt,
 		water,
 	});
+	/**
+	 * The estimate when the panel is answering, the reading's age when it is
+	 * not. An estimate over a remembered number would be arithmetic on a
+	 * temperature nobody is measuring any more, so the two never overlap.
+	 */
+	const caption = water?.value
+		? eta
+		: waterMemory && updatedAt - waterMemory.at >= TEMP_STALE_MS
+			? timeAgo(waterMemory.at, updatedAt)
+			: "";
 	// One width for the stack: these switches sit above one another, right
 	// aligned, so any difference between them reads as a mistake.
 	const trackWidth = "w-17";
@@ -362,7 +382,7 @@ function PoolSpaHero({
 
 					<div className="mt-2 flex items-baseline gap-1.5 leading-none">
 						<span className="text-7xl font-semibold tabular-nums tracking-tighter">
-							{water?.value ?? "—"}
+							{water?.value || waterMemory?.value || "—"}
 						</span>
 						{/* The degree sits at the reading's baseline, which leaves the
 						    whole height of a 7xl numeral empty beneath it — so the
@@ -370,9 +390,15 @@ function PoolSpaHero({
 						    comes and goes without moving anything below it. */}
 						<div className="flex flex-col items-start gap-1.5">
 							<span className="text-2xl text-muted">{water?.unit ?? "°"}</span>
-							{eta ? (
+							{/* One slot, two things that are never both true: an estimate
+							    belongs to a live reading, and an age belongs to one the
+							    panel has stopped giving. A remembered number says nothing
+							    for its first half hour, because the water has barely moved
+							    and it is as good as live — after that it has to admit what
+							    it is. */}
+							{caption ? (
 								<Chip className="whitespace-nowrap" variant="soft">
-									{eta}
+									{caption}
 								</Chip>
 							) : null}
 						</div>
