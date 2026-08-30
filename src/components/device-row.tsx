@@ -4,9 +4,7 @@ import {
 	Flame,
 	Lightbulb,
 	SlidersHorizontal,
-	Wind,
 	Zap,
-	ZodiacAquarius,
 } from "lucide-react";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 
@@ -29,9 +27,12 @@ export function IconCircle({
 	);
 }
 
+/**
+ * Icons come from the device's kind, which the protocol supplies. A relay is
+ * whatever the owner wired to it, so anything unrecognised gets the bolt
+ * rather than an icon guessed from its position.
+ */
 export function DeviceIcon({ device }: { device: PoolDevice }) {
-	if (device.name === "aux_1") return <ZodiacAquarius className="size-4" />;
-	if (device.name === "aux_2") return <Wind className="size-4" />;
 	switch (device.kind) {
 		case "light":
 			return <Lightbulb className="size-4" />;

@@ -1,7 +1,6 @@
 import { Card, Switch } from "@heroui/react";
-import { Zap } from "lucide-react";
 import type { PoolDevice } from "#/lib/iaqualink/types";
-import { IconCircle } from "./device-row";
+import { DeviceIcon, IconCircle } from "./device-row";
 import { DeviceSpeed } from "./pump-speeds";
 
 /**
@@ -23,7 +22,7 @@ export function AuxCard({
 		<Card className="flex-row items-center justify-between gap-4">
 			<div className="flex items-center gap-4">
 				<IconCircle on={device.on}>
-					<Zap className="size-4" />
+					<DeviceIcon device={device} />
 				</IconCircle>
 				<Card.Title>{device.label}</Card.Title>
 			</div>
