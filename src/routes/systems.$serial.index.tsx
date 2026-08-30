@@ -345,18 +345,19 @@ function PoolSpaHero({
 	/**
 	 * Three things the chip can mean, in three colours that do not collide.
 	 *
-	 * The climb takes the heater's own tone, because while this counts down the
+	 * A countdown takes the heater's own tone, because while this counts down the
 	 * heater switch beside it is already wearing it — the chip is that switch's
 	 * progress rather than a separate idea, and accent read as a quiet fact
 	 * about the water instead of the equipment working. Green at the moment it
 	 * arrives, amber when the number is no longer live: the header's chip
 	 * already spends those two on exactly those ideas.
 	 */
-	const tone = !water?.value
-		? ("warning" as const)
-		: caption === "Ready"
-			? ("success" as const)
-			: ("danger" as const);
+	const tone =
+		!water?.value || caption === "Heating"
+			? ("warning" as const)
+			: caption === "Ready"
+				? ("success" as const)
+				: ("danger" as const);
 	// One width for the stack: these switches sit above one another, right
 	// aligned, so any difference between them reads as a mistake.
 	const trackWidth = "w-17";

@@ -243,6 +243,17 @@ export function heatRate(run: Run, now: number): number | null {
 }
 
 /**
+ * How close to the set point stops being a countdown and starts being upkeep.
+ *
+ * Two degrees, because that is the band a spa lives in while someone is in it:
+ * the water sheds heat to the air and the panel catches it, so the reading
+ * sits a degree or two under the target for the whole soak. Nothing there
+ * wants a number — the answer to "how much longer" is that it is already warm
+ * and the heater is keeping it there.
+ */
+const HEATING_ONLY_DEGREES = 2;
+
+/**
  * The line, from a rate and the two temperatures. The rate is a single input so
  * that a measured-last-time rate, if one is ever remembered, slots in here
  * without any of this changing.
@@ -264,6 +275,14 @@ export function heatCaption(
 	// heater reports "enabled" all season next to it, so announcing readiness on
 	// the arithmetic alone would park the word on the card until October.
 	if (remaining <= 0) return rate === null ? "" : "Ready";
+	// Inside a couple of degrees there is nothing worth counting. A spa in use
+	// drifts a degree or two under its set point and the heater catches it back
+	// up, over and over — a duration there would be a countdown to a number the
+	// water is already at for practical purposes, restarting every few minutes.
+	// It only needs to say that the heat is on, which is also true of the last
+	// stretch of a real heat-up, where the approach goes asymptotic and any
+	// estimate is at its worst.
+	if (remaining <= HEATING_ONLY_DEGREES) return "Heating";
 	if (rate === null) return `${Math.round(remaining)}° to go`;
 	// A rate pointing away from the target is a heat-up that has already ended.
 	if (rate <= 0) return "";
