@@ -163,7 +163,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 				>
 					{signedIn ? (
 						<>
-							{serial && air?.value ? (
+							{/* Sub-pages keep the header quiet: settings and diagnostics
+							    are about the system, not the water, so the readings and
+							    their controls sit those pages out. */}
+							{!pageTitle && serial && air?.value ? (
 								<span className="me-1 flex items-center gap-1.5 text-xs text-muted">
 									<AirIcon className="size-4 text-accent" />
 									<span className="tabular-nums">
@@ -172,7 +175,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 									</span>
 								</span>
 							) : null}
-							{hasLive ? (
+							{hasLive && !pageTitle ? (
 								<Chip color={live ? "success" : "warning"} variant="soft">
 									{live ? "Live" : age}
 								</Chip>
@@ -180,7 +183,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 							{/* size-5 glyphs leave 8px of padding inside each 36px button, so
 						    a smaller gap here still reads level with the chip's spacing. */}
 							<div className="flex items-center space-x-0.5">
-								<ThemeToggle />
+								{pageTitle ? null : <ThemeToggle />}
 								{/* Two settings pages: a system's adds renaming, the account's
 							    does not. */}
 								{onSettings ? null : serial ? (
