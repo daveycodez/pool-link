@@ -1,12 +1,23 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { isCelsius } from "#/lib/format";
-import { useSession, useSnapshot } from "#/lib/queries";
+import type { PoolDevice } from "#/lib/iaqualink/types";
+import { useSession, useSnapshot, useVspPumps } from "#/lib/queries";
 
 /** Jandy LED WaterColors — the one light family with an effect list here. */
 const JANDY_SUBTYPE = 4;
 
 const num = (v: unknown) => (v == null ? Number.NaN : Number(v));
+
+/**
+ * A colour light this app can actually drive. `type 2` means some colour
+ * light; the subtype names the brand, and the brand decides which effect ids
+ * apply. Anything else is left as a plain relay rather than given a hero wired
+ * to effects it cannot run.
+ */
+export function isJandyLight(device: PoolDevice): boolean {
+	return device.kind === "light" && num(device.raw.subtype) === JANDY_SUBTYPE;
+}
 
 /** Bounce to /login when there is no session. Every signed-in route uses this. */
 export function useRequireSession() {
@@ -28,6 +39,9 @@ export function useRequireSession() {
  */
 export function usePool(serial: string) {
 	const snap = useSnapshot(serial);
+	// Started here rather than inside the cards that need it, so the two run
+	// together and the screen has everything before it draws anything.
+	const pumps = useVspPumps(serial);
 
 	const devices = snap.data?.devices ?? [];
 	const byName = new Map(devices.map((d) => [d.name, d]));
@@ -41,7 +55,8 @@ export function usePool(serial: string) {
 	return {
 		serial,
 		snap,
-		loading: snap.isPending,
+		// Both, so speed dropdowns arrive with their cards instead of after them.
+		loading: snap.isPending || pumps.isPending,
 		spaMode,
 		celsius: isCelsius(snap.data?.raw),
 		water: spaMode ? spa : pool,
@@ -54,24 +69,15 @@ export function usePool(serial: string) {
 				d.name.endsWith("_heater") &&
 				d.name !== "solar_heater",
 		),
-		// A colour light is type 2; the subtype names the brand, which decides
-		// what effect list applies. Only the Jandy family is implemented, so
-		// anything else stays an ordinary switch rather than getting a hero
-		// wired to effects it does not have.
-		light: devices.find(
-			(d) => d.kind === "light" && num(d.raw.subtype) === JANDY_SUBTYPE,
-		),
 		// The real spa-mode control: turning it on throws the valves over, which
 		// is what makes the panel report spa_temp instead of pool_temp.
 		spaPump: byName.get("spa_pump"),
-		// Every aux relay the panel reports, in its own order. Nothing here is
-		// named or positioned by this app — the pool screen renders one card
-		// each, so a pool with different equipment gets different cards.
+		// Every aux relay the panel reports, in its own order — lights included,
+		// since the screen decides per relay which card to draw. Nothing here is
+		// named or positioned by this app, so a pool with different equipment
+		// gets different cards.
 		auxes: devices.filter(
-			(d) =>
-				d.name.startsWith("aux_") &&
-				d.kind !== "light" &&
-				(d.on || !genericAux.test(d.label)),
+			(d) => d.name.startsWith("aux_") && (d.on || !genericAux.test(d.label)),
 		),
 		// Equipment is the granular view: every actionable device the panel
 		// exposes, including ones the pool screen surfaces its own way. Only the

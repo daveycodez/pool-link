@@ -8,7 +8,7 @@ import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
-import { usePool, useRequireSession } from "#/lib/use-pool";
+import { isJandyLight, usePool, useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/")({
 	component: Pool,
@@ -24,7 +24,6 @@ function Pool() {
 		poolSet,
 		spaSet,
 		heaters,
-		light,
 		spaPump,
 		auxes,
 		celsius,
@@ -48,18 +47,15 @@ function Pool() {
 			celsius={celsius}
 			poolSet={poolSet}
 			spaSet={spaSet}
-			light={light}
 			onToggle={(d, on) => actuate.mutate({ device: d, on })}
 			onSetTemps={(sp, pl) => setTemps.mutate({ spa: sp, pool: pl })}
-			onLightColor={(effectId) =>
-				light
-					? lightColor.mutate({
-							name: light.name,
-							subtype:
-								typeof light.raw.subtype === "string" ? light.raw.subtype : "",
-							effectId,
-						})
-					: undefined
+			onLightColor={(device, effectId) =>
+				lightColor.mutate({
+					name: device.name,
+					subtype:
+						typeof device.raw.subtype === "string" ? device.raw.subtype : "",
+					effectId,
+				})
 			}
 		/>
 	);
@@ -75,7 +71,6 @@ function PoolScreen({
 	celsius,
 	poolSet,
 	spaSet,
-	light,
 	onToggle,
 	onSetTemps,
 	onLightColor,
@@ -88,10 +83,9 @@ function PoolScreen({
 	celsius: boolean;
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
-	light: PoolDevice | undefined;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 	onSetTemps: (spa: string, pool: string) => void;
-	onLightColor: (effectId: number) => void;
+	onLightColor: (device: PoolDevice, effectId: number) => void;
 	serial: string;
 }) {
 	return (
@@ -113,24 +107,26 @@ function PoolScreen({
 				water={water}
 			/>
 
-			{light ? (
-				<LightHero
-					device={light}
-					onToggle={(on) => onToggle(light, on)}
-					onColor={onLightColor}
-				/>
-			) : null}
-
-			{/* One card per relay, in the panel's own order — nothing on this
-			    screen is positioned by what the equipment happens to be. */}
-			{auxes.map((aux) => (
-				<AuxCard
-					device={aux}
-					key={aux.id}
-					onToggle={(on) => onToggle(aux, on)}
-					serial={serial}
-				/>
-			))}
+			{/* One card per relay, in the panel's own order. A relay that reports
+			    as a Jandy colour light gets the effects hero; everything else is
+			    a switch, so what appears follows the panel rather than this app. */}
+			{auxes.map((aux) =>
+				isJandyLight(aux) ? (
+					<LightHero
+						device={aux}
+						key={aux.id}
+						onColor={(effectId) => onLightColor(aux, effectId)}
+						onToggle={(on) => onToggle(aux, on)}
+					/>
+				) : (
+					<AuxCard
+						device={aux}
+						key={aux.id}
+						onToggle={(on) => onToggle(aux, on)}
+						serial={serial}
+					/>
+				),
+			)}
 		</div>
 	);
 }
