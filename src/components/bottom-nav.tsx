@@ -40,11 +40,12 @@ export function BottomNav({ serial }: { serial: string }) {
 				    Light takes the shadow: `--surface-shadow` is already defined as
 				    no shadow in dark, so it needs no variant to stay out of the way.
 				    Dark takes a rim instead, which is what reads on a near-black
-				    background where a shadow cannot. It has to be the secondary
-				    border: plain `--border` lands within a point of the pill's own
-				    fill and vanishes, while `--border-secondary` is mixed a fifth of
-				    the way to the foreground and sits ~11 points above it. */}
-				<Tabs.ListContainer className="shadow-surface dark:border dark:border-secondary">
+				    background where a shadow cannot. It has to be `--segment`, the
+				    indicator's own fill: plain `--border` sits within a point of the
+				    pill and vanishes, and the secondary and tertiary borders — the
+				    two that are defined as a `color-mix` rather than a literal
+				    colour — do not render at all on iOS. */}
+				<Tabs.ListContainer className="shadow-surface dark:border dark:border-segment">
 					<Tabs.List aria-label="Sections">
 						{TABS.map(({ to, label, Icon }) => (
 							<Tabs.Tab className="gap-2" id={to} key={to}>
