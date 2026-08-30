@@ -11,7 +11,7 @@ import {
 } from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useSetTemps } from "#/lib/queries";
-import { isReported, usePool, useRequireSession } from "#/lib/use-pool";
+import { usePool, useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/equipment")({
 	component: Equipment,
@@ -87,8 +87,10 @@ function Equipment() {
 			) : null}
 
 			{/* The cooling target sits with the heating one, both being pool
-			    targets — read-only, since no command in the p-api writes it. */}
-			{isReported(poolChill) ? (
+			    targets — read-only, since no command in the p-api writes it.
+			    Shown whether or not the panel reports a value: this page is the
+			    inventory, and it hides nothing. */}
+			{poolChill ? (
 				<ReadingRow
 					device={poolChill}
 					icon={<Snowflake className="size-4" />}
