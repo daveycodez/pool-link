@@ -29,6 +29,7 @@ interface Chem {
 
 import type { IclChange } from "#/lib/queries";
 import {
+	lastLightEffect,
 	useActuate,
 	useIclZone,
 	useLightColor,
@@ -206,6 +207,7 @@ function PoolScreen({
 						onColor={(effectId) => onLightColor(aux, effectId)}
 						onToggle={(on) => onToggle(aux, on)}
 						pending={held.devices.has(aux.name)}
+						serial={serial}
 					/>
 				) : (
 					<AuxHero
@@ -441,17 +443,26 @@ function ChemRow({ chem }: { chem: Chem }) {
  */
 function WaterColorsHero({
 	device,
+	serial,
 	pending,
 	onToggle,
 	onColor,
 }: {
 	device: PoolDevice;
+	serial: string;
 	/** A change is still working through the fixture's pulse sequence. */
 	pending: boolean;
 	onToggle: (on: boolean) => void;
 	onColor: (effectId: number) => void;
 }) {
-	const [picked, setPicked] = useState<string | null>(null);
+	// The panel never reports this light's colour, so the app's memory of the
+	// last pick — per system, per light — is the only knowledge there is. It
+	// seeds the highlight, and the switch resumes it on the way back on.
+	const last = lastLightEffect(serial, device.name);
+	const lastName =
+		Object.entries(JANDY_WATERCOLORS).find(([, id]) => id === last)?.[0] ??
+		null;
+	const [picked, setPicked] = useState<string | null>(lastName);
 	const effects = Object.keys(JANDY_WATERCOLORS).filter(
 		(name) => JANDY_WATERCOLORS[name] > 0,
 	);
@@ -483,8 +494,14 @@ function WaterColorsHero({
 						onIcon={Lightbulb}
 						onLabel="On"
 						onToggle={(_d, on) => {
-							// Powering up resets the fixture to the head of its table,
-							// so "on" is Alpine White and the swatch should say so.
+							// On resumes the last colour we know — powering up resets
+							// the fixture to Alpine White, and the memory beats the
+							// reset. With no memory, plain on and the reset stands.
+							if (on && last !== undefined) {
+								setPicked(lastName);
+								onColor(last);
+								return;
+							}
 							if (on) setPicked("Alpine White");
 							onToggle(on);
 						}}

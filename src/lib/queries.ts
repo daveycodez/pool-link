@@ -636,8 +636,13 @@ export function useLightColor(serial: string | undefined) {
 			await settle(waterColorsHold(effectId));
 			return res;
 		},
-		// As in useActuate: an in-flight poll would land mid-pulse.
-		onMutate: () => panel.cancel(),
+		// As in useActuate: an in-flight poll would land mid-pulse. And the
+		// pick is remembered here, because the panel cannot: this light's
+		// colour is never reported, so the memory IS the resume state.
+		onMutate: ({ name, effectId }) => {
+			if (serial) remember(lastLightKey(serial), name, effectId);
+			return panel.cancel();
+		},
 		// The hold can run out a pulse or two early, and a refetch then reads
 		// the tail of the sequence — the relay mid-pulse, "off" — which would
 		// paint the light off for a whole poll cycle. So the refetch retries
@@ -662,25 +667,39 @@ export function useLightColor(serial: string | undefined) {
  * app cannot do this; the panel is its only memory.
  */
 const lastSpeedKey = (serial: string) => `pool-link:vsp-last:${serial}`;
+const lastLightKey = (serial: string) => `pool-link:light-last:${serial}`;
 
-const readLastSpeeds = (serial: string): Record<string, number> => {
+const readMemory = (key: string): Record<string, number> => {
 	try {
-		return JSON.parse(localStorage.getItem(lastSpeedKey(serial)) ?? "{}");
+		return JSON.parse(localStorage.getItem(key) ?? "{}");
 	} catch {
 		return {};
 	}
 };
 
-const rememberSpeed = (serial: string, pumpId: number, speedId: number) => {
+const remember = (key: string, field: string | number, value: number) => {
 	try {
 		localStorage.setItem(
-			lastSpeedKey(serial),
-			JSON.stringify({ ...readLastSpeeds(serial), [pumpId]: speedId }),
+			key,
+			JSON.stringify({ ...readMemory(key), [field]: value }),
 		);
 	} catch {
 		// Private browsing or no storage; the panel's reporting is the floor.
 	}
 };
+
+const rememberSpeed = (serial: string, pumpId: number, speedId: number) =>
+	remember(lastSpeedKey(serial), pumpId, speedId);
+
+/**
+ * The last effect picked for a WaterColors light. Stronger than the pump
+ * memory in one way: the panel never reports this light's colour at all, so
+ * this is not a cache of the panel's knowledge — it is the only knowledge.
+ */
+export const lastLightEffect = (
+	serial: string,
+	deviceName: string,
+): number | undefined => readMemory(lastLightKey(serial))[deviceName];
 
 /**
  * Fetched pumps, with forgotten speeds restored from local memory. A pump
@@ -695,7 +714,7 @@ const withRememberedSpeeds = (serial: string, pumps: VspPump[]): VspPump[] =>
 			rememberSpeed(serial, pump.pumpId, active.id);
 			return pump;
 		}
-		const last = readLastSpeeds(serial)[pump.pumpId];
+		const last = readMemory(lastSpeedKey(serial))[pump.pumpId];
 		if (last === undefined) return pump;
 		return {
 			...pump,
