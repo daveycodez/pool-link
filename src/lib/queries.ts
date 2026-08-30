@@ -655,6 +655,55 @@ export function useLightColor(serial: string | undefined) {
 }
 
 /**
+ * The panel forgets a pump's speed the moment the pump turns off: the next
+ * poll reports no active speed at all. We remember — per system, per pump,
+ * in localStorage — so the speed grid keeps the last selection dimmed while
+ * the pump is off, and the hero's switch has a speed to resume. The official
+ * app cannot do this; the panel is its only memory.
+ */
+const lastSpeedKey = (serial: string) => `pool-link:vsp-last:${serial}`;
+
+const readLastSpeeds = (serial: string): Record<string, number> => {
+	try {
+		return JSON.parse(localStorage.getItem(lastSpeedKey(serial)) ?? "{}");
+	} catch {
+		return {};
+	}
+};
+
+const rememberSpeed = (serial: string, pumpId: number, speedId: number) => {
+	try {
+		localStorage.setItem(
+			lastSpeedKey(serial),
+			JSON.stringify({ ...readLastSpeeds(serial), [pumpId]: speedId }),
+		);
+	} catch {
+		// Private browsing or no storage; the panel's reporting is the floor.
+	}
+};
+
+/**
+ * Fetched pumps, with forgotten speeds restored from local memory. A pump
+ * that reports a speed teaches the memory; one that reports none — off, in
+ * the panel's telling — reads its last known speed back instead of blanking
+ * the selection.
+ */
+const withRememberedSpeeds = (serial: string, pumps: VspPump[]): VspPump[] =>
+	pumps.map((pump) => {
+		const active = pump.speeds.find((s) => s.active);
+		if (active) {
+			rememberSpeed(serial, pump.pumpId, active.id);
+			return pump;
+		}
+		const last = readLastSpeeds(serial)[pump.pumpId];
+		if (last === undefined) return pump;
+		return {
+			...pump,
+			speeds: pump.speeds.map((s) => ({ ...s, active: s.id === last })),
+		};
+	});
+
+/**
  * Variable-speed pumps and their configured speeds.
  *
  * Building this costs two requests plus one per installed pump, so it is polled
@@ -669,7 +718,10 @@ export function useVspPumps(serial: string | undefined) {
 
 	return useQuery({
 		queryKey: keys.vsp(uid, serial ?? "-"),
-		queryFn: uid && serial ? () => listVspPumps(serial) : skipToken,
+		queryFn:
+			uid && serial
+				? async () => withRememberedSpeeds(serial, await listVspPumps(serial))
+				: skipToken,
 		refetchInterval: quiet ? false : VSP_POLL_MS,
 		refetchIntervalInBackground: false,
 		staleTime: VSP_POLL_MS * 2,
@@ -698,6 +750,9 @@ export function useSetVspSpeed(serial: string | undefined) {
 			speedId: number;
 		}) => setVspSpeed(serial as string, speedId, pumpId),
 		onMutate: async ({ pumpId, speedId }) => {
+			// The pick itself is the memory's best source — recorded before any
+			// poll gets a say, so turning the pump off cannot unlearn it.
+			if (serial) rememberSpeed(serial, pumpId, speedId);
 			await qc.cancelQueries({ queryKey: qk });
 			const prev = qc.getQueryData(qk);
 			const prevPanel = panel.snapshot();
