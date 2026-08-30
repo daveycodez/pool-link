@@ -103,6 +103,27 @@ const MAX_STEPS = 8;
 const MIN_STEPS = 3;
 
 /**
+ * How many of the most recent crossings the rate is measured across. Four is
+ * three intervals — enough that one late poll cannot swing the answer — while
+ * staying short enough that the rate follows the climb rather than remembering
+ * how it started. Kept at or above MIN_STEPS, or the first estimate would be
+ * measured over fewer intervals than the threshold was chosen to guarantee.
+ */
+const RATE_STEPS = 4;
+
+/**
+ * How much faster the newest degree must arrive than the one before it for the
+ * climb to count as still accelerating, and the estimate to be withheld.
+ *
+ * A degree and a half. Ten-second polls put a few percent of noise on a
+ * two-minute interval, and a steady climb slows rather than speeds as the gap
+ * to the set point closes — so anything this much quicker than its predecessor
+ * is the opening of a heat-up rather than its pace. Deceleration is deliberately
+ * not caught: it makes the estimate read long, and long is the safe direction.
+ */
+const ACCELERATING = 1.5;
+
+/**
  * The largest change between consecutive readings that could be water.
  *
  * This judges the step rather than the value on purpose. A pad transient prints
@@ -240,13 +261,42 @@ export function nextRun(prev: Run | undefined, sample: Sample): Run {
  */
 export function heatRate(run: Run, now: number): number | null {
 	if (run.steps.length < MIN_STEPS) return null;
-	const first = run.steps[0];
-	const last = run.steps[run.steps.length - 1];
+	// The most recent crossings, not every one the window holds. A heat-up is
+	// not one rate: the first degree carries the burner lighting, the heat
+	// exchanger coming up to temperature and whatever sat in the plumbing, and
+	// on a spa that degree can take several times what the ones after it take.
+	// Averaged across the whole window that opening drags the estimate for as
+	// long as the window is deep — the first honest number a spa gave was three
+	// times its eventual one, and it stayed wrong for twenty minutes because it
+	// was still averaging in a minute of cold pipe. Four crossings is three
+	// intervals of smoothing and about eight minutes on a spa, which is recent
+	// enough to describe the water as it is now.
+	const recent = run.steps.slice(-RATE_STEPS);
+	const first = recent[0];
+	const last = recent[recent.length - 1];
 	const span = last.at - first.at;
 	if (span <= 0) return null;
-	const mean = span / (run.steps.length - 1);
+	const mean = span / (recent.length - 1);
 	if (now - last.at > Math.max(mean * STALL_FACTOR, STALL_FLOOR_MS))
 		return null;
+
+	// Nothing while the climb is still speeding up. A spa opens slowly — the
+	// burner lights, the exchanger comes up, and the first degrees are fighting
+	// whatever cold water the plumbing held — so the earliest measurement is an
+	// honest reading of a period that is already over. Measured at three
+	// crossings it can be three times the eventual rate, which showed a spa
+	// twenty minutes from ready as over an hour, then took it back a minute
+	// later. A number that has to be withdrawn was not worth showing: while the
+	// intervals are still shortening the chip counts degrees instead, and the
+	// duration appears once the water settles into a pace.
+	const gaps = recent
+		.slice(1)
+		.map((step, i) => step.at - recent[i].at)
+		.filter((g) => g > 0);
+	if (gaps.length >= 2) {
+		const [prev, latest] = gaps.slice(-2);
+		if (latest * ACCELERATING < prev) return null;
+	}
 	return (last.temp - first.temp) / span;
 }
 
