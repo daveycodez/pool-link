@@ -14,7 +14,7 @@ import { BottomNav } from "#/components/bottom-nav";
 import { Loading } from "#/components/loading";
 import { ThemeToggle } from "#/components/theme-toggle";
 import { isCelsius, timeAgo } from "#/lib/format";
-import { usePanel, useSession, useSystems } from "#/lib/queries";
+import { STALE_MS, usePanel, useSession, useSystems } from "#/lib/queries";
 
 /**
  * Page chrome for every route. The header lives here so /login gets the
@@ -59,10 +59,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		Number.isFinite(airValue) && airValue >= (celsius ? 21 : 70)
 			? ThermometerSun
 			: ThermometerSnowflake;
-	const live = source.isSuccess && !source.isStale;
-	// Only tick while stale — no reason to re-render the whole layout every
-	// second when the label is the constant "Live".
-	const now = useSecondTick(!live);
+	// Always ticking, because the cutoff below has to be noticed even when
+	// nothing else re-renders. Cheap: `children` keeps its element identity,
+	// so the tick re-renders the chrome alone.
+	const now = useSecondTick();
+	// The chip has one rule: Live until the data is STALE_MS old. Not query
+	// staleness — a mutation's invalidate marks queries stale mid-refetch and
+	// a single failed poll drops isSuccess, and both painted an age over data
+	// seconds old. Age is the only thing the chip claims, so age decides.
+	const live =
+		source.dataUpdatedAt > 0 && now - source.dataUpdatedAt < STALE_MS;
 	const age = source.dataUpdatedAt
 		? timeAgo(source.dataUpdatedAt, now)
 		: "Stale";
@@ -203,17 +209,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	);
 }
 
-/** Re-render once a second, but only while the caller needs a moving value. */
-function useSecondTick(enabled: boolean) {
+/** Re-render once a second, so the chip notices its cutoff and its age. */
+function useSecondTick() {
 	const [now, setNow] = useState(() => Date.now());
 
 	useEffect(() => {
-		if (!enabled) return;
-		// Resync on enable; `now` may be from whenever the ticker last stopped.
-		setNow(Date.now());
 		const id = setInterval(() => setNow(Date.now()), 1_000);
 		return () => clearInterval(id);
-	}, [enabled]);
+	}, []);
 
 	return now;
 }

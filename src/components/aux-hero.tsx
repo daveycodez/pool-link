@@ -49,7 +49,17 @@ export function AuxHero({
 					offLabel="Off"
 					onIcon={Thumb}
 					onLabel="On"
-					onToggle={(_d, on) => onToggle(on)}
+					onToggle={(_d, on) => {
+						// Turning this pump on IS setting a speed: the command
+						// carries on_off_action "on", so one request closes the
+						// relay and lands the pump on its last speed — or its
+						// first, when none is known. Only here: the equipment
+						// page's switch stays a bare relay toggle.
+						const speed = pump && (active ?? pump.speeds[0]);
+						if (on && pump && speed)
+							setSpeed.mutate({ pumpId: pump.pumpId, speedId: speed.id });
+						else onToggle(on);
+					}}
 				/>
 			</div>
 

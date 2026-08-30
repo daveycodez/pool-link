@@ -57,7 +57,7 @@ const POLL_MS = 10_000;
  * failing — not that one is due, and not that they are sitting out a light
  * hold on purpose.
  */
-const STALE_MS = 30_000;
+export const STALE_MS = 30_000;
 
 /**
  * How long a light change holds: its target state stays pinned, and the
@@ -455,20 +455,6 @@ export function useActuate(serial: string | undefined) {
 	return useMutation({
 		mutationKey: [...holdKey(serial), "actuate"],
 		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
-			// Turning on a relay that carries a variable-speed pump is one
-			// request, not two: the speed command carries on_off_action "on",
-			// so sending the known speed — or the first configured one — both
-			// closes the relay and lands the pump where it belongs.
-			if (on) {
-				const pump = pumpForDevice(
-					qc.getQueryData<VspPump[]>(keys.vsp(uid, serial ?? "-")),
-					device.name,
-				);
-				const speed =
-					pump && (pump.speeds.find((s) => s.active) ?? pump.speeds[0]);
-				if (pump && speed)
-					return setVspSpeed(serial as string, speed.id, pump.pumpId);
-			}
 			const res = await toggleDevice(
 				serial as string,
 				device.name,
