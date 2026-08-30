@@ -36,6 +36,8 @@ export interface Step {
 export interface Run {
 	/** `${serial}|${body}` — which system, and which body's sensor. */
 	id: string;
+	/** When this run was anchored, for withdrawing a seed that never earns out. */
+	startedAt: number;
 	/** The most recent accepted reading, crossing or not; the gap is timed
 	 *  against this rather than against the last crossing, because a plateau
 	 *  that is being watched is not a gap. */
@@ -193,7 +195,12 @@ function reading(device: PoolDevice | undefined, celsius: boolean): number {
  * through it; every rejection returns the run it was handed, untouched.
  */
 export function nextRun(prev: Run | undefined, sample: Sample): Run {
-	const held: Run = prev ?? { id: sample.id, last: null, steps: [] };
+	const held: Run = prev ?? {
+		id: sample.id,
+		last: null,
+		startedAt: sample.at,
+		steps: [],
+	};
 	const step: Step = { temp: sample.temp, at: sample.at };
 
 	// Before anything else, including the body: a transient blanks the whole
@@ -205,7 +212,8 @@ export function nextRun(prev: Run | undefined, sample: Sample): Run {
 	// Keyed on the device name of the last accepted reading rather than on
 	// `spaMode`, which is derived from which body reports a value and so flips
 	// on its own when the pad reports "0" for the idle one.
-	if (held.id !== sample.id) return { id: sample.id, last: step, steps: [] };
+	if (held.id !== sample.id)
+		return { id: sample.id, last: step, startedAt: sample.at, steps: [] };
 
 	const last = held.last;
 	// The anchor: a reading at unknown depth in a plateau. It dates the run and
@@ -213,7 +221,7 @@ export function nextRun(prev: Run | undefined, sample: Sample): Run {
 	if (!last) return { ...held, last: step };
 
 	if (sample.at - last.at > MAX_GAP_MS)
-		return { ...held, last: step, steps: [] };
+		return { ...held, last: step, startedAt: sample.at, steps: [] };
 	if (Math.abs(sample.temp - last.temp) > MAX_STEP[sample.celsius ? "C" : "F"])
 		return held;
 	if (sample.temp === last.temp) return { ...held, last: step };
@@ -240,6 +248,125 @@ export function heatRate(run: Run, now: number): number | null {
 	if (now - last.at > Math.max(mean * STALL_FACTOR, STALL_FLOOR_MS))
 		return null;
 	return (last.temp - first.temp) / span;
+}
+
+/**
+ * The rate memory, so a heat-up does not spend its first three minutes saying
+ * how many degrees are left.
+ *
+ * This is the one thing here that outlives the tab, and it is a rate rather
+ * than a reading on purpose: persist.ts refuses to restore readings because
+ * one presented as current is a lie the app cannot detect, and a slope is a
+ * property of the equipment against a body of water rather than a claim about
+ * what the water is now. The degrees are still measured fresh every session;
+ * only how fast they tend to arrive is remembered.
+ */
+const heatRateKey = (serial: string) => `pool-link:heat-rate-last:${serial}`;
+
+/**
+ * Rates worth believing, in degrees per minute.
+ *
+ * The ceiling is physical: a large gas heater on a small spa moves it about
+ * two degrees a minute, so three is past anything a residential pad can do and
+ * a stored value above it came from a mismeasurement rather than water. The
+ * floor is about usefulness — under this even a small climb is most of a day
+ * away, which is not an answer anybody acts on.
+ */
+const RATE_BAND: Record<"F" | "C", { min: number; max: number }> = {
+	F: { min: 0.02, max: 3 },
+	C: { min: 0.011, max: 1.7 },
+};
+
+/**
+ * How long a remembered rate stands. A heat pump's output swings with the air
+ * it is pulling from — half as much work in November as in July — and a cover
+ * comes and goes across a season, so a fortnight is as far as one summer's
+ * measurement describes the next fortnight's water.
+ */
+const RATE_MEMORY_MAX_AGE_MS = 14 * 24 * 60 * 60_000;
+
+/**
+ * Crossings before a run is worth remembering. Three is enough to show a
+ * number, but four is a span no pair of unlucky polls can fake, and this one
+ * is written down for next time.
+ */
+const TEACH_STEPS = 4;
+
+/**
+ * How long a remembered rate may speak for a climb that has not been seen to
+ * climb. Three minutes is several crossings at any spa rate: see one and the
+ * live measurement is on its way, see none and the heater is reporting itself
+ * on without moving water — "3" means enabled, not firing — and last week's
+ * rate is a guess wearing an answer's clothes.
+ */
+const SEED_GRACE_MS = 3 * 60_000;
+
+interface RememberedRate {
+	rate: number;
+	at: number;
+}
+
+/** Both bodies and both kinds of heat, kept apart: a spa is a bathtub against
+ *  a pool's tens of thousands of gallons, and a heat pump moves a fraction of
+ *  what a burner does. One number for each combination, and no crossing over. */
+export function heatSourceKey(
+	body: string,
+	heater: PoolDevice | undefined,
+	heatPump: HeatPump | null,
+	celsius: boolean,
+): string {
+	const source = heatPump?.on ? "hpm" : heater?.on ? "heater" : "";
+	return source ? `${body}|${source}|${celsius ? "C" : "F"}` : "";
+}
+
+function readRates(serial: string): Record<string, RememberedRate> {
+	try {
+		return JSON.parse(localStorage.getItem(heatRateKey(serial)) ?? "{}");
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * Teach the memory: the newest measurement replaces what was there.
+ *
+ * Not an average with the old one. Tomorrow's heat-up is most like today's —
+ * same water, same equipment, near enough the same air — and least like one
+ * from a fortnight ago under a cover that has since come off. Averaging would
+ * hold onto conditions that have already gone, and it would take several runs
+ * to walk back from a heater swapped for a heat pump instead of one. The cost
+ * is that a single badly-timed run misleads the next one, and the next one
+ * then corrects it outright.
+ */
+export function rememberHeatRate(serial: string, key: string, rate: number) {
+	if (!serial || !key) return;
+	try {
+		localStorage.setItem(
+			heatRateKey(serial),
+			JSON.stringify({
+				...readRates(serial),
+				[key]: { at: Date.now(), rate },
+			}),
+		);
+	} catch {
+		// No storage; every heat-up simply measures itself from scratch.
+	}
+}
+
+/** The remembered rate, in degrees per millisecond, or null. */
+export function lastHeatRate(
+	serial: string,
+	key: string,
+	celsius: boolean,
+): number | null {
+	if (!serial || !key) return null;
+	const one = readRates(serial)[key];
+	if (typeof one?.rate !== "number" || typeof one?.at !== "number") return null;
+	if (Date.now() - one.at > RATE_MEMORY_MAX_AGE_MS) return null;
+	const band = RATE_BAND[celsius ? "C" : "F"];
+	const perMinute = one.rate * 60_000;
+	if (perMinute < band.min || perMinute > band.max) return null;
+	return one.rate;
 }
 
 /**
@@ -359,9 +486,31 @@ export function useHeatEta({
 		return next;
 	}, [serial, body, temp, updatedAt, celsius, commanding, firing]);
 
+	const live = run ? heatRate(run, updatedAt) : null;
+	const memoryKey = heatSourceKey(body, heater, heatPump, celsius);
+
+	// Written down once a run has measured enough to be worth repeating. In an
+	// effect because it writes to storage, and keyed on the rate so a run that
+	// keeps crossing does not keep re-teaching from the same climb.
+	const teachable =
+		run && run.steps.length >= TEACH_STEPS && live !== null ? live : null;
+	useEffect(() => {
+		if (teachable !== null) rememberHeatRate(serial, memoryKey, teachable);
+	}, [serial, memoryKey, teachable]);
+
 	if (!run) return "";
+	// Last time's rate stands in until this time's is measured — which is the
+	// first three minutes, and the three minutes somebody is most likely to be
+	// looking. Withdrawn once a climb has gone that long without a single
+	// crossing: the heater is reporting itself on without moving water, and a
+	// remembered rate would be answering for a heat-up that is not happening.
+	const stalled =
+		run.steps.length === 0 && updatedAt - run.startedAt >= SEED_GRACE_MS;
+	const rate =
+		live ?? (stalled ? null : lastHeatRate(serial, memoryKey, celsius));
+
 	// The target arrives already through a bare `Number()`, which is 0 for the
 	// empty string a panel sends for a set point it does not have — and counting
 	// down to zero degrees would report every warm pool as ready.
-	return heatCaption(heatRate(run, updatedAt), temp, sane(target, celsius));
+	return heatCaption(rate, temp, sane(target, celsius));
 }
