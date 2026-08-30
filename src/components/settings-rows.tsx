@@ -279,7 +279,7 @@ export function WebTouchRow({ serial }: { serial: string }) {
 			}}
 			type="button"
 		>
-			<SettingsRow Icon={CalendarClock} title="Schedules">
+			<SettingsRow Icon={CalendarClock} title="iAqualink Web">
 				<ExternalLink className="size-5 text-muted" />
 			</SettingsRow>
 		</button>
