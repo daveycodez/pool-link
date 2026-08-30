@@ -30,6 +30,7 @@ interface Chem {
 import type { IclChange } from "#/lib/queries";
 import {
 	lastLightEffect,
+	rememberLightEffect,
 	useActuate,
 	useIclZone,
 	useLightColor,
@@ -463,6 +464,10 @@ function WaterColorsHero({
 		Object.entries(JANDY_WATERCOLORS).find(([, id]) => id === last)?.[0] ??
 		null;
 	const [picked, setPicked] = useState<string | null>(lastName);
+	// The marked swatch: the remembered pick — or, while off, Alpine White as
+	// the default, the same way an off pump previews its first speed. Either
+	// way the dimmed swatch says exactly what "on" will do.
+	const marked = picked ?? (device.on ? null : "Alpine White");
 	const effects = Object.keys(JANDY_WATERCOLORS).filter(
 		(name) => JANDY_WATERCOLORS[name] > 0,
 	);
@@ -496,13 +501,28 @@ function WaterColorsHero({
 						onToggle={(_d, on) => {
 							// On resumes the last colour we know — powering up resets
 							// the fixture to Alpine White, and the memory beats the
-							// reset. With no memory, plain on and the reset stands.
-							if (on && last !== undefined) {
+							// reset. Unless the memory IS Alpine White: the bare relay
+							// close lands there by itself, and programming it would
+							// spin through a whole redundant reset cycle.
+							if (
+								on &&
+								last !== undefined &&
+								last !== JANDY_WATERCOLORS["Alpine White"]
+							) {
 								setPicked(lastName);
 								onColor(last);
 								return;
 							}
-							if (on) setPicked("Alpine White");
+							if (on) {
+								setPicked("Alpine White");
+								// The bare relay-on landed the fixture on white just as
+								// surely as programming it would have — remember it.
+								rememberLightEffect(
+									serial,
+									device.name,
+									JANDY_WATERCOLORS["Alpine White"],
+								);
+							}
 							onToggle(on);
 						}}
 					/>
@@ -532,10 +552,15 @@ function WaterColorsHero({
 								onColor(JANDY_WATERCOLORS[name]);
 							}}
 							size="sm"
-							// Filled while this effect is the one running — but only while
-							// the light is actually on, or an off light would still look
-							// like it had a colour selected.
-							variant={picked === name && device.on ? "primary" : "tertiary"}
+							// Primary is a colour actually lit; the off light keeps its
+							// selection dimmed to secondary, like a stopped pump's speed.
+							variant={
+								marked === name
+									? device.on
+										? "primary"
+										: "secondary"
+									: "tertiary"
+							}
 						>
 							<ColorSwatch
 								className="shrink-0"

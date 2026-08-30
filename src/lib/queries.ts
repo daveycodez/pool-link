@@ -786,6 +786,17 @@ export const lastLightEffect = (
 ): number | undefined => readMemory(lastLightKey(serial))[deviceName];
 
 /**
+ * Teach the light memory from outside a colour mutation — the plain relay-on
+ * lands the fixture on Alpine White without any set_light being sent, and
+ * that is knowledge worth keeping too.
+ */
+export const rememberLightEffect = (
+	serial: string,
+	deviceName: string,
+	effectId: number,
+): void => remember(lastLightKey(serial), deviceName, effectId);
+
+/**
  * Fetched pumps, with forgotten speeds restored from local memory. A pump
  * that reports a speed teaches the memory; one that reports none — off, in
  * the panel's telling — reads its last known speed back instead of blanking
