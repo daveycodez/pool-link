@@ -609,7 +609,19 @@ export function useLightColor(serial: string | undefined) {
 		},
 		// As in useActuate: an in-flight poll would land mid-pulse.
 		onMutate: () => panel.cancel(),
-		onSettled: () => panel.invalidate(),
+		// The hold can run out a pulse or two early, and a refetch then reads
+		// the tail of the sequence — the relay mid-pulse, "off" — which would
+		// paint the light off for a whole poll cycle. So the refetch retries
+		// until the light reads on, briefly; the mutation is still pending
+		// through this, so the pin and the spinner hold to the handoff.
+		onSettled: async (_res, _err, { name }) => {
+			for (let i = 0; ; i++) {
+				await panel.invalidate();
+				const lit = panel.read()?.devices.find((d) => d.name === name)?.on;
+				if (lit || i >= 3) return;
+				await settle(2_000);
+			}
+		},
 	});
 }
 
