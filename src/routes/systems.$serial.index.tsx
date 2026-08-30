@@ -499,7 +499,7 @@ function WaterColorsHero({
 									}, ${stops.join(", ")})`,
 								}}
 							/>
-							{name}
+							<span className="truncate">{name}</span>
 						</Button>
 					);
 				})}

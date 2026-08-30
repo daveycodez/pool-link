@@ -138,7 +138,7 @@ export function IclHero({
 									}, ${stops.join(", ")})`,
 								}}
 							/>
-							{name}
+							<span className="truncate">{name}</span>
 						</Button>
 					);
 				})}
@@ -178,7 +178,7 @@ export function IclHero({
 						}`}
 					>
 						<ColorSwatch className="shrink-0" size="xs" />
-						<Label className="text-xs">Custom Color</Label>
+						<Label className="truncate text-xs">Custom Color</Label>
 					</ColorPicker.Trigger>
 					<ColorPicker.Popover>
 						<ColorArea

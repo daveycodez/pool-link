@@ -77,7 +77,7 @@ export function AuxHero({
 										: "secondary"
 							}
 						>
-							{speed.name}
+							<span className="truncate">{speed.name}</span>
 						</Button>
 					))}
 				</div>

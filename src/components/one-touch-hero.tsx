@@ -58,7 +58,7 @@ export function OneTouchHero({
 										: "text-muted"
 								}`}
 							/>
-							{macro.label}
+							<span className="truncate">{macro.label}</span>
 						</Button>
 					);
 				})}
