@@ -40,6 +40,29 @@ export type IclChange =
 	| { kind: "brightness"; zoneId: number; dim: number }
 	| { kind: "custom"; zoneId: number; rgbw: [number, number, number, number] };
 
+/**
+ * How long a persisted entry may be reused. Long, because what is kept barely
+ * changes — pump wiring moves when someone rewires the pad, and not otherwise
+ * — and everything restored is refetched on mount regardless, so age costs at
+ * most a stale first paint. It doubles as the gcTime of what gets persisted:
+ * a restore older than gcTime is collected on arrival, so the two must agree.
+ *
+ * The persister applies this to the whole stored blob rather than per query,
+ * so the systems list rides the same window. That is harmless for the same
+ * reason: it is replaced by a fetch as soon as anything mounts.
+ */
+export const PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * The gcTime for persisted queries. On the client it must match
+ * PERSIST_MAX_AGE_MS or a restore would be collected on arrival — but a finite
+ * gcTime is a live setTimeout, and during the prerender that timer is what
+ * keeps the build process from exiting (react-query's own server default is
+ * Infinity for exactly this reason, and an explicit value overrides it).
+ */
+const PERSIST_GC_TIME_MS =
+	typeof window === "undefined" ? Infinity : PERSIST_MAX_AGE_MS;
+
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
 const POLL_MS = 10_000;
 
@@ -113,6 +136,9 @@ export function useSystems(enabled: boolean) {
 		refetchIntervalInBackground: false,
 		// Double the interval, so a healthy cycle never reads as stale.
 		staleTime: POLL_MS * 2,
+		// Kept as long as the persisted copy is allowed to be, or a restore
+		// would be collected on arrival for being older than the default.
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }
 
@@ -378,6 +404,9 @@ export function useVspPumps(serial: string | undefined) {
 		refetchInterval: mutating ? false : VSP_POLL_MS,
 		refetchIntervalInBackground: false,
 		staleTime: VSP_POLL_MS * 2,
+		// As above: this is the one worth restoring, so it has to survive to be
+		// restored. Pump wiring does not change on its own in the meantime.
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }
 

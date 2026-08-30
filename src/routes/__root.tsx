@@ -1,15 +1,12 @@
 import { Toast, toast } from "@heroui/react";
-import {
-	MutationCache,
-	QueryCache,
-	QueryClient,
-	QueryClientProvider,
-} from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
 import { useEffect, useState } from "react";
 import { AppLayout } from "#/components/app-layout";
 import { AqualinkError, errorMessage } from "#/lib/aqualink/types";
+import { persistOptions } from "#/lib/persist";
 import { keys } from "#/lib/queries";
 import appCss from "../styles.css?url";
 
@@ -140,10 +137,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 					enableSystem
 					disableTransitionOnChange
 				>
-					<QueryClientProvider client={client}>
+					<PersistQueryClientProvider
+						client={client}
+						persistOptions={persistOptions}
+					>
 						<AppLayout>{children}</AppLayout>
 						<OfflineBanner />
-					</QueryClientProvider>
+					</PersistQueryClientProvider>
 				</ThemeProvider>
 				<Scripts />
 			</body>
