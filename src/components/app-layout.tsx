@@ -125,7 +125,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		session.isPending ||
 		(signedIn && needsSystems && systems.isPending) ||
 		passingThrough ||
-		(Boolean(serial) && !snap.data);
+		// Signed-in only: signed out, the panel queries are disabled and this
+		// would never resolve — the spinner would stand in front of the route
+		// whose job is to redirect to /login, which cannot run unmounted.
+		(signedIn && Boolean(serial) && !snap.data);
 
 	// /sign-out renders its own spinner, but it has to actually mount to run the
 	// mutation — so it bypasses the chrome without bypassing `children`.

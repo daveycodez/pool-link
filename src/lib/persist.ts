@@ -42,8 +42,12 @@ const canUseIDB = () => typeof indexedDB !== "undefined";
  * Bumped when what is persisted changes shape. A restored cache that no longer
  * matches what the code expects is worse than a cold start, so this throws the
  * old one away rather than trying to read it.
+ *
+ * "2": the keys grew the account prefix and the session moved into the cache,
+ * and "1"-era blobs restored as if nothing had changed — a device that had
+ * visited before could restore itself into an endless spinner.
  */
-const BUSTER = "1";
+const BUSTER = "2";
 
 /**
  * What survives a reload. Only what is slow to fetch and stable enough to be
