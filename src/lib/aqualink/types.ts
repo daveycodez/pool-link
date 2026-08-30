@@ -12,6 +12,12 @@ export interface SystemSummary {
 	status: string;
 	isVSP: boolean;
 	type: string;
+	/**
+	 * The id WebTouch takes as its actionID — the account's device id from
+	 * prm, which is not the pad serial. Falls back to the serial where the
+	 * payload carries no separate id.
+	 */
+	webtouchId: string;
 }
 
 /** A device's raw payload (name + parsed attributes). */

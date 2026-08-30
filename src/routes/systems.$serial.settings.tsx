@@ -9,6 +9,7 @@ import {
 	SignOutRow,
 	SystemNameRow,
 	SystemSerialRow,
+	WebTouchRow,
 } from "#/components/settings-rows";
 import { useRequireSession } from "#/lib/use-pool";
 
@@ -29,6 +30,7 @@ function SystemSettings() {
 			<SystemNameRow serial={serial} />
 			<SystemSerialRow serial={serial} />
 			<AppearanceRow />
+			<WebTouchRow serial={serial} />
 			<DiagnosticsRow serial={serial} />
 			<MySystemsRow serial={serial} />
 			<AddSystemRow />

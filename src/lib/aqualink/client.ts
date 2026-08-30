@@ -276,6 +276,9 @@ export class AqualinkClient implements AqualinkClientLike {
 				status: pick(r.status, r.connectionStatus) || "unknown",
 				isVSP: r.isVSP === "true" || r.isVSP === true,
 				type: pick(r.device_type, r.type, r.model) || "iaqualink",
+				webtouchId:
+					pick(r.device_id, r.deviceId, r.id) ||
+					pick(r.serial_number, r.serial),
 			};
 		});
 	}
@@ -357,6 +360,18 @@ export class AqualinkClient implements AqualinkClientLike {
 			country: this.session?.country ?? "",
 		};
 	}
+
+	/**
+	 * The WebTouch remote the official app embeds — the panel's own web UI,
+	 * for the things no API covers, schedules first among them. The token
+	 * rides the URL, so it is minted fresh here: a stale one greets the user
+	 * with a login form instead of their panel.
+	 */
+	async webtouchUrl(webtouchId: string): Promise<string> {
+		const s = await this.currentSession();
+		const q = new URLSearchParams({ actionID: webtouchId, idToken: s.idToken });
+		return `https://webtouch.iaqualink.net/?${q}`;
+	}
 }
 
 // ---- App-facing convenience helpers (singleton) -----------------------------
@@ -377,6 +392,11 @@ export function listSystems(): Promise<SystemSummary[]> {
 
 export function sessionMeta() {
 	return client.sessionMeta();
+}
+
+/** A signed-in WebTouch link for one system; see the class method. */
+export function webtouchUrl(webtouchId: string): Promise<string> {
+	return client.webtouchUrl(webtouchId);
 }
 
 /** Home screen: temperatures, set points and the fixed-key equipment state. */

@@ -9,10 +9,12 @@ import {
 } from "@heroui/react";
 import { Link } from "@tanstack/react-router";
 import {
+	CalendarClock,
 	Check,
 	ChevronRight,
 	CircleUser,
 	Copy,
+	ExternalLink,
 	Hash,
 	LogOut,
 	MapPinHouse,
@@ -25,6 +27,7 @@ import { useTheme } from "next-themes";
 import { useEffect, useRef, useState } from "react";
 import { IconCircle } from "#/components/device-row";
 import { THEMES } from "#/components/theme-toggle";
+import { webtouchUrl } from "#/lib/aqualink/client";
 import { errorMessage } from "#/lib/aqualink/types";
 import { groupSerial } from "#/lib/format";
 import { useSetDeviceName, useSystems } from "#/lib/queries";
@@ -246,6 +249,40 @@ export function DiagnosticsRow({ serial }: { serial?: string }) {
 				<ChevronRight className="size-5 text-muted" />
 			</SettingsRow>
 		</Link>
+	);
+}
+
+/**
+ * Opens the WebTouch remote — the panel's own web UI, which the official app
+ * embeds for what no API covers, schedules first among them — signed in with
+ * this app's session.
+ */
+export function WebTouchRow({ serial }: { serial: string }) {
+	// Already cached by the layout, so this costs no request of its own.
+	const system = useSystems(true).data?.find((s) => s.serial === serial);
+	if (!system) return null;
+
+	return (
+		<button
+			className="card-link w-full text-start"
+			// The tab opens before the await: a fresh token can mean a network
+			// round trip, and a window.open on the far side of one is a popup
+			// where browsers count it, not a click.
+			onClick={() => {
+				const tab = window.open("about:blank", "_blank");
+				webtouchUrl(system.webtouchId).then(
+					(url) => {
+						if (tab) tab.location.href = url;
+					},
+					() => tab?.close(),
+				);
+			}}
+			type="button"
+		>
+			<SettingsRow Icon={CalendarClock} title="Schedules">
+				<ExternalLink className="size-5 text-muted" />
+			</SettingsRow>
+		</button>
 	);
 }
 
