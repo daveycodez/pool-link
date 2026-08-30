@@ -81,6 +81,15 @@ export const STALE_MS = 30_000;
  */
 const LIGHT_HOLD_MS = 15_000;
 
+/**
+ * How long the pad needs before it answers sanely after a light's relay
+ * drops. The refetch that releases a hold reads the whole pad, and one taken
+ * right after the command lands mid-transient — turning a light off painted
+ * every temperature as 0 until the next poll, with the light itself reading
+ * a perfectly agreeable "off".
+ */
+const PAD_SETTLE_MS = 5_000;
+
 /** Pump speeds are near-static, so they ride a much slower cycle. */
 const VSP_POLL_MS = POLL_MS * 2;
 
@@ -484,9 +493,11 @@ export function useActuate(serial: string | undefined) {
 			}
 			// Switching a WaterColors light on IS programming Alpine White: the
 			// fixture comes up at the head of its table, so it rides the same
-			// hold as picking id 1. Off is a bare relay drop, and nothing else
-			// lies about itself — neither waits.
-			if (device.kind === "light" && on) await settle(waterColorsHold(1));
+			// hold as picking id 1. Off is a bare relay drop — but the release
+			// refetch still has to outwait the pad's transient window, or it
+			// reads back a snapshot with the readings blanked.
+			if (device.kind === "light")
+				await settle(on ? waterColorsHold(1) : PAD_SETTLE_MS);
 			return res;
 		},
 		onMutate: async ({ device, on }): Promise<{ vspPrev?: VspPump[] }> => {
