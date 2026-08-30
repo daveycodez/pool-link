@@ -7,6 +7,7 @@ import {
 	Zap,
 } from "lucide-react";
 import type { PoolDevice } from "#/lib/iaqualink/types";
+import { presetIcon } from "./preset-icons";
 
 /** Accent while the device is running, muted when it's idle. */
 export function IconCircle({
@@ -28,11 +29,14 @@ export function IconCircle({
 }
 
 /**
- * Icons come from the device's kind, which the protocol supplies. A relay is
- * whatever the owner wired to it, so anything unrecognised gets the bolt
- * rather than an icon guessed from its position.
+ * The label first — a relay is named from the panel's own preset list, so the
+ * name says what the equipment is in a way its position never could. Failing
+ * that, the device's kind, which the protocol supplies. Failing both, the bolt.
  */
 export function DeviceIcon({ device }: { device: PoolDevice }) {
+	const Preset = presetIcon(device.label);
+	if (Preset) return <Preset className="size-4" />;
+
 	switch (device.kind) {
 		case "light":
 			return <Lightbulb className="size-4" />;

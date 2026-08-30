@@ -1,6 +1,6 @@
 import { Card, Description, Label, ListBox, Select } from "@heroui/react";
 import { Gauge } from "lucide-react";
-import { pumpForDevice, type VspPump } from "#/lib/aqualink/client";
+import type { VspPump } from "#/lib/aqualink/client";
 import { useSetVspSpeed, useVspPumps } from "#/lib/queries";
 import { IconCircle } from "./device-row";
 
@@ -39,35 +39,6 @@ export function PumpSpeeds({ serial }: { serial: string }) {
 				</Card>
 			))}
 		</div>
-	);
-}
-
-/**
- * The speed control for whichever pump drives a device, or nothing when that
- * device is on a plain relay. The device's aux number is the link, so this
- * follows the panel's own wiring rather than any name.
- */
-export function DeviceSpeed({
-	serial,
-	deviceName,
-	className,
-}: {
-	serial: string;
-	deviceName: string | undefined;
-	className?: string;
-}) {
-	const { data: pumps } = useVspPumps(serial);
-	const setSpeed = useSetVspSpeed(serial);
-	const pump = pumpForDevice(pumps, deviceName);
-
-	if (!pump) return null;
-
-	return (
-		<PumpSpeedSelect
-			className={className}
-			onSelect={(speedId) => setSpeed.mutate({ pumpId: pump.pumpId, speedId })}
-			pump={pump}
-		/>
 	);
 }
 
