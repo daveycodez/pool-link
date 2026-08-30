@@ -65,14 +65,19 @@ export function AuxHero({
 								setSpeed.mutate({ pumpId: pump.pumpId, speedId: speed.id })
 							}
 							size="sm"
+							// A speed is a setting that outlives being switched off, so
+							// the selected one stays marked either way — filled while the
+							// pump is running it, quieter while it is only what the pump
+							// would run at.
 							variant={
-								speed.id === active?.id && device.on ? "primary" : "tertiary"
+								speed.id !== active?.id
+									? "tertiary"
+									: device.on
+										? "primary"
+										: "secondary"
 							}
 						>
 							{speed.name}
-							<span className="ml-auto tabular-nums opacity-60">
-								{speed.rpm}
-							</span>
 						</Button>
 					))}
 				</div>

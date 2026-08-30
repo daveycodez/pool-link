@@ -174,7 +174,14 @@ export function useActuate(serial: string | undefined) {
 		onError: (_e, _v, ctx) => {
 			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
 		},
-		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
+		// The pumps too: a relay carrying a variable-speed pump reports its
+		// speed on a separate query with a slower cycle, and leaving that behind
+		// left one button reading its fill from the snapshot and its selection
+		// from data up to a cycle older.
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: qk });
+			qc.invalidateQueries({ queryKey: keys.vsp(serial ?? "-") });
+		},
 	});
 }
 
