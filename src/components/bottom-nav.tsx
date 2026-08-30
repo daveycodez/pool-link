@@ -35,14 +35,16 @@ export function BottomNav({ serial }: { serial: string }) {
 					navigate({ to: String(key), params: { serial } })
 				}
 			>
-				{/* The pill is `bg-default` — three points of lightness off the page
-				    in light mode, so it barely reads as a shape on its own. Both
-				    tokens here are ones the selected indicator already uses:
-				    `--segment` is lighter than the pill in either theme (white on
-				    94% in light, 39.64% on 27.4% in dark), so it rims the edge
-				    rather than outlining it, and dark defines `--surface-shadow`
-				    as no shadow, so the lift lands on light alone. */}
-				<Tabs.ListContainer className="border border-segment shadow-surface">
+				{/* The pill is `bg-default`, a few points of lightness off the page,
+				    so it needs an edge of its own — but a different one per theme.
+				    Light takes the shadow: `--surface-shadow` is already defined as
+				    no shadow in dark, so it needs no variant to stay out of the way.
+				    Dark takes a rim instead, which is what reads on a near-black
+				    background where a shadow cannot. It has to be the secondary
+				    border: plain `--border` lands within a point of the pill's own
+				    fill and vanishes, while `--border-secondary` is mixed a fifth of
+				    the way to the foreground and sits ~11 points above it. */}
+				<Tabs.ListContainer className="shadow-surface dark:border dark:border-secondary">
 					<Tabs.List aria-label="Sections">
 						{TABS.map(({ to, label, Icon }) => (
 							<Tabs.Tab className="gap-2" id={to} key={to}>
