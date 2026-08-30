@@ -487,6 +487,7 @@ export function useActuate(serial: string | undefined) {
 			device,
 			on,
 			also,
+			resumeSpeed,
 		}: {
 			device: PoolDevice;
 			on: boolean;
@@ -497,6 +498,16 @@ export function useActuate(serial: string | undefined) {
 			 * heater lagged the valves badly enough to look broken.
 			 */
 			also?: PoolDevice;
+			/**
+			 * Whether closing a relay that carries a variable-speed pump should
+			 * also send that pump a speed.
+			 *
+			 * Off by default, because the extra command belongs to a surface
+			 * rather than to the act: the hero's switches mean "run this", and
+			 * the equipment page's mean exactly the command they are named
+			 * after. The panel restores no speed on its own either way.
+			 */
+			resumeSpeed?: boolean;
 		}) => {
 			const flip = (d: PoolDevice, state: boolean) =>
 				toggleDevice(
@@ -511,12 +522,11 @@ export function useActuate(serial: string | undefined) {
 			// RS-485 command at a time either way, and sending the second only
 			// once the first is answered keeps them in the order asked for.
 			if (also) await flip(also, on);
-			// Turning on a relay that carries a variable-speed pump is two
-			// commands, always: the relay, then — once the panel has answered —
-			// the speed, because the panel does not restore one on its own.
-			// The user's last known speed wins, then whatever the table calls
-			// active, then the first configured speed as the default.
-			if (on) {
+			// The relay, then — once the panel has answered — the speed, because
+			// the panel restores none on its own. The user's last known speed
+			// wins, then whatever the table calls active, then the first
+			// configured speed as the default.
+			if (on && resumeSpeed) {
 				const pump = pumpForDevice(
 					qc.getQueryData<VspPump[]>(keys.vsp(uid, serial ?? "-")),
 					device.name,

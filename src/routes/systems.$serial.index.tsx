@@ -101,6 +101,11 @@ function Pool() {
 	 * Only on, and only here. Switching off leaves the heater alone, and the
 	 * equipment page's switches stay what they say they are — the granular
 	 * control is a tap away for anyone who wants the valves without the heat.
+	 *
+	 * The same division puts resumeSpeed here: a relay carrying a pump comes
+	 * on at a speed from this screen, because these switches mean "run this",
+	 * and comes on as a bare relay from the equipment page, because those mean
+	 * the command they are named after.
 	 */
 	const toggle = (device: PoolDevice, on: boolean) => {
 		const spaHeater = heaters.find((h) => h.name.startsWith("spa"));
@@ -108,7 +113,7 @@ function Pool() {
 			on && device.name === "spa_pump" && spaHeater && !spaHeater.on
 				? spaHeater
 				: undefined;
-		actuate.mutate({ also, device, on });
+		actuate.mutate({ also, device, on, resumeSpeed: true });
 	};
 
 	return (
