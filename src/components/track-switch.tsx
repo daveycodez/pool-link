@@ -45,7 +45,7 @@ export function TrackSwitch({
 				<Switch.Content>
 					{/* The control is `relative overflow-hidden`, so the label can sit in
 				    the track and be uncovered by the thumb. */}
-					<Switch.Control className={`w-17 ${isSelected ? toned.bg : ""}`}>
+					<Switch.Control className={`w-16 ${isSelected ? toned.bg : ""}`}>
 						<span
 							// Inset by the thumb's exact footprint — 1.71875rem wide plus
 							// its 0.125rem margin, per switch.css — so the label box is
