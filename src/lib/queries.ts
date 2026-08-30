@@ -564,18 +564,22 @@ export function useHeatPump(serial: string | undefined) {
 }
 
 /**
- * How long a WaterColors effect change holds, by target effect id.
+ * How long a WaterColors effect change holds: a reset, then one pulse per
+ * step past the first colour.
  *
- * Timed against the water itself: Spring Green (id 5) done at 15s, Magenta
- * (id 8) at 20s — a straight line in the target id alone, and one that
- * back-fits the Alpine White (id 1) reading of ~8s. Linear in the target
- * because the panel is not stepping from the current colour: it resets the
- * fixture to the head of the table and pulses forward, which it can do
- * blind, since neither it nor the API ever knows what colour is running.
- * (The official app's progress bar runs the same line plus padding that
- * grows with the id — measured water beats measured bar.)
+ * Watched at the pool: the light goes dark for 8–10 seconds — the panel
+ * holding power off until the fixture falls back to the head of its table —
+ * and only then starts pulsing, one step per pulse. The reset lands ON the
+ * first colour, so Alpine White (id 1) needs no pulses at all and the count
+ * is id − 1. The panel does all this blind every time, since neither it nor
+ * the API ever knows what colour is running — which is why the duration
+ * depends only on the target. Fitted to timed changes: Cobalt Blue (id 3)
+ * ~12s, Spring Green (id 5) ~15s, Magenta (id 8) ~20s.
  */
-const waterColorsHold = (effectId: number) => 6_500 + 1_700 * effectId;
+const WATERCOLORS_RESET_MS = 8_800;
+const WATERCOLORS_STEP_MS = 1_600;
+const waterColorsHold = (effectId: number) =>
+	WATERCOLORS_RESET_MS + WATERCOLORS_STEP_MS * (effectId - 1);
 
 /**
  * Set a light's color effect. Effect ids start at 1 and 0 is "off", so
