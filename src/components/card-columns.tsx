@@ -78,7 +78,9 @@ export function CardColumns({ children }: { children: React.ReactNode }) {
 	// with the remainder going to the earlier columns so the left is never
 	// shorter than the right.
 	const per = Math.ceil(items.length / count);
-	items.forEach((child, i) => columns[Math.floor(i / per)]?.push(child));
+	items.forEach((child, i) => {
+		columns[Math.floor(i / per)]?.push(child);
+	});
 
 	return (
 		<div className="flex flex-col gap-4 md:flex-row md:items-start">
