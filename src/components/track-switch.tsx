@@ -9,6 +9,7 @@ export function TrackSwitch({
 	onIcon: OnIcon,
 	offIcon: OffIcon,
 	tone = "accent",
+	isDisabled,
 	onToggle,
 }: {
 	device: PoolDevice;
@@ -18,6 +19,8 @@ export function TrackSwitch({
 	offIcon: React.ComponentType<{ className?: string }>;
 	/** Selected-state colour, so spa and heat read apart from the rest. */
 	tone?: "accent" | "warning" | "danger";
+	/** Held while a change is working through the device it switches. */
+	isDisabled?: boolean;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 }) {
 	const toned = {
@@ -33,6 +36,7 @@ export function TrackSwitch({
 		<Switch
 			className="h-6 justify-center"
 			aria-label={onLabel}
+			isDisabled={isDisabled}
 			isSelected={device.on}
 			onChange={(on: boolean) => onToggle(device, on)}
 			size="lg"

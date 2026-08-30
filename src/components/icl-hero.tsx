@@ -73,6 +73,9 @@ export function IclHero({
 					) : null}
 					<TrackSwitch
 						device={{ ...ZONE_AS_DEVICE, label: zone.label, on: zone.on }}
+						// Held with the swatches: a power flip mid-change would race
+						// the colour command the zone is still working through.
+						isDisabled={pending}
 						offIcon={LightbulbOff}
 						offLabel="Off"
 						onIcon={Lightbulb}

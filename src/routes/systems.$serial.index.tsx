@@ -475,6 +475,9 @@ function WaterColorsHero({
 					) : null}
 					<TrackSwitch
 						device={device}
+						// A toggle would inject a relay pulse into the sequence the
+						// panel is counting out, and the fixture counts it too.
+						isDisabled={pending}
 						offIcon={LightbulbOff}
 						offLabel="Off"
 						onIcon={Lightbulb}
