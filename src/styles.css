@@ -9,6 +9,27 @@
  */
 :root {
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+
+  /*
+   * Card glow: how much accent is mixed in at the corner, and how far across
+   * the card it reaches before fading out. Tuned to read the same over both
+   * themes' surfaces, so neither needs to override it.
+   */
+  --hero-glow: 6%;
+  --hero-spread: 50%;
+}
+
+/*
+ * Every card carries the same ambient wash from its top-right corner. Painted
+ * as a background layer rather than a positioned element so it scales with the
+ * card, needs no overflow clipping, and cannot be knocked out of place.
+ */
+.card {
+  background-image: radial-gradient(
+    circle at 100% 0%,
+    color-mix(in oklab, var(--accent) var(--hero-glow), transparent) 0%,
+    transparent var(--hero-spread)
+  );
 }
 
 body {

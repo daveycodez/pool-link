@@ -48,11 +48,9 @@ export function DeviceIcon({ device }: { device: PoolDevice }) {
 
 export function EquipmentRow({
 	device,
-	busy,
 	onToggle,
 }: {
 	device: PoolDevice;
-	busy: boolean;
 	onToggle: (on: boolean) => void;
 }) {
 	return (
@@ -71,7 +69,6 @@ export function EquipmentRow({
 			<Switch
 				aria-label={device.label}
 				isSelected={device.on}
-				isDisabled={busy}
 				onChange={(on: boolean) => onToggle(on)}
 			>
 				<Switch.Content>

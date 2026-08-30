@@ -1,4 +1,4 @@
-import { Button, Card, NumberField, Switch } from "@heroui/react";
+import { Button, Card, Switch } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
 	Bubbles,
@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { EquipmentRow } from "#/components/device-row";
 import { Loading } from "#/components/loading";
+import { POOL_RANGE, SPA_RANGE, TempStepper } from "#/components/temp-stepper";
 import { JANDY_WATERCOLORS, WATERCOLOR_HEX } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useLightColor, useSetTemps } from "#/lib/queries";
@@ -54,7 +55,6 @@ function Pool() {
 			poolSet={poolSet}
 			spaSet={spaSet}
 			light={light}
-			busy={actuate.isPending || setTemps.isPending || lightColor.isPending}
 			onToggle={(d, on) => actuate.mutate({ device: d, on })}
 			onSetTemps={(sp, pl) => setTemps.mutate({ spa: sp, pool: pl })}
 			onLightColor={(effectId) =>
@@ -81,7 +81,6 @@ function PoolScreen({
 	poolSet,
 	spaSet,
 	light,
-	busy,
 	onToggle,
 	onSetTemps,
 	onLightColor,
@@ -95,7 +94,6 @@ function PoolScreen({
 	poolSet: PoolDevice | undefined;
 	spaSet: PoolDevice | undefined;
 	light: PoolDevice | undefined;
-	busy: boolean;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 	onSetTemps: (spa: string, pool: string) => void;
 	onLightColor: (effectId: number) => void;
@@ -103,7 +101,6 @@ function PoolScreen({
 	return (
 		<div className="space-y-4">
 			<ModeHero
-				busy={busy}
 				heater={heaters.find((h) =>
 					spaMode ? h.name.startsWith("spa") : h.name.startsWith("pool"),
 				)}
@@ -123,7 +120,6 @@ function PoolScreen({
 			{light ? (
 				<LightHero
 					device={light}
-					busy={busy}
 					onToggle={(on) => onToggle(light, on)}
 					onColor={onLightColor}
 				/>
@@ -132,7 +128,6 @@ function PoolScreen({
 			{waterfall ? (
 				<EquipmentRow
 					device={waterfall}
-					busy={busy}
 					onToggle={(on) => onToggle(waterfall, on)}
 				/>
 			) : null}
@@ -152,7 +147,6 @@ function ModeHero({
 	jetPump,
 	heater,
 	setPoint,
-	busy,
 	onToggle,
 	onSetPoint,
 }: {
@@ -162,26 +156,12 @@ function ModeHero({
 	jetPump: PoolDevice | undefined;
 	heater: PoolDevice | undefined;
 	setPoint: PoolDevice | undefined;
-	busy: boolean;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 	onSetPoint: (temp: number) => void;
 }) {
-	// Ranges the panel accepts, and the granularity it steps in.
-	const range = spaMode
-		? { min: 98, max: 104, step: 1 }
-		: { min: 78, max: 88, step: 2 };
 	const target = Number(setPoint?.value);
 	return (
-		<Card className="relative overflow-hidden p-6">
-			<div
-				aria-hidden
-				className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full"
-				style={{
-					background:
-						"radial-gradient(circle, color-mix(in oklab, var(--accent) 12%, transparent) 0%, transparent 75%)",
-				}}
-			/>
-
+		<Card className="p-6">
 			{/* Two columns, not one row: the switch stack grows downward on its own
 			    without pushing the reading down or resizing the card. */}
 			<div className="flex items-start justify-between gap-4">
@@ -205,23 +185,12 @@ function ModeHero({
 					{/* Target sits under the reading so the two can be compared — the
 					    whole point of showing both. */}
 					{Number.isFinite(target) ? (
-						<NumberField
-							aria-label="Target temperature"
+						<TempStepper
 							className="mt-3 w-fit"
-							isDisabled={busy || !heater?.on}
-							maxValue={range.max}
-							minValue={range.min}
-							onChange={onSetPoint}
-							step={range.step}
+							onCommit={onSetPoint}
+							range={spaMode ? SPA_RANGE : POOL_RANGE}
 							value={target}
-							variant="secondary"
-						>
-							<NumberField.Group>
-								<NumberField.DecrementButton />
-								<NumberField.Input className="w-14 text-center" />
-								<NumberField.IncrementButton />
-							</NumberField.Group>
-						</NumberField>
+						/>
 					) : null}
 				</div>
 
@@ -229,7 +198,6 @@ function ModeHero({
 					{spaPump ? (
 						<TrackSwitch
 							device={spaPump}
-							busy={busy}
 							offIcon={Waves}
 							offLabel="Pool"
 							onIcon={Bubbles}
@@ -243,7 +211,6 @@ function ModeHero({
 					{heater ? (
 						<TrackSwitch
 							device={heater}
-							busy={busy}
 							offIcon={Flame}
 							offLabel="Heat"
 							onIcon={Flame}
@@ -255,7 +222,6 @@ function ModeHero({
 					{spaMode && jetPump ? (
 						<TrackSwitch
 							device={jetPump}
-							busy={busy}
 							offIcon={Wind}
 							offLabel="Jets"
 							onIcon={Wind}
@@ -277,7 +243,6 @@ function TrackSwitch({
 	onIcon: OnIcon,
 	offIcon: OffIcon,
 	tone = "accent",
-	busy,
 	onToggle,
 }: {
 	device: PoolDevice;
@@ -287,7 +252,6 @@ function TrackSwitch({
 	offIcon: React.ComponentType<{ className?: string }>;
 	/** Selected-state colour, so spa and heat read apart from the rest. */
 	tone?: "accent" | "warning" | "danger";
-	busy: boolean;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 }) {
 	const toned = {
@@ -303,7 +267,6 @@ function TrackSwitch({
 		<Switch
 			className="h-6 justify-center"
 			aria-label={onLabel}
-			isDisabled={busy}
 			isSelected={device.on}
 			onChange={(on: boolean) => onToggle(device, on)}
 			size="lg"
@@ -364,12 +327,10 @@ const LIGHT_SHOWS: Record<string, [string, string]> = {
  */
 function LightHero({
 	device,
-	busy,
 	onToggle,
 	onColor,
 }: {
 	device: PoolDevice;
-	busy: boolean;
 	onToggle: (on: boolean) => void;
 	onColor: (effectId: number) => void;
 }) {
@@ -377,36 +338,19 @@ function LightHero({
 	const effects = Object.keys(JANDY_WATERCOLORS).filter(
 		(name) => JANDY_WATERCOLORS[name] > 0,
 	);
-	const glow = picked ? WATERCOLOR_HEX[picked] : "var(--accent)";
 
 	return (
-		<Card className="relative overflow-hidden p-6">
-			<div
-				aria-hidden
-				className="pointer-events-none absolute -right-20 -top-20 size-64 rounded-full transition-colors duration-500"
-				style={{
-					background: `radial-gradient(circle, color-mix(in oklab, ${glow} ${
-						device.on ? "22%" : "8%"
-					}, transparent) 0%, transparent 75%)`,
-				}}
-			/>
-
+		<Card className="p-6">
 			<div className="flex items-start justify-between gap-4">
 				<div className="min-w-0">
 					<div className="flex h-6 items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
 						<Lightbulb className="size-4 text-accent" />
 						{device.label}
 					</div>
-					{picked ? (
-						<div className="mt-1 truncate text-lg font-semibold tracking-tight">
-							{picked}
-						</div>
-					) : null}
 				</div>
 
 				<TrackSwitch
 					device={device}
-					busy={busy}
 					offIcon={LightbulbOff}
 					offLabel="Off"
 					onIcon={Lightbulb}
@@ -421,17 +365,20 @@ function LightHero({
 				{effects.map((name) => (
 					<Button
 						aria-pressed={picked === name}
-						className={`w-full justify-start text-xs ${
-							picked === name ? "ring-2 ring-accent ring-inset" : ""
-						}`}
-						isDisabled={busy}
+						className="w-full justify-start text-xs"
 						key={name}
+						// Effect ids start at 1 and 0 is "off", so setting one turns the
+						// light on as well — no separate toggle, which would race the
+						// colour with a plain on command.
 						onPress={() => {
 							setPicked(name);
 							onColor(JANDY_WATERCOLORS[name]);
 						}}
 						size="sm"
-						variant="tertiary"
+						// Filled while this effect is the one running — but only while
+						// the light is actually on, or an off light would still look
+						// like it had a colour selected.
+						variant={picked === name && device.on ? "primary" : "tertiary"}
 					>
 						<span
 							className="size-4 shrink-0 rounded-full ring-1 ring-black/10 ring-inset dark:ring-white/15"

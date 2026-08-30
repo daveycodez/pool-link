@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	useIsMutating,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import {
 	addDevice,
 	getDeviceStatus,
@@ -18,6 +23,23 @@ import type { PoolDevice } from "#/lib/iaqualink/types";
 
 /** Poll cadence: the panel is the source of truth, we just mirror it. */
 const POLL_MS = 5_000;
+
+/**
+ * The panel serialises commands over RS-485 and keeps reporting a transient
+ * state while it works through one — a light is the worst case, since Jandy
+ * WaterColors change effect by pulsing the relay and read as off throughout.
+ *
+ * So a command is not finished when its HTTP call returns; it is finished when
+ * the panel has settled. Every mutation stays pending for that long, which
+ * makes `isMutating` the single signal the poll needs.
+ */
+const SETTLE_MS = 5_000;
+
+/** Lights pulse the relay through a sequence, so they take twice as long. */
+const LIGHT_SETTLE_MS = 15_000;
+
+const settle = (ms: number) =>
+	new Promise((resolve) => setTimeout(resolve, ms));
 
 export const keys = {
 	session: () => ["session"] as const,
@@ -72,6 +94,10 @@ export function useSystems(enabled: boolean) {
 }
 
 export function useSnapshot(serial: string | undefined) {
+	// Mutations stay pending until the panel has settled, so this covers both
+	// the request and the transient state that follows it.
+	const mutating = useIsMutating() > 0;
+
 	return useQuery({
 		queryKey: keys.snapshot(serial ?? "-"),
 		queryFn: async () => {
@@ -79,12 +105,12 @@ export function useSnapshot(serial: string | undefined) {
 			return normalize(serial as string, home, devices);
 		},
 		enabled: Boolean(serial),
-		refetchInterval: POLL_MS,
+		refetchInterval: mutating ? false : POLL_MS,
 		refetchIntervalInBackground: false,
-		// Longer than the poll so healthy cycles never flip the Live chip:
-		// stale means a poll was actually missed — a backgrounded tab, a failed
-		// request — not simply the gap between two successful ones.
-		staleTime: POLL_MS * 2,
+		// Long enough to cover the longest a command can hold the poll, plus a
+		// cycle. Stale then means a poll was actually missed — a backgrounded
+		// tab, a failed request — not a command still settling.
+		staleTime: LIGHT_SETTLE_MS + POLL_MS,
 		retry: (count, error) =>
 			error instanceof AqualinkError && error.status === 401
 				? false
@@ -97,14 +123,17 @@ export function useActuate(serial: string | undefined) {
 	const qc = useQueryClient();
 	const qk = keys.snapshot(serial ?? "-");
 	return useMutation({
-		mutationFn: ({ device, on }: { device: PoolDevice; on: boolean }) =>
-			toggleDevice(
+		mutationFn: async ({ device, on }: { device: PoolDevice; on: boolean }) => {
+			const res = await toggleDevice(
 				serial as string,
 				device.name,
 				device.kind,
 				on,
 				typeof device.raw.subtype === "string" ? device.raw.subtype : "",
-			),
+			);
+			await settle(device.kind === "light" ? LIGHT_SETTLE_MS : SETTLE_MS);
+			return res;
+		},
 		onMutate: async ({ device, on }) => {
 			await qc.cancelQueries({ queryKey: qk });
 			const prev = qc.getQueryData(qk);
@@ -131,8 +160,32 @@ export function useSetTemps(serial: string | undefined) {
 	const qc = useQueryClient();
 	const qk = keys.snapshot(serial ?? "-");
 	return useMutation({
-		mutationFn: ({ spa, pool }: { spa: string; pool: string }) =>
-			setTemps(serial as string, spa, pool),
+		mutationFn: async ({ spa, pool }: { spa: string; pool: string }) => {
+			const res = await setTemps(serial as string, spa, pool);
+			await settle(SETTLE_MS);
+			return res;
+		},
+		onMutate: async ({ spa, pool }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
+				if (!old) return old;
+				return {
+					...old,
+					devices: old.devices.map((d) =>
+						d.name === "spa_set_point"
+							? { ...d, value: spa }
+							: d.name === "pool_set_point"
+								? { ...d, value: pool }
+								: d,
+					),
+				};
+			});
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
 		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
 	});
 }
@@ -142,7 +195,7 @@ export function useLightColor(serial: string | undefined) {
 	const qc = useQueryClient();
 	const qk = keys.snapshot(serial ?? "-");
 	return useMutation({
-		mutationFn: ({
+		mutationFn: async ({
 			name,
 			subtype,
 			effectId,
@@ -150,7 +203,34 @@ export function useLightColor(serial: string | undefined) {
 			name: string;
 			subtype: string;
 			effectId: number;
-		}) => setLightColor(serial as string, name, subtype, effectId),
+		}) => {
+			const res = await setLightColor(
+				serial as string,
+				name,
+				subtype,
+				effectId,
+			);
+			await settle(LIGHT_SETTLE_MS);
+			return res;
+		},
+		// Effect ids start at 1 and 0 is "off", so choosing one turns the light on.
+		onMutate: async ({ name }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData(qk);
+			qc.setQueryData(qk, (old: ReturnType<typeof normalize> | undefined) => {
+				if (!old) return old;
+				return {
+					...old,
+					devices: old.devices.map((d) =>
+						d.name === name ? { ...d, on: true } : d,
+					),
+				};
+			});
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
 		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
 	});
 }

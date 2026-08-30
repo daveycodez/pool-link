@@ -1,8 +1,9 @@
-import { Card, NumberField } from "@heroui/react";
+import { Card } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Thermometer } from "lucide-react";
 import { EquipmentRow, IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
+import { POOL_RANGE, SPA_RANGE, TempStepper } from "#/components/temp-stepper";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useActuate, useSetTemps } from "#/lib/queries";
 import { usePool, useRequireSession } from "#/lib/use-pool";
@@ -10,10 +11,6 @@ import { usePool, useRequireSession } from "#/lib/use-pool";
 export const Route = createFileRoute("/systems/$serial/equipment")({
 	component: Equipment,
 });
-
-/** Ranges the panel accepts, and the granularity it steps in. */
-const SPA_RANGE = { min: 98, max: 104, step: 1 };
-const POOL_RANGE = { min: 78, max: 88, step: 2 };
 
 function Equipment() {
 	const { serial } = Route.useParams();
@@ -40,7 +37,6 @@ function Equipment() {
 	const spaPump = controls.find((d) => d.name === "spa_pump");
 	const lead = new Set(["pool_pump", "spa_pump"]);
 	const rest = controls.filter((d) => !lead.has(d.name));
-	const busy = actuate.isPending || setTemps.isPending;
 
 	if (controls.length === 0 && heaters.length === 0 && !spaSet && !poolSet) {
 		return (
@@ -57,7 +53,6 @@ function Equipment() {
 			    temperature it targets, then whatever else the panel exposes. */}
 			{filterPump ? (
 				<EquipmentRow
-					busy={busy}
 					device={filterPump}
 					onToggle={(on) => actuate.mutate({ device: filterPump, on })}
 				/>
@@ -65,7 +60,6 @@ function Equipment() {
 
 			{spaPump ? (
 				<EquipmentRow
-					busy={busy}
 					device={spaPump}
 					onToggle={(on) => actuate.mutate({ device: spaPump, on })}
 				/>
@@ -73,14 +67,12 @@ function Equipment() {
 
 			{poolHeater ? (
 				<EquipmentRow
-					busy={busy}
 					device={poolHeater}
 					onToggle={(on) => actuate.mutate({ device: poolHeater, on })}
 				/>
 			) : null}
 			{poolSet ? (
 				<TempRow
-					busy={busy}
 					device={poolSet}
 					onChange={pool}
 					range={POOL_RANGE}
@@ -90,14 +82,12 @@ function Equipment() {
 
 			{spaHeater ? (
 				<EquipmentRow
-					busy={busy}
 					device={spaHeater}
 					onToggle={(on) => actuate.mutate({ device: spaHeater, on })}
 				/>
 			) : null}
 			{spaSet ? (
 				<TempRow
-					busy={busy}
 					device={spaSet}
 					onChange={spa}
 					range={SPA_RANGE}
@@ -109,7 +99,6 @@ function Equipment() {
 				<EquipmentRow
 					key={d.id}
 					device={d}
-					busy={busy}
 					onToggle={(on) => actuate.mutate({ device: d, on })}
 				/>
 			))}
@@ -122,17 +111,13 @@ function TempRow({
 	title,
 	device,
 	range,
-	busy,
 	onChange,
 }: {
 	title: string;
 	device: PoolDevice;
 	range: { min: number; max: number; step: number };
-	busy: boolean;
 	onChange: (temp: number) => void;
 }) {
-	const value = Number(device.value);
-
 	return (
 		<Card className="flex-row items-center justify-between gap-4">
 			<div className="flex items-center gap-4">
@@ -141,23 +126,12 @@ function TempRow({
 				</IconCircle>
 				<Card.Title>{title}</Card.Title>
 			</div>
-			<NumberField
-				aria-label={title}
+			<TempStepper
 				className="w-fit"
-				isDisabled={busy || !Number.isFinite(value)}
-				maxValue={range.max}
-				minValue={range.min}
-				onChange={onChange}
-				step={range.step}
-				value={value}
-				variant="secondary"
-			>
-				<NumberField.Group>
-					<NumberField.DecrementButton />
-					<NumberField.Input className="w-14 text-center" />
-					<NumberField.IncrementButton />
-				</NumberField.Group>
-			</NumberField>
+				onCommit={onChange}
+				range={range}
+				value={Number(device.value)}
+			/>
 		</Card>
 	);
 }
