@@ -676,12 +676,13 @@ export function useHeatPump(serial: string | undefined) {
  * first colour, so Alpine White (id 1) needs no pulses at all and the count
  * is id − 1. The panel does all this blind every time, since neither it nor
  * the API ever knows what colour is running — which is why the duration
- * depends only on the target. 6s base, then a second per id — settled by
- * trial against the pool; a shorter base released the refetch into the
- * pad's transient window and the switch flickered at the handoff.
+ * depends only on the target. 6s base, then 0.6s per id — the pulse cadence
+ * AqualinkD uses when it programs these fixtures itself. The base is settled
+ * by trial: a shorter one released the refetch into the pad's transient
+ * window and the switch flickered at the handoff.
  */
 const WATERCOLORS_RESET_MS = 6_000;
-const WATERCOLORS_STEP_MS = 1_000;
+const WATERCOLORS_STEP_MS = 600;
 const waterColorsHold = (effectId: number) =>
 	WATERCOLORS_RESET_MS + WATERCOLORS_STEP_MS * effectId;
 
