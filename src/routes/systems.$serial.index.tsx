@@ -388,7 +388,7 @@ function PoolSpaHero({
 						</span>
 						<div className="flex flex-col items-start gap-1.5">
 							{caption ? (
-								<Chip className="whitespace-nowrap" variant="soft">
+								<Chip className="whitespace-nowrap" size="sm" variant="soft">
 									{caption}
 								</Chip>
 							) : null}
