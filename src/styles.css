@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+/*
+ * Pin the typeface rather than inheriting the platform's. HeroUI sizes its
+ * controls in rem and its own comments note the difference ("~14px on desktop,
+ * ~16px on mobile") — with a different face per OS, any width tuned against
+ * one of them is wrong on the others.
+ */
+:root {
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
 body {
 	@apply bg-background min-h-svh;
 }

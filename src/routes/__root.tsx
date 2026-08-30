@@ -47,6 +47,16 @@ export const Route = createRootRoute({
 			{ title: "Pool Link" },
 		],
 		links: [
+			{ rel: "preconnect", href: "https://fonts.googleapis.com" },
+			{
+				crossOrigin: "anonymous",
+				href: "https://fonts.gstatic.com",
+				rel: "preconnect",
+			},
+			{
+				href: "https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap",
+				rel: "stylesheet",
+			},
 			{ rel: "stylesheet", href: appCss },
 			{ rel: "manifest", href: `${base}manifest.webmanifest` },
 			// Browsers that understand SVG favicons take the first; the .ico is
