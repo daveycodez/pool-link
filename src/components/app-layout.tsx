@@ -1,10 +1,8 @@
 import { Chip } from "@heroui/react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import {
 	House,
 	MapPinHouse,
-	RefreshCw,
 	Settings,
 	ThermometerSnowflake,
 	ThermometerSun,
@@ -16,8 +14,7 @@ import { BottomNav } from "#/components/bottom-nav";
 import { Loading } from "#/components/loading";
 import { ThemeToggle } from "#/components/theme-toggle";
 import { isCelsius, timeAgo } from "#/lib/format";
-import { keys } from "#/lib/keys";
-import { usePanel, useSession, useSystems, useUserId } from "#/lib/queries";
+import { usePanel, useSession, useSystems } from "#/lib/queries";
 
 /**
  * Page chrome for every route. The header lives here so /login gets the
@@ -34,10 +31,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	const session = useSession();
 	const signedIn = Boolean(session.data);
 	const systems = useSystems(signedIn);
-	const uid = useUserId();
 	const router = useRouter();
 	const navigate = useNavigate();
-	const qc = useQueryClient();
 
 	const pathname = useRouterState({ select: (st) => st.location.pathname });
 
@@ -64,12 +59,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 		Number.isFinite(airValue) && airValue >= (celsius ? 21 : 70)
 			? ThermometerSun
 			: ThermometerSnowflake;
-	// On the list, each card's online state is its own query — refreshing the
-	// list alone would leave every chip showing whatever it last saw.
-	const refresh = () => {
-		source.refetch();
-		if (!serial) qc.invalidateQueries({ queryKey: keys.statuses(uid) });
-	};
 	const live = source.isSuccess && !source.isStale;
 	// Only tick while stale — no reason to re-render the whole layout every
 	// second when the label is the constant "Live".
@@ -182,17 +171,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 							{/* size-5 glyphs leave 8px of padding inside each 36px button, so
 						    a smaller gap here still reads level with the chip's spacing. */}
 							<div className="flex items-center space-x-0.5">
-								{hasLive ? (
-									<IconBtn
-										label="Refresh"
-										onPress={refresh}
-										disabled={source.isFetching}
-									>
-										<RefreshCw
-											className={`size-4.5 ${source.isFetching ? "animate-spin" : ""}`}
-										/>
-									</IconBtn>
-								) : null}
 								<ThemeToggle />
 								{/* Two settings pages: a system's adds renaming, the account's
 							    does not. */}
