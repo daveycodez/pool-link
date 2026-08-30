@@ -552,12 +552,20 @@ function WaterColorsHero({
 								onColor(JANDY_WATERCOLORS[name]);
 							}}
 							size="sm"
-							// Never primary: the panel does not report this fixture's
-							// colour, so a filled swatch would claim knowledge nobody
-							// has — anyone at the pad or in another app can change it
-							// underneath us. Secondary reads as the hint it is: what
-							// the switch will go to when this light is turned on.
-							variant={marked === name ? "secondary" : "tertiary"}
+							// Primary only while the change is in flight: for those
+							// seconds we know what the fixture is being told, so the
+							// swatch commits alongside the spinner. Once it lands
+							// nothing confirms it — the panel never reports this
+							// fixture's colour, and anyone at the pad can change it —
+							// so it falls back to secondary: a hint at what the switch
+							// will go to, not a claim about what is lit.
+							variant={
+								marked === name
+									? pending
+										? "primary"
+										: "secondary"
+									: "tertiary"
+							}
 						>
 							<ColorSwatch
 								className="shrink-0"
