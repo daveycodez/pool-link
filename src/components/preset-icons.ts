@@ -3,6 +3,7 @@ import {
 	ArrowUpFromLine,
 	Blinds,
 	Bot,
+	BroomSparkles,
 	Bubbles,
 	ChevronsDown,
 	ChevronsUp,
@@ -16,14 +17,18 @@ import {
 	Lamp,
 	LayoutGrid,
 	Lightbulb,
+	Moon,
 	Music,
 	Palette,
+	PartyPopper,
+	Power,
 	RefreshCcw,
 	Snowflake,
 	Sparkles,
 	Split,
 	SprayCan,
 	Sun,
+	Sunset,
 	ThermometerSun,
 	Timer,
 	TrendingDown,
@@ -116,4 +121,25 @@ export function presetIcon(label: string | undefined): Icon | null {
 	const exact = PRESET_ICONS[key];
 	if (exact) return exact;
 	return PRESET_PATTERNS.find(([re]) => re.test(key))?.[1] ?? null;
+}
+
+/**
+ * OneTouch macros are named from the panel's own list too, so the same
+ * argument applies: matching the name is reading the panel's vocabulary, not
+ * guessing at one owner's wording. A macro's contents are unreadable from
+ * here, so the icon is all the hint there is about what it does.
+ */
+const MACRO_ICONS: Record<string, Icon> = {
+	"all off": Power,
+	"clean mode": BroomSparkles,
+	"day party": PartyPopper,
+	"night party": Moon,
+	"pool mode": Waves,
+	"spa mode": Bubbles,
+};
+
+/** Falls back to a generic scene mark, so no macro sits iconless beside one. */
+export function macroIcon(label: string | undefined): Icon {
+	const key = (label ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+	return MACRO_ICONS[key] ?? Sunset;
 }

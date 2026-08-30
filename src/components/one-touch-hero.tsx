@@ -1,12 +1,13 @@
 import { Button, Card } from "@heroui/react";
-import { Sparkles } from "lucide-react";
+import { Wand2 } from "lucide-react";
+import { useState } from "react";
 import type { OneTouchMacro } from "#/lib/iaqualink/types";
+import { macroIcon } from "./preset-icons";
 
 /**
- * The panel's own scenes. What each one does was decided at the panel and is
- * not readable from here — only its name and whether it is the one running.
- * So this offers no icons or descriptions it would have to invent, just the
- * names the owner gave them.
+ * The panel's own scenes. What each one does is decided at the panel and is
+ * not readable from here — the name is the only thing to go on, so the icon
+ * comes from that and nothing else is offered that would have to be invented.
  */
 export function OneTouchHero({
 	macros,
@@ -15,12 +16,18 @@ export function OneTouchHero({
 	macros: OneTouchMacro[];
 	onRun: (macro: OneTouchMacro) => void;
 }) {
+	// A scene takes a while to land, and until it does the panel still reports
+	// the old one. Holding the press locally means the button fills on the tap
+	// rather than a poll later — the panel's answer wins as soon as it has one.
+	const [picked, setPicked] = useState<string | null>(null);
+	const active = macros.find((m) => m.on)?.name ?? picked;
+
 	if (macros.length === 0) return null;
 
 	return (
 		<Card className="p-6">
 			<div className="flex h-6 items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
-				<Sparkles className="size-4 text-accent" />
+				<Wand2 className="size-4 text-accent" />
 				OneTouch
 			</div>
 
@@ -28,18 +35,33 @@ export function OneTouchHero({
 			    owner-written and vary in length, so equal widths keep the block
 			    from going ragged. */}
 			<div className="grid grid-cols-2 gap-2">
-				{macros.map((macro) => (
-					<Button
-						aria-pressed={macro.on}
-						className="w-full justify-start text-xs"
-						key={macro.name}
-						onPress={() => onRun(macro)}
-						size="sm"
-						variant={macro.on ? "primary" : "tertiary"}
-					>
-						{macro.label}
-					</Button>
-				))}
+				{macros.map((macro) => {
+					const Icon = macroIcon(macro.label);
+					return (
+						<Button
+							aria-pressed={active === macro.name}
+							className="w-full justify-start text-xs"
+							key={macro.name}
+							onPress={() => {
+								setPicked(macro.name);
+								onRun(macro);
+							}}
+							size="sm"
+							variant={active === macro.name ? "primary" : "tertiary"}
+						>
+							<Icon
+								// Muted while idle so the name leads; against the filled
+								// accent it takes the foreground meant to sit on it.
+								className={`shrink-0 ${
+									active === macro.name
+										? "text-accent-foreground"
+										: "text-muted"
+								}`}
+							/>
+							{macro.label}
+						</Button>
+					);
+				})}
 			</div>
 		</Card>
 	);
