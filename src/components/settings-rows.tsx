@@ -13,6 +13,7 @@ import {
 	ChevronRight,
 	CircleUser,
 	Copy,
+	Cpu,
 	ExternalLink,
 	Globe,
 	Hash,
@@ -30,7 +31,7 @@ import { THEMES } from "#/components/theme-toggle";
 import { webtouchUrl } from "#/lib/aqualink/client";
 import { errorMessage } from "#/lib/aqualink/types";
 import { groupSerial } from "#/lib/format";
-import { useSetDeviceName, useSystems } from "#/lib/queries";
+import { usePanel, useSetDeviceName, useSystems } from "#/lib/queries";
 
 export function SettingsRow({
 	Icon,
@@ -184,6 +185,30 @@ export function SystemSerialRow({ serial }: { serial: string }) {
 					</InputGroup.Suffix>
 				</InputGroup>
 			</TextField>
+		</SettingsRow>
+	);
+}
+
+/**
+ * What the panel calls itself, which is the other half of the identity the
+ * serial row above already gives: the serial names this installation, and this
+ * names the hardware doing the work. Nothing else in the app says which panel
+ * an account is talking to, and it is the first thing anyone comparing this
+ * app's behaviour against someone else's has to know.
+ *
+ * Absent unless the panel volunteers it. Only one panel's frame has ever been
+ * read, so the field is expected to be null on hardware this has never seen,
+ * and a row that cannot say anything is worse than no row.
+ */
+export function PanelModelRow({ serial }: { serial: string }) {
+	// Already cached by the layout, which polls this system on every page under
+	// it, so this costs no request of its own.
+	const model = usePanel(serial).data?.model;
+	if (!model) return null;
+
+	return (
+		<SettingsRow Icon={Cpu} title="Panel">
+			<span className="truncate font-mono text-muted text-sm">{model}</span>
 		</SettingsRow>
 	);
 }

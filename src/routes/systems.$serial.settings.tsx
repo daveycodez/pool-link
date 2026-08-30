@@ -6,6 +6,7 @@ import {
 	AppearanceRow,
 	DiagnosticsRow,
 	MySystemsRow,
+	PanelModelRow,
 	SignOutRow,
 	SystemNameRow,
 	SystemSerialRow,
@@ -29,6 +30,7 @@ function SystemSettings() {
 		<CardColumns>
 			<SystemNameRow serial={serial} />
 			<SystemSerialRow serial={serial} />
+			<PanelModelRow serial={serial} />
 			<AppearanceRow />
 			<AddSystemRow />
 			<WebTouchRow serial={serial} />
