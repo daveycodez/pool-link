@@ -1,6 +1,22 @@
-import { Button, Card, ColorSwatch, Label, Slider } from "@heroui/react";
+import {
+	Button,
+	Card,
+	ColorArea,
+	ColorPicker,
+	ColorSlider,
+	ColorSwatch,
+	Label,
+	parseColor,
+	Slider,
+} from "@heroui/react";
 import { Lightbulb, LightbulbOff } from "lucide-react";
-import { effectStops, ICL_DIM_STEP, ICL_EFFECTS } from "#/lib/aqualink/enums";
+import { useEffect, useRef } from "react";
+import {
+	effectStops,
+	ICL_CUSTOM_COLOR_ID,
+	ICL_DIM_STEP,
+	ICL_EFFECTS,
+} from "#/lib/aqualink/enums";
 import type { IclZone } from "#/lib/iaqualink/types";
 import type { IclChange } from "#/lib/queries";
 import { TrackSwitch } from "./track-switch";
@@ -20,6 +36,20 @@ export function IclHero({
 }) {
 	// Off is a state, not something to pick — the switch already covers it.
 	const effects = Object.entries(ICL_EFFECTS).filter(([, id]) => id > 0);
+
+	const [r, g, b, w] = zone.rgbw;
+	const custom = parseColor(`rgb(${r}, ${g}, ${b})`);
+	const isCustom = zone.colorId === ICL_CUSTOM_COLOR_ID;
+
+	// Dragging reports continuously, and every report would be a command the
+	// panel works through in turn — so only what the drag settles on is sent.
+	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (timer.current) clearTimeout(timer.current);
+		},
+		[],
+	);
 
 	return (
 		<Card className="p-6">
@@ -112,10 +142,73 @@ export function IclHero({
 						</Button>
 					);
 				})}
+
+				{/* The panel keeps one custom colour per zone and reports it back as
+				    effect 16, so this belongs with the effects rather than apart from
+				    them. White is a fourth LED channel with no picker of its own —
+				    whatever the zone already had is passed through untouched. */}
+				<ColorPicker
+					// Inline-flex by default, so it shrinks to its trigger unless told
+					// otherwise. Carries the metrics of a sm Button so it sits flush
+					// with the effects rather than merely near them.
+					className="w-full"
+					onChange={(color) => {
+						if (timer.current) clearTimeout(timer.current);
+						timer.current = setTimeout(() => {
+							const rgb = color.toFormat("rgb");
+							onChange({
+								kind: "custom",
+								rgbw: [
+									rgb.getChannelValue("red"),
+									rgb.getChannelValue("green"),
+									rgb.getChannelValue("blue"),
+									w,
+								],
+								zoneId: zone.zoneId,
+							});
+						}, CUSTOM_DEBOUNCE_MS);
+					}}
+					value={custom}
+				>
+					<ColorPicker.Trigger
+						className={`h-9 w-full gap-2 rounded-3xl px-3 text-xs md:h-8 ${
+							isCustom && zone.on
+								? "bg-accent text-accent-foreground"
+								: "bg-default"
+						}`}
+					>
+						<ColorSwatch className="shrink-0" size="xs" />
+						<Label className="text-xs">Custom Color</Label>
+					</ColorPicker.Trigger>
+					<ColorPicker.Popover>
+						<ColorArea
+							aria-label="Custom colour"
+							className="max-w-full"
+							colorSpace="hsb"
+							xChannel="saturation"
+							yChannel="brightness"
+						>
+							<ColorArea.Thumb />
+						</ColorArea>
+						<ColorSlider
+							aria-label="Hue"
+							channel="hue"
+							className="gap-1 px-1"
+							colorSpace="hsb"
+						>
+							<ColorSlider.Track>
+								<ColorSlider.Thumb />
+							</ColorSlider.Track>
+						</ColorSlider>
+					</ColorPicker.Popover>
+				</ColorPicker>
 			</div>
 		</Card>
 	);
 }
+
+/** Long enough to cover a drag, short enough not to feel like a delay. */
+const CUSTOM_DEBOUNCE_MS = 600;
 
 /**
  * TrackSwitch speaks PoolDevice, and a zone is not one — it has no aux name
