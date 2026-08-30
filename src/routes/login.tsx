@@ -2,7 +2,6 @@ import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Waves } from "lucide-react";
 import { useState } from "react";
-import { errorMessage } from "#/lib/aqualink/types";
 import { useLogin } from "#/lib/queries";
 
 export const Route = createFileRoute("/login")({
@@ -19,7 +18,13 @@ function LoginScreen() {
 		e.preventDefault();
 		loginMutation.mutate(
 			{ email, password },
-			{ onSuccess: () => navigate({ to: "/", replace: true }) },
+			{
+				onSuccess: () => navigate({ to: "/", replace: true }),
+				// Toasted by the global handler like every other failure. The
+				// password goes with it: a rejected one is not worth re-submitting,
+				// and leaving it filled invites exactly that.
+				onError: () => setPassword(""),
+			},
 		);
 	}
 
@@ -68,11 +73,6 @@ function LoginScreen() {
 							<Label>Password</Label>
 							<Input autoComplete="current-password" placeholder="••••••••" />
 						</TextField>
-						{loginMutation.isError ? (
-							<p className="text-sm text-danger" role="alert">
-								{errorMessage(loginMutation.error)}
-							</p>
-						) : null}
 					</div>
 
 					<div className="flex flex-col gap-4">
