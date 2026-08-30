@@ -566,16 +566,16 @@ export function useHeatPump(serial: string | undefined) {
 /**
  * How long a WaterColors effect change holds, by target effect id.
  *
- * Measured against the official app (Alpine White id 1 ≈ 13s of progress
- * bar, Spring Green id 5 ≈ 25s, Magenta id 8 ≈ 33s, the water done ~5s
- * before the bar each time): the durations sit on a straight line in the
- * target id alone. So the panel is not stepping from the current colour — it
- * resets the fixture to the head of the table and pulses forward to the
- * target, which it can do blind, since neither it nor the API ever knows
- * what colour is running. Fitted to when the water is actually done rather
- * than to the app's padded bar.
+ * Timed against the water itself: Spring Green (id 5) done at 15s, Magenta
+ * (id 8) at 20s — a straight line in the target id alone, and one that
+ * back-fits the Alpine White (id 1) reading of ~8s. Linear in the target
+ * because the panel is not stepping from the current colour: it resets the
+ * fixture to the head of the table and pulses forward, which it can do
+ * blind, since neither it nor the API ever knows what colour is running.
+ * (The official app's progress bar runs the same line plus padding that
+ * grows with the id — measured water beats measured bar.)
  */
-const waterColorsHold = (effectId: number) => 5_000 + 3_000 * effectId;
+const waterColorsHold = (effectId: number) => 6_500 + 1_700 * effectId;
 
 /**
  * Set a light's color effect. Effect ids start at 1 and 0 is "off", so
