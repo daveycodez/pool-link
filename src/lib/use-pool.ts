@@ -20,12 +20,98 @@ import {
  * else's relay of the same name would be hidden too. It is here because it was
  * asked for; the durable shape is a list the owner edits rather than one the
  * code carries.
+ *
+ * The relay count that replaced the other label heuristic does not replace this
+ * one. The relay it hides is `aux_EA`, which sits outside the addresses the
+ * count measures, and the panel reports it the way it reports the three relays
+ * that are really there — a type and subtype of 0, against the 2 every padded
+ * slot carries, under a name its owner chose. It is a working relay somebody
+ * asked not to look at, not a slot with nothing behind it, and nothing the
+ * panel says would ever hide it.
  */
 const HIDDEN_LABELS = new Set(["bomb karen"]);
 
 /** Whether a device is one the screens should show at all. */
 export function isHidden(device: { label: string }): boolean {
 	return HIDDEN_LABELS.has(device.label.trim().toLowerCase());
+}
+
+/**
+ * How many numbered relays the devices screen names before the banks begin.
+ *
+ * The numbered range is always aux_1 … aux_7 — an RS-8 (filter pump plus seven
+ * auxiliaries) fills every one of them, and a panel bigger than that reaches
+ * its remaining relays through expansion banks instead. The range does not
+ * shrink for a smaller panel: this pool's RS-4 reports all seven, four of them
+ * slots its hardware does not have.
+ */
+const BASE_AUX_SLOTS = 7;
+
+/**
+ * The expansion banks, in address order, and how many relays each holds.
+ *
+ * The panel's own labels are what fix this order. On this RS-4 every slot past
+ * the hardware is named "Aux V1" through "Aux V28", and that sequence runs
+ * unbroken from aux_4 to aux_7, on through aux_B1–B8, aux_C1–C8 and aux_D1–D8
+ * — V5 lands exactly on aux_B1. So the banks are not a separate address space
+ * to be judged on their own; they are the tail of the one the numbered slots
+ * begin, and a relay's position in it can be counted straight through.
+ */
+const AUX_BANKS = ["B", "C", "D"];
+const AUX_BANK_SIZE = 8;
+
+/**
+ * Where a relay sits in the panel's single ordered run of auxiliary addresses,
+ * or null for an address that is not part of it.
+ *
+ * `aux_EA` is the null case and the reason this returns one: it is outside
+ * both the numbered range and the banks, the count says nothing about it, and
+ * on this pool it is a configured relay wearing an owner's name. An address
+ * this cannot place is left for the caller to show, never to hide.
+ */
+function auxIndex(name: string): number | null {
+	const numbered = /^aux_(\d+)$/.exec(name);
+	if (numbered) return Number(numbered[1]);
+
+	const banked = /^aux_([A-Z])(\d+)$/.exec(name);
+	if (!banked) return null;
+	const bank = AUX_BANKS.indexOf(banked[1]);
+	const slot = Number(banked[2]);
+	if (bank < 0 || slot < 1 || slot > AUX_BANK_SIZE) return null;
+	return BASE_AUX_SLOTS + bank * AUX_BANK_SIZE + slot;
+}
+
+/**
+ * The panel's own name for a slot it has no relay behind. Only a fallback now
+ * — see isWiredRelay — and fragile in exactly the way that made it worth
+ * replacing: it is matched against a label the owner renames at the panel.
+ */
+const GENERIC_AUX = /^aux\s+v\d+$/i;
+
+/**
+ * Whether the panel has hardware behind this relay.
+ *
+ * The devices screen is padded to the largest panel the protocol addresses, so
+ * most of what it names is nothing: this RS-4 reports 31 addressable relays for
+ * the 3 it owns. `relay_count` is the panel saying how many it has, filter pump
+ * included, so the auxiliaries run from index 1 to relayCount − 1 and every
+ * address past that is padding — whatever it is called. That last part is the
+ * whole point of the change: the label used to decide this, so renaming a slot
+ * on the panel conjured a relay and naming a real one "Aux V9" erased it.
+ *
+ * When the count is missing or unusable there is nothing else to go on, so this
+ * falls back to reading the label, which is the behaviour every panel had
+ * before. Both branches are answered generously — a device this cannot place is
+ * shown — because a phantom row is a nuisance and a missing one is a relay the
+ * owner cannot reach.
+ */
+export function isWiredRelay(
+	device: { name: string; label: string },
+	relayCount: number | null,
+): boolean {
+	if (relayCount === null) return !GENERIC_AUX.test(device.label);
+	const index = auxIndex(device.name);
+	return index === null || index < relayCount;
 }
 
 /** Jandy LED WaterColors — the one light family with an effect list here. */
@@ -132,9 +218,13 @@ export function usePool(serial: string) {
 		if (liveTemp) rememberTemp(serial, bodyKey, liveTemp);
 	}, [serial, bodyKey, liveTemp]);
 
-	// "Aux V3" and friends are unconfigured virtual slots the panel always
-	// reports; hide them unless one is somehow on.
-	const genericAux = /^aux\s+v\d+$/i;
+	// The devices screen is padded out to the largest panel the protocol can
+	// address, so most of what it names is a slot with nothing behind it. The
+	// panel's relay count says where its hardware stops; anything past that is
+	// padding and stays off both screens — unless it is somehow on, which would
+	// mean the count is wrong and a relay is running, and that is worth seeing.
+	const relayCount = snap.data?.relayCount ?? null;
+	const wired = (d: PoolDevice) => d.on || isWiredRelay(d, relayCount);
 
 	return {
 		serial,
@@ -204,19 +294,16 @@ export function usePool(serial: string) {
 		// named or positioned by this app, so a pool with different equipment
 		// gets different cards.
 		auxes: devices.filter(
-			(d) =>
-				d.name.startsWith("aux_") &&
-				!isHidden(d) &&
-				(d.on || !genericAux.test(d.label)),
+			(d) => d.name.startsWith("aux_") && !isHidden(d) && wired(d),
 		),
 		// Equipment is the granular view: every actionable device the panel
 		// exposes, including ones the pool screen surfaces its own way. Only the
-		// unconfigured virtual slots are hidden, and only while they are off.
+		// slots past the panel's relay count are hidden, and only while off.
 		controls: devices.filter(
 			(d) =>
 				(["pump", "switch", "dimmer", "light"].includes(d.kind) ||
 					d.name === "solar_heater") &&
-				(d.on || !genericAux.test(d.label)),
+				wired(d),
 		),
 	};
 }

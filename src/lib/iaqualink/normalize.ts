@@ -391,6 +391,33 @@ function buildMacros(onetouch: unknown): OneTouchMacro[] {
 	return out;
 }
 
+/**
+ * How many relays the panel has, from get_home's `relay_count`.
+ *
+ * The number is the one in the panel's model name: this pool answers "4", and
+ * the raw AQU frame in the same response spells out "RS-4 Combo". An AquaLink
+ * RS counts its filter pump among its relays, so a panel of size N carries
+ * N − 1 auxiliaries — which is why this pool's three configured relays sit at
+ * aux_1 to aux_3 and the panel calls aux_4 a virtual slot. That is what makes
+ * the field worth reading: aux_1 … aux_7 and the lettered expansion banks come
+ * back from every panel whatever its size, and this is the only thing in
+ * either screen that says where the hardware stops.
+ *
+ * The bounds are the range in which an answer can mean anything. Below 2 there
+ * is no auxiliary relay left at all, and taking such a number at face value
+ * would empty the equipment screen of a pool that plainly has equipment. Above
+ * 32 it has outrun the addresses the devices screen can name — seven numbered
+ * slots and three banks of eight, plus the filter pump — so it is not counting
+ * relays. Either way the caller gets null and falls back to whatever it did
+ * before this field existed, which is the only safe direction: showing a relay
+ * that is not there costs a dead row, and hiding one costs the owner a pump.
+ */
+function buildRelayCount(v: unknown): number | null {
+	const n = num(v);
+	if (n === null || !Number.isInteger(n) || n < 2 || n > 32) return null;
+	return n;
+}
+
 export function normalize(
 	serial: string,
 	home: Raw,
@@ -423,6 +450,7 @@ export function normalize(
 		heatPump: buildHeatPump(merged.heatpump_info),
 		saltCell: buildSaltCell(merged),
 		macros: buildMacros(onetouch),
+		relayCount: buildRelayCount(merged.relay_count),
 		raw: merged,
 	};
 }

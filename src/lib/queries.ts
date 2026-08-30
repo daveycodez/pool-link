@@ -20,6 +20,7 @@ import {
 	getDeviceStatus,
 	getSwcConfig,
 	homeScreen,
+	iclGetInfo,
 	iclSetBrightness,
 	iclSetColor,
 	iclSetCustomColor,
@@ -44,8 +45,9 @@ import {
 import { HPM_TEMP_PARAM, SWC_BOOST_HOURS } from "#/lib/aqualink/enums";
 import { loadSession } from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
+import { readPhOrp } from "#/lib/chemistry";
 import { clearHeatRuns } from "#/lib/heat-eta";
-import { normalize } from "#/lib/iaqualink/normalize";
+import { iclPresent, normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice, PoolSnapshot, Raw } from "#/lib/iaqualink/types";
 import { keys } from "#/lib/keys";
 import { PERSIST_GC_TIME_MS } from "#/lib/persist";
@@ -105,6 +107,21 @@ const VSP_POLL_MS = POLL_MS * 2;
 /** Macros are edited at the panel, so this is drift correction, not tracking. */
 const ONETOUCH_POLL_MS = POLL_MS * 6;
 
+/**
+ * How often to ask a chemistry probe whether it is still there.
+ *
+ * Presence is wiring. It changes when someone fits or pulls a TruSense, which
+ * happens perhaps once in the life of a pad and never while a phone is looking
+ * at it. The health beside it can turn on its own — a probe left dry or knocked
+ * out of calibration stops reading — but over hours, not seconds, and the
+ * readings themselves keep arriving with the home screen at the live rate
+ * regardless. So this is drift correction on the same minute-long cycle the
+ * macros ride, sized so a probe pulled out of the water stops being quoted
+ * within a minute rather than until the tab is reloaded, and so the extra
+ * request it costs stays a rounding error against the panel's real traffic.
+ */
+const PHORP_POLL_MS = POLL_MS * 6;
+
 const settle = (ms: number) =>
 	new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -119,9 +136,20 @@ export function useUserId(): string {
 export function useSession() {
 	return useQuery({
 		queryKey: keys.session(),
+		// There is nothing to fetch: the session is written here by signing in
+		// and put back by the persister, so this only answers on a cold start
+		// with an empty cache, where null is the truth.
 		queryFn: () => loadSession(),
 		staleTime: Infinity,
 		refetchOnWindowFocus: false,
+		// The same never-collect the other persisted queries take, and the
+		// session needs it most. On the default five minutes an entry with no
+		// observers is dropped, and the next read finds an empty cache — which
+		// this query's own fetcher reports as no session, because reading the
+		// cache is all it can do. That signs someone out with no request made
+		// and nothing to see: no 401, no error, just a redirect to the login
+		// screen from a tab that was sitting still.
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }
 
@@ -315,6 +343,37 @@ export function usePanel(serial: string | undefined) {
 		// is still true. It has to outlive maxAge to survive being restored.
 		gcTime: PERSIST_GC_TIME_MS,
 	});
+	/**
+	 * The colour-light zones read on their own, which is additive and never the
+	 * reason anything renders.
+	 *
+	 * Gated on the home screen's own answer, exactly as `useSwc` is: a pad
+	 * without colour zones — which is nearly all of them, this one included —
+	 * must never send this, or every such pool buys a pointless request forever.
+	 *
+	 * Slow, because what only this read can say is configuration: how many zones
+	 * the panel counts, what they are named, and the RGBW behind a zone set to
+	 * Custom Color. Those move when somebody edits them at the panel, not while
+	 * anyone is watching the screen. Live zone state keeps arriving on the ten
+	 * second poll inside `get_devices`, and a zone the owner changes here is
+	 * refetched at once regardless of cadence — the key sits under the panel
+	 * prefix, so the one invalidation every zone mutation already does reaches
+	 * it.
+	 *
+	 * Deliberately not persisted. The macros screen is kept across reloads
+	 * because it is names; this carries names *and* which colour is burning
+	 * right now, and a restored zone insisting it is lit magenta is a lie the
+	 * app cannot detect. The names are not worth the reading that rides with
+	 * them.
+	 */
+	const iclInfo = useQuery({
+		queryKey: keys.icl(uid, serial ?? "-"),
+		queryFn:
+			ready && serial && iclPresent(home.data)
+				? () => iclGetInfo(serial)
+				: skipToken,
+		...panelOptions(quiet, ONETOUCH_POLL_MS),
+	});
 
 	const snapshot = useMemo(
 		() =>
@@ -325,9 +384,10 @@ export function usePanel(serial: string | undefined) {
 						devices.data.devices,
 						devices.data.icl,
 						onetouch.data,
+						iclInfo.data,
 					)
 				: undefined,
-		[serial, home.data, devices.data, onetouch.data],
+		[serial, home.data, devices.data, onetouch.data, iclInfo.data],
 	);
 	// Pinned over what the polls report: a light mid-change reads as its
 	// target until its mutation resolves, so a mid-pulse "off" never paints.
@@ -348,6 +408,11 @@ export function usePanel(serial: string | undefined) {
 			home.refetch();
 			devices.refetch();
 			onetouch.refetch();
+			// Kept out of isPending/isFetching above and only refetched here: on
+			// nearly every pad this query is a skipToken, which never leaves the
+			// pending state — folding it into those would hold the whole screen on
+			// a request that is never going to be sent.
+			iclInfo.refetch();
 		},
 	};
 }
@@ -373,6 +438,7 @@ function usePanelCache(serial: string | undefined) {
 	const hk = keys.home(uid, s);
 	const dk = keys.devices(uid, s);
 	const ok = keys.onetouch(uid, s);
+	const ik = keys.icl(uid, s);
 
 	// A raw entry is `{ state: "0", ... }` or a bare scalar that is the state.
 	const withState = (v: unknown, state: string): unknown =>
@@ -385,7 +451,17 @@ function usePanelCache(serial: string | undefined) {
 		const home = qc.getQueryData<Raw>(hk);
 		const devices = qc.getQueryData<DevicesScreen>(dk);
 		return home && devices
-			? normalize(s, home, devices.devices, devices.icl, qc.getQueryData(ok))
+			? normalize(
+					s,
+					home,
+					devices.devices,
+					devices.icl,
+					qc.getQueryData(ok),
+					// So a snapshot composed from the cache holds the same zones the
+					// screen is showing. Undefined on every pad without the read, which
+					// is what normalize() already expects.
+					qc.getQueryData(ik),
+				)
 			: undefined;
 	};
 
@@ -813,6 +889,39 @@ export function useSwc(serial: string | undefined, present: boolean) {
 		queryKey: keys.swc(uid, serial ?? "-"),
 		queryFn: uid && serial && present ? () => getSwcConfig(serial) : skipToken,
 		...panelOptions(quiet, ONETOUCH_POLL_MS),
+	});
+}
+
+/**
+ * The chemistry probe's report on itself, gated the way the chlorinator is.
+ *
+ * `reported` should be true only when `get_home` has already put a number on
+ * one of the two chemistry keys, and that gate is the whole design. Most pads
+ * have no TruSense, and an unconditional query would buy every one of them a
+ * pointless request a minute for as long as the app is open — the same bargain
+ * useSwc refuses. It also means the request is only ever spent on the case it
+ * can settle: a number that might be a probe's measurement and might be a
+ * placeholder. Where `get_home` says nothing there is nothing on screen to
+ * correct, so there is nothing worth asking about.
+ *
+ * The cost of that gate, stated plainly: a probe that is fitted but sends
+ * nothing to the home screen is never asked about, and the app stays as silent
+ * about it as it is today. Saying nothing about a probe that says nothing is
+ * not a lie, and it is the half of the ambiguity that costs nothing to leave
+ * alone.
+ *
+ * An error here is not a failure worth surfacing. It means the panel does not
+ * know the command, or wants a unit id nobody has documented — in either case
+ * the channels stay `unknown` and the readings render exactly as they did
+ * before this existed.
+ */
+export function usePhOrp(serial: string | undefined, reported: boolean) {
+	const uid = useUserId();
+	const quiet = useIsMutating({ mutationKey: holdKey(serial) }) > 0;
+	return useQuery({
+		queryKey: keys.phorp(uid, serial ?? "-"),
+		queryFn: uid && serial && reported ? () => readPhOrp(serial) : skipToken,
+		...panelOptions(quiet, PHORP_POLL_MS),
 	});
 }
 

@@ -124,5 +124,11 @@ export interface PoolSnapshot {
 	saltCell: SaltCell | null;
 	/** Configured macros only; the panel pads the list to its maximum. */
 	macros: OneTouchMacro[];
+	/**
+	 * How many relays the panel's hardware has — the number in its model name,
+	 * the filter pump included, so the auxiliaries number one fewer. Null when
+	 * the panel does not report it or reports something that cannot be one.
+	 */
+	relayCount: number | null;
 	raw: Raw;
 }
