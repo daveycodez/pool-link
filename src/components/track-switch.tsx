@@ -10,6 +10,7 @@ export function TrackSwitch({
 	offIcon: OffIcon,
 	tone = "accent",
 	isDisabled,
+	trackWidth = "w-17",
 	onToggle,
 }: {
 	device: PoolDevice;
@@ -21,6 +22,12 @@ export function TrackSwitch({
 	tone?: "accent" | "warning" | "danger";
 	/** Held while a change is working through the device it switches. */
 	isDisabled?: boolean;
+	/**
+	 * Track width, so one card can size its switch without moving every other
+	 * switch in the app. The label centres in whatever the thumb leaves
+	 * uncovered, so any width works without touching the insets below.
+	 */
+	trackWidth?: string;
 	onToggle: (d: PoolDevice, on: boolean) => void;
 }) {
 	const toned = {
@@ -45,7 +52,9 @@ export function TrackSwitch({
 				<Switch.Content>
 					{/* The control is `relative overflow-hidden`, so the label can sit in
 				    the track and be uncovered by the thumb. */}
-					<Switch.Control className={`w-16 ${isSelected ? toned.bg : ""}`}>
+					<Switch.Control
+					className={`${trackWidth} ${isSelected ? toned.bg : ""}`}
+				>
 						<span
 							// Inset by the thumb's exact footprint — 1.71875rem wide plus
 							// its 0.125rem margin, per switch.css — so the label box is

@@ -49,6 +49,7 @@ export function AuxHero({
 					offLabel="Off"
 					onIcon={Thumb}
 					onLabel="On"
+					trackWidth="w-16"
 					onToggle={(_d, on) => onToggle(on)}
 				/>
 			</div>
