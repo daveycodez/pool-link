@@ -1,4 +1,4 @@
-import { Card, Switch } from "@heroui/react";
+import { Card, Chip, Switch } from "@heroui/react";
 import {
 	Droplets,
 	Flame,
@@ -7,6 +7,7 @@ import {
 	Zap,
 } from "lucide-react";
 import type { PoolDevice } from "#/lib/iaqualink/types";
+import { isStandby } from "#/lib/use-pool";
 import { presetIcon } from "./preset-icons";
 
 /** Accent while the device is running, muted when it's idle. */
@@ -71,17 +72,27 @@ export function EquipmentRow({
 					) : null}
 				</div>
 			</div>
-			<Switch
-				aria-label={device.label}
-				isSelected={device.on}
-				onChange={(on: boolean) => onToggle(on)}
-			>
-				<Switch.Content>
-					<Switch.Control>
-						<Switch.Thumb />
-					</Switch.Control>
-				</Switch.Content>
-			</Switch>
+			<div className="flex items-center gap-3">
+				{/* A heater the panel calls enabled rather than on: the switch has
+				    two positions and this is the third state, so it is said beside
+				    it rather than folded into it. */}
+				{isStandby(device) ? (
+					<Chip color="warning" size="sm" variant="soft">
+						Standby
+					</Chip>
+				) : null}
+				<Switch
+					aria-label={device.label}
+					isSelected={device.on}
+					onChange={(on: boolean) => onToggle(on)}
+				>
+					<Switch.Content>
+						<Switch.Control>
+							<Switch.Thumb />
+						</Switch.Control>
+					</Switch.Content>
+				</Switch>
+			</div>
 		</Card>
 	);
 }

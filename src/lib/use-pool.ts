@@ -1,7 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { HPM_FAULTS } from "#/lib/aqualink/enums";
+import { HPM_FAULTS, IaquaHeaterState } from "#/lib/aqualink/enums";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import {
@@ -46,6 +46,25 @@ export function isReported(
 	if (!device) return false;
 	const state = device.raw.state ?? device.raw.status ?? device.raw.value;
 	return state != null && String(state).trim() !== "";
+}
+
+/**
+ * Whether a heater is enabled but not firing.
+ *
+ * Heaters are the only equipment the panel reports three ways — 0 off, 1 on,
+ * 3 enabled — and `heaterOn()` folds the last two into one boolean, because a
+ * switch has two positions and both of those mean the heater is not off. The
+ * distinction survives on the raw state and matters to anyone looking at the
+ * card: a heater sitting in 3 all summer is waiting on a call for heat that a
+ * pool already above its set point will never make, which is a different thing
+ * from one that is burning.
+ */
+export function isStandby(device: PoolDevice | undefined): boolean {
+	return (
+		device?.kind === "climate" &&
+		device.name.endsWith("_heater") &&
+		String(device.raw.state) === IaquaHeaterState.ENABLED
+	);
 }
 
 /**
