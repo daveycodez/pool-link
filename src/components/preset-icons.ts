@@ -34,6 +34,7 @@ import {
 	TrendingDown,
 	Waves,
 	Wind,
+	ZodiacAquarius,
 } from "lucide-react";
 
 type Icon = React.ComponentType<{ className?: string }>;
@@ -102,7 +103,7 @@ const PRESET_ICONS: Record<string, Icon> = {
 	valves: Split,
 	"vanishing edge": Waves,
 	"vanshng edge": Waves,
-	waterfall: Waves,
+	waterfall: ZodiacAquarius,
 	"water feature": Waves,
 	whirlpool: Bubbles,
 	"wtr feature": Waves,
