@@ -10,9 +10,16 @@ import {
 	getHome,
 	getMasterDeviceList,
 	getOnetouch,
+	getPhOrpCalibrationStatus,
+	getPhOrpLastCalibration,
+	getPhOrpValues,
+	getScheduleList,
+	getUnassignedSerials,
 	getVspAppModelSerials,
+	getVspDefinition,
 	getVspNames,
 	getVspSpeeds,
+	iclGetInfo,
 	listSystems,
 	sessionMeta,
 } from "#/lib/aqualink/client";
@@ -24,13 +31,52 @@ const EMPTY = "—";
 /** A labelled call against one system. */
 type ProbeEntry = [string, (serial: string) => Promise<unknown>];
 
-/** Every read command the p-api exposes for one system, grouped by subsystem. */
+/**
+ * Every read command the p-api exposes for one system, grouped by subsystem.
+ *
+ * Reads only, and the rule is not a style preference: a row here fires the
+ * moment it is clicked, with no confirmation and against the owner's real pool.
+ * A write in this list is a relay that closes because somebody was curious.
+ */
 const SCREEN_PROBES: ProbeEntry[] = [
 	["device status", getDeviceStatus],
 	["get_home", getHome],
 	["get_devices", getDevices],
 	["get_onetouch", getOnetouch],
+	// Documented by iaqualink-py but never called by this app, and unproven
+	// against a real panel — which is exactly what a probe is for. Schedules
+	// are otherwise only reachable through WebTouch, so an answer here would
+	// mean the panel's own programs are readable after all.
+	["get_schedule_list", getScheduleList],
+	// The zone list on its own, which carries the RGBW behind a custom colour
+	// that the copy folded into get_devices leaves out. Upstream records this
+	// command timing out on hardware and reads zones from get_devices instead,
+	// so a hang here is the known answer and not a fault in this app.
+	["get_icl_info", iclGetInfo],
 ];
+
+/**
+ * Sensor unit ids to try for the TruSense probe. The protocol reference
+ * establishes that `unit_id` is an integer and admits it has never seen a live
+ * value, so the range is genuinely unknown — probing the two lowest is cheaper
+ * than picking one and reading its rejection as "no sensor fitted".
+ */
+const PHORP_UNITS = [0, 1];
+
+const PHORP_COMMANDS: [
+	string,
+	(serial: string, unitId: number) => Promise<unknown>,
+][] = [
+	["get_phorp_values", getPhOrpValues],
+	["get_phorp_lastcalibinfo", getPhOrpLastCalibration],
+	["get_phorp_calibstatus", getPhOrpCalibrationStatus],
+];
+
+const PHORP_PROBES: ProbeEntry[] = PHORP_COMMANDS.flatMap(([label, fn]) =>
+	PHORP_UNITS.map(
+		(unit): ProbeEntry => [`${label} (unit ${unit})`, (s) => fn(s, unit)],
+	),
+);
 
 /**
  * Slots are pump positions on the panel, not aux relays. An empty slot answers
@@ -43,10 +89,21 @@ const VSP_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
 const VSP_PROBES: ProbeEntry[] = [
 	["get_vsp_names", getVspNames],
 	["get_vsp_appmodelserials", getVspAppModelSerials],
+	["get_unassigned_serials", getUnassignedSerials],
 	...VSP_SLOTS.map(
 		(slot): ProbeEntry => [
 			`get_vsp_speedauxinfo (slot ${slot})`,
 			(s) => getVspSpeeds(s, slot),
+		],
+	),
+	// The definition says which unit a slot's min, max and presets are counted
+	// in — a flow-rate pump and a speed pump report the same integers — and it
+	// is the only read that distinguishes them. Probed per slot for the same
+	// reason speedauxinfo is: a stub slot answers rather than refusing.
+	...VSP_SLOTS.map(
+		(slot): ProbeEntry => [
+			`get_vsp_definition (slot ${slot})`,
+			(s) => getVspDefinition(s, slot),
 		],
 	),
 	["get_master_device_list (0)", (s) => getMasterDeviceList(s, "0")],
@@ -171,6 +228,23 @@ export function DiagnosticsPanel({ serial }: { serial?: string }) {
 						</Card.Header>
 						<Probes>
 							{VSP_PROBES.map(([label, fn]) => (
+								<Probe key={label} onPress={onSerial(label, fn)}>
+									{label}
+								</Probe>
+							))}
+						</Probes>
+					</Card>
+
+					<Card>
+						<Card.Header>
+							<Card.Title>TruSense</Card.Title>
+							<Card.Description>
+								What the pH/ORP probe says about itself, which the home screen's
+								bare readings cannot.
+							</Card.Description>
+						</Card.Header>
+						<Probes>
+							{PHORP_PROBES.map(([label, fn]) => (
 								<Probe key={label} onPress={onSerial(label, fn)}>
 									{label}
 								</Probe>

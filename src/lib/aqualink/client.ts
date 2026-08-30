@@ -8,24 +8,48 @@
 import {
 	API_KEY,
 	accountUrl,
+	CMD_ASSIGN_VSP_SERIAL,
 	CMD_CONTROL_SWC_BOOST,
+	CMD_DO_1POINT_PH_CALIBRATION,
+	CMD_DO_2POINT_PH_CALIBRATION,
+	CMD_DO_ORP_CALIBRATION,
+	CMD_DO_SCHEDULE_OPERATION,
 	CMD_ENABLE_DISABLE_HPM,
+	CMD_ENABLE_PUMP_SPEED_VALUE,
 	CMD_GET_DEVICES,
 	CMD_GET_HOME,
 	CMD_GET_MASTER_DEVICE_LIST,
 	CMD_GET_ONETOUCH,
+	CMD_GET_PHORP_CALIBSTATUS,
+	CMD_GET_PHORP_LASTCALIBINFO,
+	CMD_GET_PHORP_VALUES,
+	CMD_GET_SCHEDULE_LIST,
 	CMD_GET_SWC_CONFIG,
+	CMD_GET_UNASSIGNED_SERIALS,
 	CMD_GET_VSP_APPMODELSERIALS,
+	CMD_GET_VSP_DEFINITION,
 	CMD_GET_VSP_NAMES,
 	CMD_GET_VSP_SPEED,
+	CMD_ICL_GET_INFO,
+	CMD_ICL_MOVE_LIGHTS,
 	CMD_ICL_ONOFF,
 	CMD_ICL_SET_COLOR,
 	CMD_ICL_SET_CUSTOM_COLOR,
+	CMD_ICL_SET_DIM,
+	CMD_ICL_SET_NAME,
+	CMD_ICL_ZONING_MODE,
+	CMD_SET_AUX_SPEED,
+	CMD_SET_LIGHT,
 	CMD_SET_ONETOUCH,
+	CMD_SET_SPEED_NAME,
+	CMD_SET_SPEEDNAME_VALUE,
 	CMD_SET_SWC_CONFIG,
+	CMD_SET_VSP_DEFINITION,
+	CMD_SET_VSP_NAME,
 	CMD_SET_VSP_SPEED,
 	CMD_SETPOINT_HPM_TEMP,
 	CMD_SWITCH_HPM_MODE,
+	CMD_UNASSIGN_VSP_SERIAL,
 	LOGIN_URL,
 	PAPI_SESSION_URL,
 	PRM,
@@ -460,6 +484,33 @@ export function setLightColor(
 	});
 }
 
+/**
+ * Set a dimming relay's brightness.
+ *
+ * The same `set_light` command a colour light rides, minus the `subtype` — and
+ * that omission is the whole difference. A dimming relay has no light family to
+ * name, so `light` carries a percentage instead of an effect id, and naming a
+ * family would tell the panel to read that percentage as an effect on a fixture
+ * that has none.
+ *
+ * Unverified against this pool, which has no dimming relay wired — the shape is
+ * two independent implementations agreeing (iaqualink-py's
+ * `IaquaDimmableLight`, Goose66's `setLightBrightness`), not a capture. Both
+ * quantise to quarters before sending and neither documents what the panel does
+ * with anything else, so callers should step in 25s; 0 is off rather than dim,
+ * and opens the relay.
+ */
+export function setDimmerLevel(
+	serial: string,
+	auxName: string,
+	level: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_LIGHT, {
+		aux: auxName.replace(/^aux_/i, ""),
+		light: String(Math.round(level)),
+	});
+}
+
 export async function setTemps(
 	serial: string,
 	spa: string,
@@ -582,6 +633,213 @@ export function stopVspPump(serial: string, slotId = 1): Promise<Raw> {
 		slot_id: String(slotId),
 		speed_id: "1",
 		on_off_action: "off",
+	});
+}
+
+/** A whole number from a wire field, or null when the field says nothing. */
+const int = (v: unknown): number | null => {
+	if (v === "" || v == null) return null;
+	const n = Number(v);
+	return Number.isFinite(n) ? Math.round(n) : null;
+};
+
+/** What a pump slot is configured as, behind the speeds it offers. */
+export interface VspDefinition {
+	slotId: number;
+	appId: number;
+	/** What the panel runs the pump for, e.g. "Filtration". */
+	appName: string;
+	/**
+	 * "rpm" or "gpm". Every other speed number this pump reports is counted in
+	 * this unit and none of them carry it, so a UI that assumes RPM will label a
+	 * flow-rate pump's speeds with a unit they are not in.
+	 */
+	unit: string;
+	min: number | null;
+	max: number | null;
+	model: string;
+	modelTypeId: number | null;
+	/** Speeds the panel runs on its own initiative, without being asked. */
+	primeSpeed: number | null;
+	primeDurationMinutes: number | null;
+	freezeProtectSpeed: number | null;
+}
+
+/**
+ * Read one slot's definition.
+ *
+ * A body with no `vsp_max_speed` is not a definition — it is a rejection the
+ * pool chose to send with a 200, or a slot the panel does not describe — and it
+ * is thrown rather than coerced, so the raw payload reaches the caller through
+ * the error body instead of arriving as a pump made entirely of nulls. That is
+ * the same test `readSwcConfig` applies to its set points, for the same reason.
+ *
+ * Unverified: upstream never sends this command, so nothing has seen a real
+ * answer. Probeable from diagnostics, which is how that changes.
+ */
+export async function getVspDefinition(
+	serial: string,
+	slotId = 1,
+): Promise<VspDefinition> {
+	const raw = await client.sessionRequest(serial, CMD_GET_VSP_DEFINITION, {
+		slot_id: String(slotId),
+	});
+	const max = int(raw.vsp_max_speed);
+	if (max === null)
+		throw new AqualinkError("No pump definition reported", undefined, raw);
+	return {
+		slotId: int(raw.slot_id) ?? slotId,
+		appId: int(raw.vsp_appId) ?? 0,
+		appName: String(raw.vsp_pump_appName ?? ""),
+		unit: String(raw.vsp_speed_unit ?? "").toLowerCase(),
+		min: int(raw.vsp_min_speed),
+		max,
+		model: String(raw.vsp_model_type ?? ""),
+		modelTypeId: int(raw.vsp_model_typeId),
+		primeSpeed: int(raw.vsp_prime_speed),
+		primeDurationMinutes: int(raw.vsp_prime_duration),
+		freezeProtectSpeed: int(raw.vsp_freeze_protect_speed),
+	};
+}
+
+/**
+ * Pump serials the panel can see on its bus but that no slot has claimed. Raw
+ * because the answer is an envelope around a list of strings and there is
+ * nothing in it worth renaming. Unverified.
+ */
+export function getUnassignedSerials(serial: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_UNASSIGNED_SERIALS);
+}
+
+/**
+ * Pump commissioning, verbatim from the protocol reference.
+ *
+ * Every one of these teaches the panel a fact about hardware rather than
+ * telling it to do something, and a wrong fact persists — a slot pointed at the
+ * wrong serial keeps answering for a pump that is not there. None has been seen
+ * on the wire by anyone, upstream implements none of them, and none is reachable
+ * from diagnostics, because a diagnostics row fires on click and these are not
+ * things to find out about by clicking.
+ */
+export function setVspName(
+	serial: string,
+	slotId: number,
+	name: string,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_VSP_NAME, {
+		slot_id: String(slotId),
+		pump_name: name,
+	});
+}
+
+export function setVspDefinition(
+	serial: string,
+	slotId: number,
+	appId: number,
+	modelTypeId: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_VSP_DEFINITION, {
+		slot_id: String(slotId),
+		app_id: String(appId),
+		model_typeid: String(modelTypeId),
+	});
+}
+
+export function assignVspSerial(
+	serial: string,
+	slotId: number,
+	pumpSerial: string,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ASSIGN_VSP_SERIAL, {
+		slot_id: String(slotId),
+		vsp_serial: pumpSerial,
+	});
+}
+
+export function unassignVspSerial(
+	serial: string,
+	slotId: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_UNASSIGN_VSP_SERIAL, {
+		slot_id: String(slotId),
+	});
+}
+
+/**
+ * Bind an aux relay to one of a pump's speeds. This is the write side of the
+ * `aux_speed_assignments` list `getPumpSpeeds` reads to work out which relay a
+ * pump belongs to, so changing it moves a pump from one relay to another as far
+ * as the whole app is concerned. Unverified.
+ */
+export function setAuxSpeed(
+	serial: string,
+	slotId: number,
+	speedId: number,
+	auxId: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_AUX_SPEED, {
+		slot_id: String(slotId),
+		speed_id: String(speedId),
+		aux_id: String(auxId),
+	});
+}
+
+/**
+ * Rename a speed preset, and set what it is worth.
+ *
+ * These address a preset by `speedname_id`, which the reference names separately
+ * from the `speed_id` the run commands take. Whether the two id spaces are the
+ * same is not documented anywhere and has never been observed, so a caller must
+ * not assume a preset's run id is its name id. Unverified.
+ */
+export function setSpeedName(
+	serial: string,
+	slotId: number,
+	speedNameId: number,
+	name: string,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_SPEED_NAME, {
+		slot_id: String(slotId),
+		speedname_id: String(speedNameId),
+		speed_name: name,
+	});
+}
+
+export function setSpeedNameValue(
+	serial: string,
+	slotId: number,
+	speedNameId: number,
+	value: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_SET_SPEEDNAME_VALUE, {
+		slot_id: String(slotId),
+		speedname_id: String(speedNameId),
+		speed_value: String(Math.round(value)),
+	});
+}
+
+/**
+ * Run a pump at a speed it has no preset for.
+ *
+ * The only command on the pad that carries a raw speed rather than picking one
+ * of the eight an installer configured. Upstream marks arbitrary-RPM writes as
+ * unconfirmed for iaqua, and the risk here is not a rejected request: presets
+ * exist because someone decided what this plumbing can carry, and a value
+ * outside them drives a real motor. Nothing here clamps it — the bounds belong
+ * to whoever knows the pump, and `getVspDefinition` reports them. Unverified.
+ */
+export function enablePumpSpeedValue(
+	serial: string,
+	slotId: number,
+	speedNameId: number,
+	value: number,
+	on = true,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ENABLE_PUMP_SPEED_VALUE, {
+		slot_id: String(slotId),
+		speedname_id: String(speedNameId),
+		speed_value: String(Math.round(value)),
+		on_off_action: on ? "on" : "off",
 	});
 }
 
@@ -857,6 +1115,24 @@ export async function controlSwcBoost(
 
 // -- ICL light zones --
 
+/**
+ * The zone list as a read of its own.
+ *
+ * Zones normally arrive folded into `get_devices` as `icl_info_list`, which is
+ * how `devicesScreen` gets them and why the app has never needed this command.
+ * The standalone read carries more: the RGBW channels behind a zone set to
+ * Custom Color, which the abbreviated copy omits entirely — so a custom colour
+ * is currently unreadable, only writable.
+ *
+ * Handle with care. Upstream's ICL work records that this command *times out on
+ * hardware*, and reading zones from `get_devices` instead is a divergence they
+ * accepted for that reason. It is wired to a probe rather than to the app so
+ * that the cost of finding out is one deliberate click.
+ */
+export function iclGetInfo(serial: string): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_GET_INFO);
+}
+
 export function iclZoneOnOff(
 	serial: string,
 	zoneId: number,
@@ -881,7 +1157,12 @@ export function iclSetColor(
 	});
 }
 
-/** Brightness rides the same command as colour — there is no set_iclzone_dim. */
+/**
+ * Brightness rides the same command as colour, with `color_id` left off so the
+ * zone keeps whatever it is showing. `set_iclzone_dim` does exist — see
+ * `iclSetZoneDim` — but no observed path in the vendor's own app has ever sent
+ * it, and this is the call the panel demonstrably handles.
+ */
 export function iclSetBrightness(
 	serial: string,
 	zoneId: number,
@@ -907,6 +1188,347 @@ export function iclSetCustomColor(
 		green_val: String(green),
 		blue_val: String(blue),
 		white_val: String(white),
+	});
+}
+
+/**
+ * Brightness through its own command rather than through the colour one.
+ *
+ * Present in the vendor's app sources and named by the protocol reference, but
+ * no observed app path sends it — which means the panel's handling of it is
+ * untested by anybody, including the vendor. `iclSetBrightness` is the call to
+ * use; this exists so the surface is complete and so the two can be compared if
+ * the colour-command route ever misbehaves. Unverified.
+ */
+export function iclSetZoneDim(
+	serial: string,
+	zoneId: number,
+	dimLevel: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_SET_DIM, {
+		zone_id: String(zoneId),
+		dim_level: String(Math.round(dimLevel)),
+	});
+}
+
+/** Rename a zone as the panel and every app will show it. Unverified. */
+export function iclSetZoneName(
+	serial: string,
+	zoneId: number,
+	name: string,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_SET_NAME, {
+		zone_id: String(zoneId),
+		name_val: name,
+	});
+}
+
+/**
+ * Turn zoning mode on or off, and get back the fixture inventory.
+ *
+ * The response is the only place `DCT_info_list` appears: every physical light
+ * the pad can see, which transmitter it hangs off, and which zone it currently
+ * belongs to. That inventory is what `iclMoveLight` needs as input, and there
+ * is no read-only way to obtain it — the command that reports it is the command
+ * that regroups every fixture on the pad. That is why it is not a probe.
+ * Unverified.
+ */
+export function iclZoningMode(serial: string, on: boolean): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_ZONING_MODE, {
+		on_off_action: on ? "on" : "off",
+	});
+}
+
+/** Move one fixture into a different zone. Ids come from `DCT_info_list`. */
+export function iclMoveLight(
+	serial: string,
+	dctId: number,
+	lightId: number,
+	zoneId: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_ICL_MOVE_LIGHTS, {
+		dct_id: String(dctId),
+		light_id: String(lightId),
+		zone_id: String(zoneId),
+	});
+}
+
+// -- Schedules --
+
+/** One timed program the panel runs on its own. */
+export interface Schedule {
+	id: number;
+	/**
+	 * What the schedule runs. This is `get_master_device_list`'s id space and
+	 * not an aux key, so a schedule cannot be named for an owner without joining
+	 * the two reads — the schedule list alone says "device 3", never "Waterfall".
+	 */
+	deviceId: number;
+	startHrs: number;
+	startMins: number;
+	stopHrs: number;
+	stopMins: number;
+	/** Free-form days descriptor the panel echoes, e.g. "All Days". */
+	days: string;
+	/** Set when the schedule drives a variable-speed pump rather than a relay. */
+	vspId: number | null;
+}
+
+export interface ScheduleList {
+	schedules: Schedule[];
+	/**
+	 * The panel's own count, which can exceed `schedules.length`: the reply is
+	 * paginated and no parameter for asking after page one is documented, so a
+	 * disagreement between these two is the signal that programs exist which
+	 * this app cannot see — worth surfacing rather than quietly truncating.
+	 */
+	total: number;
+	/** Whether the panel has room for another schedule. */
+	canAdd: boolean;
+}
+
+/**
+ * Shape a schedule reply, or null when the body is not one.
+ *
+ * `scheduleList` has to be an array. A panel that does not know the command may
+ * still answer 200 with an explanation, and a pad with no programs answers with
+ * an empty array — those two are different facts and coercing the first into
+ * the second would report "no schedules" for "no such command".
+ */
+function readScheduleList(raw: Raw): ScheduleList | null {
+	if (!Array.isArray(raw.scheduleList)) return null;
+	const schedules = rows(raw.scheduleList).map(
+		(s): Schedule => ({
+			id: int(s.id) ?? 0,
+			deviceId: int(s.deviceId) ?? 0,
+			startHrs: int(s.startHrs) ?? 0,
+			startMins: int(s.startMins) ?? 0,
+			stopHrs: int(s.stopHrs) ?? 0,
+			stopMins: int(s.stopMins) ?? 0,
+			days: String(s.scheduleDays ?? ""),
+			vspId: int(s.vspId),
+		}),
+	);
+	return {
+		schedules,
+		total: int(raw.totalCount) ?? schedules.length,
+		canAdd: raw.isNewScheduleAllowed !== false,
+	};
+}
+
+/**
+ * Read the panel's timed programs.
+ *
+ * Until this command, schedules were the headline example of something this app
+ * could not reach — `webtouchUrl`'s comment names them as the reason that link
+ * exists at all. The protocol reference says they are plain session reads; no
+ * client anywhere implements them and no capture exists, so an answer here is
+ * genuinely new information and the diagnostics probe is how it is obtained.
+ *
+ * Throws with the raw body attached when the reply is not a schedule list, so a
+ * rejection reads as its own explanation rather than as an empty schedule.
+ */
+export async function getScheduleList(serial: string): Promise<ScheduleList> {
+	const raw = await client.sessionRequest(serial, CMD_GET_SCHEDULE_LIST);
+	const list = readScheduleList(raw);
+	if (!list)
+		throw new AqualinkError("No schedule list reported", undefined, raw);
+	return list;
+}
+
+/** The fields an added or edited schedule carries. */
+export interface ScheduleSpec {
+	deviceId: number;
+	startHrs: number;
+	startMins: number;
+	stopHrs: number;
+	stopMins: number;
+	/**
+	 * Days descriptor. The reference only ever shows "All Days" and documents no
+	 * grammar for anything narrower, so the safe move is to echo back a string
+	 * the panel itself reported rather than to compose one.
+	 */
+	days: string;
+}
+
+function scheduleParams(spec: ScheduleSpec): Payload {
+	return {
+		deviceId: String(spec.deviceId),
+		startHrs: String(spec.startHrs),
+		startMins: String(spec.startMins),
+		stopHrs: String(spec.stopHrs),
+		stopMins: String(spec.stopMins),
+		scheduleDays: spec.days,
+	};
+}
+
+/**
+ * Add, edit and delete are one command with an `operation` parameter, split
+ * into three here because they do not take the same fields: an edit needs both
+ * the id and the whole spec, a delete needs only the id, and one function
+ * taking every parameter optionally would let a caller send an edit with no id
+ * — which is an add the panel was not asked for.
+ *
+ * All three are unverified. Nothing has ever written a schedule over this API.
+ */
+export async function addSchedule(
+	serial: string,
+	spec: ScheduleSpec,
+): Promise<ScheduleList | null> {
+	return readScheduleList(
+		await client.sessionRequest(serial, CMD_DO_SCHEDULE_OPERATION, {
+			operation: "Add",
+			...scheduleParams(spec),
+		}),
+	);
+}
+
+export async function editSchedule(
+	serial: string,
+	scheduleId: number,
+	spec: ScheduleSpec,
+): Promise<ScheduleList | null> {
+	return readScheduleList(
+		await client.sessionRequest(serial, CMD_DO_SCHEDULE_OPERATION, {
+			operation: "Edit",
+			scheduleId: String(scheduleId),
+			...scheduleParams(spec),
+		}),
+	);
+}
+
+export async function deleteSchedule(
+	serial: string,
+	scheduleId: number,
+): Promise<ScheduleList | null> {
+	return readScheduleList(
+		await client.sessionRequest(serial, CMD_DO_SCHEDULE_OPERATION, {
+			operation: "Delete",
+			scheduleId: String(scheduleId),
+		}),
+	);
+}
+
+// -- TruSense pH/ORP --
+
+/** A decimal wire field. pH is the one reading here that is not a whole number. */
+const dec = (v: unknown): number | null => {
+	if (v === "" || v == null) return null;
+	const n = Number(v);
+	return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * A TruSense probe's own report of the water.
+ *
+ * The same two numbers reach `get_home` as `ph` and `orp`, so this is not how
+ * the app learns the chemistry. What it adds is the per-channel status string:
+ * `get_home` reports a number whether or not the probe behind it is working,
+ * and a reading from a failed or drifted sensor looks exactly like a good one.
+ *
+ * Take the values as reported. The flat `get_home` fields are scaled integers —
+ * Goose66 multiplies `ph` by 0.1 and `orp` by 10 to get real units — and whether
+ * this command scales the same way has never been observed. Applying that
+ * factor here on the assumption they match would silently move a pH by a decade.
+ */
+export interface PhOrpReading {
+	ph: number | null;
+	/** The probe's word for its own pH channel. Empty when it did not say. */
+	phStatus: string;
+	orp: number | null;
+	orpStatus: string;
+}
+
+/**
+ * Read the pH/ORP probe. `unitId` addresses the sensor unit; the reference
+ * confirms it is an integer but has never seen a live value, so the valid range
+ * is unknown and the diagnostics probes try the low ids rather than assume one.
+ */
+export async function getPhOrpValues(
+	serial: string,
+	unitId = 1,
+): Promise<PhOrpReading> {
+	const raw = await client.sessionRequest(serial, CMD_GET_PHORP_VALUES, {
+		unit_id: String(unitId),
+	});
+	const ph = dec(raw.pH_value);
+	const orp = dec(raw.ORP_value);
+	// Neither channel reporting means this is not a reading — most likely a
+	// rejection, or a unit id nothing answers to. Either way the raw body says
+	// more than a pair of nulls would.
+	if (ph === null && orp === null)
+		throw new AqualinkError("No pH/ORP reading reported", undefined, raw);
+	return {
+		ph,
+		phStatus: String(raw.pH_sensor_status ?? ""),
+		orp,
+		orpStatus: String(raw.ORP_sensor_status ?? ""),
+	};
+}
+
+/**
+ * When each channel was last calibrated, and whether it ever was. Raw: the
+ * payload is two nested day/month/year objects beside a handful of status
+ * strings, and there is no shape to impose on it that a caller would not
+ * immediately have to take apart again.
+ */
+export function getPhOrpLastCalibration(
+	serial: string,
+	unitId = 1,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_PHORP_LASTCALIBINFO, {
+		unit_id: String(unitId),
+	});
+}
+
+/** The same shape, reporting a calibration in progress rather than the last one. */
+export function getPhOrpCalibrationStatus(
+	serial: string,
+	unitId = 1,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_GET_PHORP_CALIBSTATUS, {
+		unit_id: String(unitId),
+	});
+}
+
+/**
+ * Start a calibration.
+ *
+ * These are not reads dressed as writes: each one begins a physical procedure
+ * at the probe, and a calibration completed against the wrong reference leaves
+ * the sensor confidently wrong about the water — the pH the app then shows is
+ * indistinguishable from a correct one, which is the failure that matters. They
+ * belong behind a guided flow that says which solution to use and when, never
+ * behind a button that fires on click, and that is why none is a probe.
+ *
+ * Unverified, all three: no client implements them and the two-point flow's
+ * `step_no` sequence is documented nowhere.
+ */
+export function calibratePh1Point(
+	serial: string,
+	unitId: number,
+	phValue: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_DO_1POINT_PH_CALIBRATION, {
+		unit_id: String(unitId),
+		ph_value: String(phValue),
+	});
+}
+
+export function calibratePh2Point(
+	serial: string,
+	unitId: number,
+	step: number,
+): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_DO_2POINT_PH_CALIBRATION, {
+		unit_id: String(unitId),
+		step_no: String(step),
+	});
+}
+
+export function calibrateOrp(serial: string, unitId: number): Promise<Raw> {
+	return client.sessionRequest(serial, CMD_DO_ORP_CALIBRATION, {
+		unit_id: String(unitId),
 	});
 }
 
