@@ -269,7 +269,7 @@ export function InstallRow() {
 	if (!canPrompt && !manual) return null;
 
 	return (
-		<SettingsRow Icon={Download} title="Install Pool Link App">
+		<SettingsRow Icon={Download} title="Install the Pool Link App">
 			{canPrompt ? (
 				<Button onPress={install} size="sm" variant="secondary">
 					Install

@@ -7,25 +7,29 @@ import { useOnline } from "#/lib/use-online";
 /**
  * The one time this app asks for something: a home-screen icon.
  *
- * Rendered by the layout on every signed-in page, which in practice means the
- * panel — a single-system account is redirected straight through the list and
- * never sees it. Deliberately not on /login: nobody installs a pool app before
- * they have seen their pool, and the sign-in card is the one screen with no
- * chrome over it.
+ * Asked twice, in the two places somebody arrives at. Once over the sign-in
+ * card, where an installed icon saves the next arrival, and once past it, on
+ * whichever page the account lands on — the systems list, or the panel itself
+ * for the single-system account the list redirects straight through.
+ *
+ * Two askings mean two dismissals. They are tracked under separate keys, so
+ * waving it away on the way in does not spend the one that comes after signing
+ * in, and neither spends the other's month of quiet.
  *
  * It comes down over the header rather than pushing the page down, so nothing
  * on screen moves under a finger already reaching for it.
  */
 
-/** Not on the first visit. An icon is worth offering to somebody who came back. */
-const VISITS_BEFORE_ASKING = 2;
-/** Long enough for the first snapshot to have landed and been read. */
-const SETTLE_MS = 8_000;
-/** What "not now" buys. An answer, not a silence — a season later is fair. */
+/** What "not now" buys, per place it was said. A season later is fair. */
 const DISMISSED_FOR_MS = 30 * 24 * 60 * 60 * 1_000;
 
-const VISITS_KEY = "pool-link:install-visits";
-const DISMISSED_KEY = "pool-link:install-dismissed";
+/** One per side of the sign-in card. See the note above on why they are two. */
+const DISMISSED_KEY = {
+	in: "pool-link:install-dismissed:signed-in",
+	out: "pool-link:install-dismissed:signed-out",
+} as const;
+
+export type InstallScope = keyof typeof DISMISSED_KEY;
 
 function read(key: string): number {
 	try {
@@ -40,43 +44,31 @@ function write(key: string, value: number) {
 		localStorage.setItem(key, String(value));
 	} catch {
 		// Storage is unavailable in a private window. Nothing here is worth
-		// making a fuss about — the banner simply never reaches its second visit.
+		// making a fuss about — the banner is simply asked again next time.
 	}
 }
 
-/** One count per load, and this mounts twice under StrictMode in development. */
-let counted = false;
-
-function countVisit(): number {
-	if (!counted) {
-		counted = true;
-		write(VISITS_KEY, read(VISITS_KEY) + 1);
-	}
-	return read(VISITS_KEY);
-}
-
-export function InstallPrompt() {
+export function InstallPrompt({ scope }: { scope: InstallScope }) {
 	const { canPrompt, manual, install } = useInstall();
 	const online = useOnline();
-	const [armed, setArmed] = useState(false);
+	const key = DISMISSED_KEY[scope];
+	// Dismissed until proven otherwise: storage cannot be read on the server or
+	// on the render that matches it, and a banner that appeared for one frame
+	// and then took itself away would be worse than one that waited a frame.
+	const [dismissed, setDismissed] = useState(true);
 
 	useEffect(() => {
-		if (countVisit() < VISITS_BEFORE_ASKING) return;
-		if (Date.now() - read(DISMISSED_KEY) < DISMISSED_FOR_MS) return;
-		const id = setTimeout(() => setArmed(true), SETTLE_MS);
-		return () => clearTimeout(id);
-	}, []);
+		setDismissed(Date.now() - read(key) < DISMISSED_FOR_MS);
+	}, [key]);
 
 	function dismiss() {
-		setArmed(false);
-		write(DISMISSED_KEY, Date.now());
+		setDismissed(true);
+		write(key, Date.now());
 	}
 
-	// Armed says the moment is right; the browser says whether there is anything
-	// to offer, and it may only say so after the timer has already run. Offline
-	// is the one moment this stays out of the way: the foot of the screen
-	// already carries a warning, and the water on screen is old.
-	if (!armed || !online || !(canPrompt || manual)) return null;
+	// Offline is the one moment this stays out of the way: the foot of the
+	// screen already carries a warning, and the water on screen is old.
+	if (dismissed || !online || !(canPrompt || manual)) return null;
 
 	// The prompt has to be raised inside the press to count as a gesture, so the
 	// dismissal is recorded after it. Either outcome is an answer: a declined
@@ -117,7 +109,7 @@ export function InstallPrompt() {
 					    step at the same size, which at 14px is barely a difference —
 					    and the description below is the longer line of the two. */}
 					<Alert.Title className="font-semibold">
-						Install Pool Link App
+						Install the Pool Link App
 					</Alert.Title>
 					<Alert.Description>
 						Add it to your home screen
@@ -130,10 +122,10 @@ export function InstallPrompt() {
 								{" — tap "}
 								<Share
 									aria-label="Share"
-									className="inline size-4 align-text-bottom"
+									className="inline size-4 align-text-bottom text-foreground"
 									role="img"
 								/>
-								{", then Add to Home Screen"}
+								{" then Add to Home Screen"}
 							</>
 						) : null}
 					</Alert.Description>

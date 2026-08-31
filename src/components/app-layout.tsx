@@ -153,9 +153,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 					: "pb-6"
 			}`}
 		>
-			{/* Past the loading gate, so it can only appear over a page with the
-			    pool already on it — and never over the sign-in card. */}
-			{signedIn && !onLogin ? <InstallPrompt /> : null}
+			{/* Both sides of the sign-in card, each with a dismissal of its own —
+			    see InstallPrompt. Past the loading gate either way, so it never
+			    lands on a spinner. */}
+			<InstallPrompt scope={signedIn ? "in" : "out"} />
 
 			{onLogin ? null : (
 				<AppHeader
