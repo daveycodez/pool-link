@@ -380,16 +380,43 @@ export class AqualinkClient implements AqualinkClientLike {
 		return this.session;
 	}
 
+	/**
+	 * Refresh, but never more than one at a time.
+	 *
+	 * The pool rotates refresh tokens: a successful refresh mints a new one and
+	 * kills the one it was asked with. So two refreshes racing on the same token
+	 * are not merely wasteful, they are destructive — the first wins, and every
+	 * other one is refused with the same 400 the pool sends for a session that
+	 * genuinely died, which lands on `clearSession()` and signs the account out.
+	 *
+	 * That race is not exotic; it is what the pool screen does by construction.
+	 * It mounts ten authenticated queries at once, so a session the cloud has
+	 * dropped comes back as ten simultaneous 401s, each of which used to call
+	 * `refresh` directly with its own copy of the same token. Nine of them then
+	 * signed the owner out of an account that a moment later held a perfectly
+	 * good rotated token — silently, because a 401 is a signal this app expects
+	 * and does not surface.
+	 *
+	 * `storedSession`'s recovery inside `refresh` cannot cover this. It was
+	 * written for a second tab and only helps once the winner's newer token has
+	 * reached IndexedDB; within one tab the losers read the blob in the same few
+	 * hundred milliseconds as the winner writes it, find the token they already
+	 * have, and fall through. Not racing in the first place is the fix, and this
+	 * is where every caller has to go to get it.
+	 */
+	private refreshOnce(existing: Session): Promise<Session> {
+		this.refreshing ??= this.refresh(existing).finally(() => {
+			this.refreshing = null;
+		});
+		return this.refreshing;
+	}
+
 	private async currentSession(): Promise<Session> {
 		const s = await this.restore();
 		if (!s?.idToken) throw new AqualinkError("Not authenticated", 401);
 		const exp = jwtExpiry(s.idToken);
-		if (exp && exp * 1000 - Date.now() < TOKEN_MARGIN_MS) {
-			this.refreshing ??= this.refresh(s).finally(() => {
-				this.refreshing = null;
-			});
-			return this.refreshing;
-		}
+		if (exp && exp * 1000 - Date.now() < TOKEN_MARGIN_MS)
+			return this.refreshOnce(s);
 		return s;
 	}
 
@@ -422,7 +449,7 @@ export class AqualinkClient implements AqualinkClientLike {
 		if (res.status === 401) {
 			const s = await this.restore();
 			if (s?.refreshToken) {
-				await this.refresh(s);
+				await this.refreshOnce(s);
 				res = await run();
 			} else {
 				this.session = null;
@@ -455,7 +482,7 @@ export class AqualinkClient implements AqualinkClientLike {
 		if (res.status === 401) {
 			const st = await this.restore();
 			if (st?.refreshToken) {
-				await this.refresh(st);
+				await this.refreshOnce(st);
 				return this.getSystems();
 			}
 			this.session = null;
