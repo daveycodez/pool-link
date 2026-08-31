@@ -1,6 +1,6 @@
 import { Button, Card, Chip } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Zap } from "lucide-react";
+import { Gauge, Pencil, Plus, Zap } from "lucide-react";
 import { useMemo } from "react";
 import { CardColumns } from "#/components/card-columns";
 import { IconCircle } from "#/components/device-row";
@@ -280,6 +280,16 @@ function ScheduleRow({
 					<div className="mt-1.5 flex flex-wrap items-center gap-2">
 						{/* Only the narrower selections carry accent: a program that runs
 						    every day is the ordinary case and should not shout. */}
+						{/* Which speed the pump is held at, for a program that runs one.
+						    Without it two programs on the same pump — one holding it at
+						    Low, one simply switching it on — are the same row twice, and
+						    the speed is the whole difference between them. */}
+						{speed ? (
+							<Chip color="accent" size="sm" variant="soft">
+								<Gauge className="size-3" />
+								{speed}
+							</Chip>
+						) : null}
 						<Chip
 							color={schedule.days === "AllDays" ? "default" : "accent"}
 							size="sm"
