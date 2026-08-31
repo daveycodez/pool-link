@@ -18,7 +18,11 @@ import { OneTouchHero } from "#/components/one-touch-hero";
 import { TempStepper, tempRange } from "#/components/temp-stepper";
 import { TrackSwitch } from "#/components/track-switch";
 import { JANDY_WATERCOLORS, WATERCOLOR_STOPS } from "#/lib/aqualink/enums";
-import { type ChemPresence, isBlankReading } from "#/lib/chemistry";
+import {
+	type ChemFlow,
+	type ChemPresence,
+	isBlankReading,
+} from "#/lib/chemistry";
 import { timeAgo } from "#/lib/format";
 import { useHeatEta } from "#/lib/heat-eta";
 import type {
@@ -36,6 +40,8 @@ interface Chem {
 	/** Whether a probe is fitted behind each reading; see ChemRow. */
 	phPresence: ChemPresence;
 	orpPresence: ChemPresence;
+	/** Whether water is moving past those probes; see ChemRow. */
+	flow: ChemFlow;
 }
 
 import type { IclChange, RememberedTemp } from "#/lib/queries";
@@ -546,9 +552,28 @@ function chemTone(value: string, band: Band): "accent" | "warning" | "danger" {
  * needs looking at" and "your water is a molar acid" are different sentences
  * and only one of them is true.
  *
+ * A fourth state sits across the first three, and it is about the water rather
+ * than the hardware. These probes measure whatever is touching them, so with
+ * the filter pump off they are quoting a few inches of stagnant water at the
+ * sensor — which is why AqualinkD darkens the same two tiles on the same
+ * signal. The chip stays and says "Pump off" instead of the number: a row that
+ * simply lost a value it had a moment ago reads as the app breaking, where the
+ * words say the reading is unavailable for a reason the owner can see on their
+ * own equipment. It takes the neutral colour rather than amber, because nothing
+ * is wrong — a pump that is off is a pool behaving normally, and the amber
+ * beside it is reserved for a probe that has something to answer for.
+ *
+ * "Pump off" and not "No flow", because the relay is what this app actually
+ * knows; the absence of flow is the inference drawn from it. It also outranks
+ * the zero test, since a probe left sitting in still water is the ordinary
+ * reason a fitted one reads nothing, and "No reading" there would send somebody
+ * to look at a sensor that is perfectly fine.
+ *
  * Salinity follows the body on show, since each has its own, and is never
  * suppressed: the chlorinator declares itself on the home screen, so its
- * reading has no second opinion to wait for and needs none.
+ * reading has no second opinion to wait for and needs none. It is left out of
+ * the flow test too — see flowOf, which explains why the cell's own status is
+ * the better signal for it than the pump's.
  */
 function ChemRow({ chem }: { chem: Chem }) {
 	const readings = [
@@ -557,6 +582,8 @@ function ChemRow({ chem }: { chem: Chem }) {
 			device: chem.ph,
 			label: "pH",
 			presence: chem.phPresence,
+			// Read against the filter pump, because this is a probe in the plumbing.
+			probe: true,
 			unit: "",
 		},
 		{
@@ -564,6 +591,7 @@ function ChemRow({ chem }: { chem: Chem }) {
 			device: chem.orp,
 			label: "ORP",
 			presence: chem.orpPresence,
+			probe: true,
 			unit: "mV",
 		},
 		{
@@ -573,6 +601,7 @@ function ChemRow({ chem }: { chem: Chem }) {
 			// Never gated: no probe status exists for salt, and `unknown` is the
 			// value that leaves a reading rendering as it always has.
 			presence: "unknown" as ChemPresence,
+			probe: false,
 			unit: "ppm",
 		},
 	]
@@ -583,18 +612,27 @@ function ChemRow({ chem }: { chem: Chem }) {
 
 	return (
 		<div className="flex flex-wrap gap-1.5">
-			{readings.map(({ band, label, presence, unit, value }) => {
+			{readings.map(({ band, label, presence, probe, unit, value }) => {
+				// Nothing is moving past this probe, so its number is about water
+				// that is no longer the pool's. Only "still" counts — "unknown" is
+				// every pad this app cannot place, and those render as they always did.
+				const stagnant = probe && chem.flow === "still";
 				// A fitted probe reporting zero is reporting nothing. Amber, not
 				// red: the water is not the problem, the probe is.
-				const blank = presence === "present" && isBlankReading(value);
+				const blank =
+					!stagnant && presence === "present" && isBlankReading(value);
 				return (
 					<Chip
-						color={blank ? "warning" : chemTone(value, band)}
+						color={
+							stagnant ? "default" : blank ? "warning" : chemTone(value, band)
+						}
 						key={label}
 						variant="soft"
 					>
 						<span className="opacity-70">{label}</span>
-						{blank ? (
+						{stagnant ? (
+							<span>Pump off</span>
+						) : blank ? (
 							<span>No reading</span>
 						) : (
 							<span className="tabular-nums">

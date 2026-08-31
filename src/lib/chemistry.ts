@@ -115,6 +115,80 @@ export function isBlankReading(value: string): boolean {
 }
 
 /**
+ * Whether water is moving past the probes.
+ *
+ * A pH or ORP probe is an electrode sitting in the plumbing, and it measures
+ * whatever is touching it. With the filter pump off nothing moves past it, so
+ * the number it reports describes a few inches of water trapped at the sensor
+ * — water that stopped being representative of the pool the moment the pump
+ * did. It drifts, too: sanitiser is consumed locally with nothing to replace
+ * it, so a stagnant ORP falls away from the pool's real figure over hours, and
+ * pH follows the CO2 that has nowhere to go. The reading is not wrong about
+ * what it is touching; it is answering a question nobody asked.
+ *
+ * AqualinkD blanks its pH and ORP tiles for exactly this, and the rule here is
+ * theirs rather than one invented: its web UI turns both off when
+ * `Filter_Pump` reports `'off'`, in the shipped configuration — the option that
+ * governs it, `turn_off_sensortiles`, defaults to true. That is a project
+ * reading these same two values off the RS-485 bus on real hardware, which is
+ * as close to the panel as anything gets.
+ *
+ * Note that they test for the pump being *off*, not for it failing to be on,
+ * and the difference is the whole of the caution here. Three things separate
+ * this app from that certainty, and each one lands on `unknown`, which renders
+ * exactly as this app always has:
+ *
+ * Whether the panel names the pump at all. The fixed keys arrive whether or not
+ * the hardware exists, so an empty `pool_pump` is "no such relay" rather than
+ * "not running", and a pad that never mentions its filter pump has said nothing
+ * about flow.
+ *
+ * Spa mode. A spa circulates through different plumbing, and nothing in this
+ * API says where the probe is spliced into it. On a shared-equipment Combo the
+ * filter pump runs through the spa loop and the probe sees flow; on a
+ * two-pump install the pool loop can be dead while the spa circulates past a
+ * probe on the other side, or past no probe at all. AqualinkD does not model
+ * this at all — it looks only at the filter pump — and guessing where somebody
+ * else's sensor is plumbed is not something to do on their behalf, so a pad in
+ * spa mode is left to render what it reports.
+ *
+ * Freeze protection. When it fires the panel runs equipment on its own terms
+ * and the relay states stop describing what somebody asked for. `useHeatEta`
+ * already refuses to estimate through it for the same reason, and this refuses
+ * to blank through it.
+ *
+ * Salinity is deliberately not covered. It is a probe too, and it wants flow
+ * for the same physical reason, but AqualinkD gates it on something else
+ * entirely — the salt tile goes dark when the chlorinator is not on, never on
+ * the pump — and that is the better signal by their own reckoning and this
+ * one's: a cell reports its reading only while it is producing, and it cannot
+ * produce without flow, so its own status already carries the answer. Gating it
+ * on the pump would be a second, weaker test for a fact the first one settles.
+ */
+export type ChemFlow = "still" | "moving" | "unknown";
+
+/**
+ * The verdict, from what the home screen reports about the pad.
+ *
+ * Ordered so that only the blanking decision is guarded. A running pump is
+ * flow whatever else is going on, and the two doubts are asked only once the
+ * answer would otherwise be "still" — which is the one answer that takes a
+ * number off the screen.
+ */
+export function flowOf(pad: {
+	/** Whether `get_home` names `pool_pump` at all — see `isReported`. */
+	filterPumpReported: boolean;
+	filterPumpOn: boolean;
+	spaMode: boolean;
+	freezing: boolean;
+}): ChemFlow {
+	if (!pad.filterPumpReported) return "unknown";
+	if (pad.filterPumpOn) return "moving";
+	if (pad.spaMode || pad.freezing) return "unknown";
+	return "still";
+}
+
+/**
  * Which sensor unit to ask, in the order to ask it.
  *
  * `unit_id` is documented as an integer and nothing further — iaqualink-py's

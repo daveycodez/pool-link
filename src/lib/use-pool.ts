@@ -7,7 +7,7 @@ import {
 	HPM_FAULTS,
 	IaquaHeaterState,
 } from "#/lib/aqualink/enums";
-import { presenceOf } from "#/lib/chemistry";
+import { flowOf, presenceOf } from "#/lib/chemistry";
 import { isCelsius } from "#/lib/format";
 import type { PoolDevice, Raw } from "#/lib/iaqualink/types";
 import {
@@ -287,6 +287,24 @@ export function usePool(serial: string) {
 	const relayCount = snap.data?.relayCount ?? null;
 	const wired = (d: PoolDevice) => d.on || isWiredRelay(d, relayCount);
 
+	// A mode, not a control: when it fires the panel runs equipment on its own
+	// terms. Read up here rather than only in the returned object because the
+	// chemistry row needs it too — relay states stop describing anybody's
+	// intention while it is running.
+	const freezing = byName.get("freeze_protection")?.on === true;
+	/**
+	 * Whether anything is moving past the pH and ORP probes, which decides
+	 * whether their numbers describe this pool or the water standing still at
+	 * the sensor. `pool_pump` is the filter pump — see normalize()'s labels —
+	 * and the two doubts beside it are the ones flowOf refuses to guess through.
+	 */
+	const chemFlow = flowOf({
+		filterPumpReported: isReported(byName.get("pool_pump")),
+		filterPumpOn: byName.get("pool_pump")?.on === true,
+		spaMode,
+		freezing,
+	});
+
 	return {
 		serial,
 		snap,
@@ -324,6 +342,13 @@ export function usePool(serial: string) {
 			 */
 			phPresence,
 			orpPresence,
+			/**
+			 * Whether the water at the probes is moving. Only pH and ORP are read
+			 * against it — see flowOf for why salinity is not — and only "still"
+			 * changes anything, so a pad whose filter pump this app cannot place
+			 * renders precisely as it always did.
+			 */
+			flow: chemFlow,
 		},
 		/**
 		 * When each channel was last calibrated, and whether one is being
@@ -362,7 +387,7 @@ export function usePool(serial: string) {
 		solar: byName.get("solar_heater"),
 		// A mode, not a control: when it fires the panel runs equipment on its
 		// own terms, which is worth saying rather than leaving unexplained.
-		freezing: byName.get("freeze_protection")?.on === true,
+		freezing,
 		// Faults arrive only on a command's echo, never in get_home — so this is
 		// set by acting on the pump, and cleared by the next poll.
 		hpmFault: snap.data?.heatPump?.alert
