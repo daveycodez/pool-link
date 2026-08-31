@@ -98,12 +98,15 @@ export function InstallPrompt() {
 				    there — plate, accent and all. The plate's corners are cut here
 				    rather than in the file, which is flattened square so a launcher
 				    can round it its own way. */}
-				<Alert.Indicator>
+				{/* Both halves need holding: the indicator is a flex item of the
+				    alert's row and shrinks with it, and Safari squeezes an image
+				    inside a squeezed box rather than letting it overflow. So the
+				    box refuses to shrink, the tile carries a floor of its own, and
+				    object-contain means even a wrong box cannot stretch it. */}
+				<Alert.Indicator className="shrink-0">
 					<img
 						alt=""
-						// shrink-0 or the flex row squeezes the width and leaves the
-						// height alone, which turns a square tile into a letterbox.
-						className="size-8 shrink-0 rounded-lg"
+						className="size-8 min-w-8 shrink-0 rounded-lg object-contain"
 						src={`${import.meta.env.BASE_URL}icons/icon-192.png`}
 					/>
 				</Alert.Indicator>
