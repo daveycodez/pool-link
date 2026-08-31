@@ -196,6 +196,7 @@ function SpeedCard({
 										</Description>
 									</div>
 									<TempStepper
+										inputClassName="w-20 text-center"
 										label={`Speed in ${unit}`}
 										onCommit={setValue}
 										range={{ min: setup.min, max: setup.max, step }}

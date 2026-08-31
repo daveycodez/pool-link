@@ -29,6 +29,14 @@ const SPEED_CEILING = 3450;
  */
 const PRIME_MINUTES_MAX = 30;
 
+/**
+ * Wide enough for four digits and the space either side of them. Speeds run to
+ * 3450 where the stepper's own default is cut for a three-digit temperature,
+ * and at that width the value touches the increment buttons. The priming time
+ * is minutes and keeps the narrow default.
+ */
+const SPEED_INPUT = "w-20 text-center";
+
 export function PumpMasterSpeeds({
 	serial,
 	definition,
@@ -68,6 +76,7 @@ export function PumpMasterSpeeds({
 			    no sensible reading of. */}
 			<SettingsRow Icon={ArrowDownToLine} title="Minimum">
 				<TempStepper
+					inputClassName={SPEED_INPUT}
 					label={`Minimum speed in ${unit}`}
 					onCommit={commit("min_speed")}
 					range={{ min: SPEED_FLOOR, max: max - step, step }}
@@ -77,6 +86,7 @@ export function PumpMasterSpeeds({
 
 			<SettingsRow Icon={ArrowUpToLine} title="Maximum">
 				<TempStepper
+					inputClassName={SPEED_INPUT}
 					label={`Maximum speed in ${unit}`}
 					onCommit={commit("max_speed")}
 					range={{ min: min + step, max: SPEED_CEILING, step }}
@@ -86,6 +96,7 @@ export function PumpMasterSpeeds({
 
 			<SettingsRow Icon={Timer} title="Priming speed">
 				<TempStepper
+					inputClassName={SPEED_INPUT}
 					label={`Priming speed in ${unit}`}
 					onCommit={commit("prime_speed")}
 					range={{ min, max, step }}
@@ -104,6 +115,7 @@ export function PumpMasterSpeeds({
 
 			<SettingsRow Icon={Snowflake} title="Freeze protection">
 				<TempStepper
+					inputClassName={SPEED_INPUT}
 					label={`Freeze protection speed in ${unit}`}
 					onCommit={commit("freezeprotect_speed")}
 					range={{ min, max, step }}

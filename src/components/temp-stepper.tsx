@@ -35,6 +35,7 @@ export function TempStepper({
 	onCommit,
 	className,
 	label = "Target temperature",
+	inputClassName = "w-14 text-center",
 }: {
 	value: number;
 	range: TempRange;
@@ -47,6 +48,12 @@ export function TempStepper({
 	 * only the announced name has to stop saying temperature.
 	 */
 	label?: string;
+	/**
+	 * How wide the number itself sits. The default fits the three digits a
+	 * temperature or a percentage ever needs; a pump speed is four and crowds
+	 * the increment buttons against its own value at that width.
+	 */
+	inputClassName?: string;
 }) {
 	// Held locally while taps are still coming in, so the number moves with
 	// every press even though only the last one is sent.
@@ -84,7 +91,7 @@ export function TempStepper({
 		>
 			<NumberField.Group>
 				<NumberField.DecrementButton />
-				<NumberField.Input className="w-14 text-center" />
+				<NumberField.Input className={inputClassName} />
 				<NumberField.IncrementButton />
 			</NumberField.Group>
 		</NumberField>
