@@ -1,4 +1,12 @@
-import { Button, Card, Input, Label, Spinner, TextField } from "@heroui/react";
+import {
+	Button,
+	Card,
+	FieldError,
+	Input,
+	Label,
+	Spinner,
+	TextField,
+} from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Waves } from "lucide-react";
 import { useState } from "react";
@@ -69,8 +77,10 @@ function LoginScreen() {
 							<Input
 								autoComplete="username"
 								inputMode="email"
-								placeholder="you@example.com"
+								placeholder="Email Address"
+								required
 							/>
+							<FieldError />
 						</TextField>
 						<TextField
 							fullWidth
@@ -81,7 +91,12 @@ function LoginScreen() {
 							onChange={setPassword}
 						>
 							<Label>Password</Label>
-							<Input autoComplete="current-password" placeholder="••••••••" />
+							<Input
+								autoComplete="current-password"
+								placeholder="Password"
+								required
+							/>
+							<FieldError />
 						</TextField>
 					</div>
 
@@ -117,9 +132,29 @@ function LoginScreen() {
 				</form>
 			</Card>
 
+			{/* The second sentence is what makes the first one checkable. "Never
+			    sent anywhere else" is a promise, and a promise on a login page is
+			    worth what the reader's trust in a stranger is worth — where a
+			    static site with published source is a fact they can go and verify,
+			    and one that explains itself: there is no server here to send a
+			    password to. So the two travel together rather than the licence
+			    becoming a badge in a footer. */}
 			<p className="max-w-sm text-center text-xs text-balance text-muted">
 				Your password goes straight to iAqualink. It’s never stored or sent
-				anywhere else.
+				anywhere else. Pool Link is{" "}
+				{/* Kept to two words on purpose: .link is inline-flex, so it cannot
+				    break across lines, and a longer phrase would end a line early in
+				    a column this narrow. */}
+				<a
+					className="link"
+					href="https://github.com/daveycodez/pool-link"
+					rel="noreferrer"
+					target="_blank"
+				>
+					open source
+				</a>{" "}
+				and runs as a static site on GitHub Pages, with no server of its own to
+				send a password to.
 			</p>
 		</div>
 	);
