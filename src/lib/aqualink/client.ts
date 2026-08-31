@@ -72,6 +72,99 @@ import {
 	type SystemSummary,
 } from "./types";
 
+/**
+ * How long a request may run before it is abandoned.
+ *
+ * Nothing here had a deadline, and `fetch` has none of its own — a request the
+ * pool never answers hangs until the tab is closed, which leaves the query that
+ * made it permanently fetching with nothing in the app able to recover it. That
+ * is not hypothetical on this API: upstream iaqualink-py records `get_icl_info`
+ * timing out on some hardware, and this client now sends about a dozen commands
+ * nobody has ever exercised.
+ *
+ * The two numbers are different because the two paths are. A session request is
+ * a command relayed from a cloud endpoint down to an RS-485 pad that serialises
+ * everything it is asked and answers at its own pace, so it is genuinely slow in
+ * a way no amount of network health fixes. The two independent clients that poll
+ * this same API in production bound it far tighter — iaqualink-py at a flat 10s,
+ * Goose66's ISY driver at 6.05s for a GET — which is the evidence that a working
+ * pad answers well inside ten seconds. Twenty is double that ceiling, so every
+ * request those two would have completed completes here with room to spare, and
+ * it is still under the thirty seconds at which the header chip stops calling
+ * the data live: a pad that has gone quiet gets reported as stale and then as an
+ * error, rather than as a spinner that never resolves. With `panelOptions`
+ * retrying twice, the worst case a screen can sit in is about a minute, which is
+ * bounded and eventually says something.
+ *
+ * Everything that is not a pad command gets upstream's own figure, because that
+ * is the case upstream measured: login and refresh are flat Cognito, and the prm
+ * calls — the location list, a device's status, a rename — are an ordinary web
+ * API. None of them has an RS-485 leg, so there is nothing for them to be slow
+ * about beyond the network itself. Refresh matters most of the three, because
+ * `currentSession` puts it in front of every other request: a long wait there
+ * stalls the whole app rather than one screen, and ten seconds is already well
+ * past a healthy round trip to a cloud endpoint.
+ */
+const PANEL_TIMEOUT_MS = 20_000;
+const CLOUD_TIMEOUT_MS = 10_000;
+
+/**
+ * An abort, as a failure the rest of the app already knows how to handle.
+ *
+ * `AqualinkError` with no status is the shape that matters. `panelOptions`
+ * refuses to retry a 401 and retries everything else twice, so a timeout must
+ * carry no status at all — a timed-out request says nothing whatever about
+ * whether the session is still good, and borrowing 401 for it would sign
+ * someone out over a slow network. Everything else, a caller's own abort
+ * included, passes through untouched: react-query cancels queries with one, and
+ * dressing that up as a request failure would report a navigation as an error.
+ */
+function asFailure(error: unknown, ms: number): unknown {
+	return error instanceof Error && error.name === "TimeoutError"
+		? new AqualinkError(`Request timed out after ${ms / 1000}s`, undefined, {
+				error: "The pool did not answer in time",
+			})
+		: error;
+}
+
+/**
+ * `fetch` with a deadline on it.
+ *
+ * The signal covers the body stream as well as the response, which is why
+ * `jsonBody` exists rather than the call sites reading `res.json()` themselves:
+ * an abort landing between the headers and the last byte has to arrive as the
+ * same failure as one landing before either.
+ *
+ * A caller's own signal is kept rather than replaced. Nothing passes one today,
+ * but `api()` takes a whole `RequestInit` from outside this module, and a
+ * spread that quietly dropped an abort signal would be a trap set for whoever
+ * uses it next.
+ */
+async function fetchWithin(
+	ms: number,
+	input: string,
+	init: RequestInit = {},
+): Promise<Response> {
+	const deadline = AbortSignal.timeout(ms);
+	const signal = init.signal
+		? AbortSignal.any([init.signal, deadline])
+		: deadline;
+	try {
+		return await fetch(input, { ...init, signal });
+	} catch (error) {
+		throw asFailure(error, ms);
+	}
+}
+
+/** The JSON body, with an abort mid-stream reported like any other timeout. */
+async function jsonBody(res: Response, ms: number): Promise<Raw> {
+	try {
+		return (await res.json()) as Raw;
+	} catch (error) {
+		throw asFailure(error, ms);
+	}
+}
+
 /** Failed responses often carry a JSON explanation; keep it for diagnostics. */
 async function readBody(res: Response): Promise<unknown> {
 	const text = await res.text().catch(() => "");
@@ -105,7 +198,7 @@ export class AqualinkClient implements AqualinkClientLike {
 
 	/** Password is used once, here, then forgotten. */
 	async login(email: string, secret: string): Promise<Session> {
-		const res = await fetch(LOGIN_URL, {
+		const res = await fetchWithin(CLOUD_TIMEOUT_MS, LOGIN_URL, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ api_key: API_KEY, email, password: secret }),
@@ -116,7 +209,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				res.status,
 				await readBody(res),
 			);
-		const data = (await res.json()) as Raw;
+		const data = await jsonBody(res, CLOUD_TIMEOUT_MS);
 		const idToken = idTokenOf(data);
 		if (!idToken) throw new AqualinkError("Login returned no ID token", 401);
 
@@ -143,7 +236,7 @@ export class AqualinkClient implements AqualinkClientLike {
 
 	private async resolveUserId(s: Session): Promise<string> {
 		try {
-			const res = await fetch(USER_ID_URL, {
+			const res = await fetchWithin(CLOUD_TIMEOUT_MS, USER_ID_URL, {
 				headers: {
 					Authorization: `Bearer ${s.idToken}`,
 					Accept: "application/json",
@@ -164,7 +257,7 @@ export class AqualinkClient implements AqualinkClientLike {
 	}
 
 	private async refresh(existing: Session): Promise<Session> {
-		const res = await fetch(REFRESH_URL, {
+		const res = await fetchWithin(CLOUD_TIMEOUT_MS, REFRESH_URL, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({
@@ -191,7 +284,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				body,
 			);
 		}
-		const data = (await res.json()) as Raw;
+		const data = await jsonBody(res, CLOUD_TIMEOUT_MS);
 		const merged: Session = {
 			...existing,
 			idToken: idTokenOf(data) || existing.idToken,
@@ -238,7 +331,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				sessionID: s.clientId,
 			});
 			for (const [k, v] of Object.entries(params)) qs.set(k, v);
-			return fetch(`${PAPI_SESSION_URL}?${qs}`, {
+			return fetchWithin(PANEL_TIMEOUT_MS, `${PAPI_SESSION_URL}?${qs}`, {
 				headers: {
 					Authorization: `Bearer ${s.idToken}`,
 					// The p-api CORS allow-list is "X-Api-Key" (not "api_key"),
@@ -266,18 +359,22 @@ export class AqualinkClient implements AqualinkClientLike {
 				res.status,
 				await readBody(res),
 			);
-		return (await res.json()) as Raw;
+		return jsonBody(res, PANEL_TIMEOUT_MS);
 	}
 
 	/** prm locations → device list (the serial source for p-api). */
 	async getSystems(): Promise<SystemSummary[]> {
 		const s = await this.currentSession();
-		const res = await fetch(`${PRM}/users/${s.userId}/locations`, {
-			headers: {
-				Authorization: `Bearer ${s.idToken}`,
-				Accept: "application/json",
+		const res = await fetchWithin(
+			CLOUD_TIMEOUT_MS,
+			`${PRM}/users/${s.userId}/locations`,
+			{
+				headers: {
+					Authorization: `Bearer ${s.idToken}`,
+					Accept: "application/json",
+				},
 			},
-		});
+		);
 		if (res.status === 401) {
 			const st = await this.restore();
 			if (st?.refreshToken) {
@@ -294,7 +391,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				res.status,
 				await readBody(res),
 			);
-		const data = (await res.json()) as Raw;
+		const data = await jsonBody(res, CLOUD_TIMEOUT_MS);
 		const arr = Array.isArray(data) ? data : pickList(data);
 		return arr.map((raw) => {
 			const r = raw as Raw;
@@ -325,17 +422,18 @@ export class AqualinkClient implements AqualinkClientLike {
 		const headers = new Headers(init.headers);
 		headers.set("Authorization", `Bearer ${s.idToken}`);
 		headers.set("Accept", "application/json");
-		const res = await fetch(url.startsWith("http") ? url : `${PRM}${url}`, {
-			...init,
-			headers,
-		});
+		const res = await fetchWithin(
+			CLOUD_TIMEOUT_MS,
+			url.startsWith("http") ? url : `${PRM}${url}`,
+			{ ...init, headers },
+		);
 		if (!res.ok)
 			throw new AqualinkError(
 				`Request failed (${res.status})`,
 				res.status,
 				await readBody(res),
 			);
-		return (await res.json()) as Raw;
+		return jsonBody(res, CLOUD_TIMEOUT_MS);
 	}
 
 	/**
