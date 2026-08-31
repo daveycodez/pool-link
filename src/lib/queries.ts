@@ -6,7 +6,7 @@ import {
 	useQuery,
 	useQueryClient,
 } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type {
 	ScheduleList,
 	ScheduleSpec,
@@ -53,7 +53,11 @@ import {
 	toggleDevice,
 } from "#/lib/aqualink/client";
 import { HPM_TEMP_PARAM, SWC_BOOST_HOURS } from "#/lib/aqualink/enums";
-import { loadSession } from "#/lib/aqualink/session";
+import {
+	loadSession,
+	sessionRefused,
+	watchRefusal,
+} from "#/lib/aqualink/session";
 import { AqualinkError } from "#/lib/aqualink/types";
 import {
 	type PhOrpCalibration,
@@ -173,8 +177,20 @@ export function useUserId(): string {
 	return useSession().data?.userId ?? "";
 }
 
+/** The prerender has no tab, so it has nothing that could have been refused. */
+const neverRefused = () => false;
+
 export function useSession() {
-	return useQuery({
+	// Subscribed to rather than read, because a refusal is a plain module flag
+	// and not cache state — deliberately so, since everything the cache holds is
+	// written on to IndexedDB and a refusal is the one thing that must not be.
+	// See `refuseSession` for why.
+	const refused = useSyncExternalStore(
+		watchRefusal,
+		sessionRefused,
+		neverRefused,
+	);
+	const query = useQuery({
 		queryKey: keys.session(),
 		// There is nothing to fetch: the session is written here by signing in
 		// and put back by the persister, so this only answers on a cold start
@@ -191,6 +207,12 @@ export function useSession() {
 		// screen from a tab that was sitting still.
 		gcTime: PERSIST_GC_TIME_MS,
 	});
+	// Reported as an absent session rather than through a flag of its own, so
+	// every reader — the header, the account key each query is scoped by, the
+	// route guard — keeps asking the one question it already asked and behaves
+	// exactly as it did when the refusal was a null written into the cache. The
+	// query's own data is left alone: it is the thing being protected.
+	return refused ? { ...query, data: null } : query;
 }
 
 export function useLogin() {

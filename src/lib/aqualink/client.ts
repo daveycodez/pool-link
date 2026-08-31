@@ -61,8 +61,10 @@ import { ICL_ZONE_NAME_MAX } from "./enums";
 import {
 	clearSession,
 	loadSession,
+	refuseSession,
 	type Session,
 	saveSession,
+	sessionRefused,
 	storedSession,
 } from "./session";
 import { type AqualinkClientLike, IaquaSystem, mergeScreen } from "./system";
@@ -329,8 +331,29 @@ export class AqualinkClient implements AqualinkClientLike {
 				const newer = adopted ? null : await storedSession();
 				if (newer && newer.refreshToken !== existing.refreshToken)
 					return this.adopt(newer);
+				// And when that lookup finds nothing newer, the session is refused
+				// rather than deleted. Deleting it is not a local act: the session
+				// lives in the persisted cache, so clearing it wrote null straight
+				// through to the blob every tab shares and every future boot reads.
+				// One refusal ended the account permanently, and silently, because a
+				// 401 is a signal this app expects and does not surface.
+				//
+				// The case just above is the only one that can be recovered from
+				// here. The ones that cannot are why this line changed: a rotation
+				// lost because a reload landed between the pool's answer and the
+				// write that stores it, the other tab's token reaching storage a
+				// moment after `storedSession` read it, an upstream 400 that was
+				// never about the token at all. From here none of those can be told
+				// apart from a session that has genuinely ended, and only the last of
+				// the four deserves to take the stored token down with it.
+				//
+				// So this tab signs out and storage keeps what it holds. The screens
+				// see exactly what they saw before — `useSession` reports a refusal
+				// as no session — and the difference shows on the next reload, which
+				// gets to put the stored token to the pool rather than being handed a
+				// null by a tab that had already given up.
 				this.session = null;
-				await clearSession();
+				refuseSession();
 				throw new AqualinkError("Session expired — sign in again", 401, body);
 			}
 			throw new AqualinkError(
@@ -374,7 +397,17 @@ export class AqualinkClient implements AqualinkClientLike {
 		return stored;
 	}
 
+	/**
+	 * This tab's session, from memory or from the cache the persister filled.
+	 *
+	 * Null once the session has been refused, and that guard carries weight now
+	 * that a refusal leaves storage intact: without it every query this page has
+	 * mounted would read the still-present session back out of the cache and put
+	 * the same dead token to the pool again, one refusal apiece. The stored copy
+	 * is kept for the next boot to try, not for this tab to keep retrying.
+	 */
 	private async restore(): Promise<Session | null> {
+		if (sessionRefused()) return null;
 		if (this.session) return this.session;
 		this.session = await loadSession();
 		return this.session;
@@ -452,8 +485,13 @@ export class AqualinkClient implements AqualinkClientLike {
 				await this.refreshOnce(s);
 				res = await run();
 			} else {
+				// Refused, not cleared, for the reason `refresh` sets out at length.
+				// This branch has even less to go on than that one: all it knows is
+				// that the copy this tab holds carries no refresh token, which says
+				// nothing about the copy in storage, and a tab that has been running
+				// since before another one signed in is exactly how that happens.
 				this.session = null;
-				await clearSession();
+				refuseSession();
 				throw new AqualinkError("Session expired — sign in again", 401);
 			}
 		}
@@ -485,8 +523,10 @@ export class AqualinkClient implements AqualinkClientLike {
 				await this.refreshOnce(st);
 				return this.getSystems();
 			}
+			// Refused rather than cleared, as in `sessionRequest` and on the same
+			// argument `refresh` makes.
 			this.session = null;
-			await clearSession();
+			refuseSession();
 			throw new AqualinkError("Session expired — sign in again", 401);
 		}
 		if (!res.ok)

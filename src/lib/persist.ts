@@ -110,8 +110,10 @@ const persister = createAsyncStoragePersister({
 			if (canUseIDB()) await set(k, v);
 		},
 	},
-	// No throttle: the session lives in this cache and the pool rotates refresh
-	// tokens, so a write has to be durable the moment it happens.
+	// No throttle, so a change the subscription notices is written at once
+	// rather than up to a second later. It is not what makes a write durable,
+	// though — see `flushPersisted`, which is where the one caller that needs
+	// that guarantee goes to get it.
 	throttleTime: 0,
 });
 
@@ -162,13 +164,34 @@ export async function readPersisted<T>(
 		.data as T | undefined;
 }
 
-/** Write the cache out now rather than waiting for the next change to trigger it. */
+/**
+ * Write the cache out now, and do not return until it is really written.
+ *
+ * Not `persister.persistClient`, which is the obvious call and cannot promise
+ * that. Every write the persister makes goes through an async throttle that
+ * keeps one write running and one queued; a third caller arriving while those
+ * two are outstanding has its arguments recorded and its promise resolved on
+ * the spot, having written nothing at all. A third caller is the ordinary case
+ * on the pool screen, because the persister also subscribes to the cache and
+ * every poll that lands is another write. So `await`ing it meant "somebody will
+ * write this shortly", where the caller that matters — a rotated refresh token,
+ * whose predecessor the pool retires the instant it answers — needs "this is on
+ * disk now".
+ *
+ * The bytes and the key are the persister's own, so the two agree about what is
+ * stored and `restoreClient` reads this back; it simply goes straight to
+ * IndexedDB and waits for the transaction to commit.
+ */
 export async function flushPersisted() {
-	await persister.persistClient({
-		buster: BUSTER,
-		clientState: dehydrate(queryClient, persistOptions.dehydrateOptions),
-		timestamp: Date.now(),
-	});
+	if (!canUseIDB()) return;
+	await set(
+		KEY,
+		JSON.stringify({
+			buster: BUSTER,
+			clientState: dehydrate(queryClient, persistOptions.dehydrateOptions),
+			timestamp: Date.now(),
+		}),
+	);
 }
 
 // Same as query-client.ts: the persister and its subscription are singletons.
