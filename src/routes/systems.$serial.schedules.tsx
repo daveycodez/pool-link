@@ -149,7 +149,6 @@ function Schedules() {
 		<ScheduleEditor
 			devices={schedulable}
 			error={add.error}
-			isPending={add.isPending}
 			onSave={(spec) => add.mutate(spec)}
 			speeds={knownSpeeds}
 			title="New schedule"
@@ -203,7 +202,6 @@ function Schedules() {
 						schedulable={schedulable}
 						speeds={knownSpeeds}
 						editError={edit.error}
-						isPending={edit.isPending || remove.isPending}
 						key={schedule.id}
 						onDelete={() => remove.mutate(schedule.id)}
 						onSave={(spec) => edit.mutate({ id: schedule.id, spec })}
@@ -220,7 +218,6 @@ function Schedules() {
 function ScheduleRow({
 	devices,
 	editError,
-	isPending,
 	onDelete,
 	onSave,
 	schedulable,
@@ -230,7 +227,6 @@ function ScheduleRow({
 	/** Everything the panel can name, which is what a row is titled from. */
 	devices: ScheduleDevice[];
 	editError: unknown;
-	isPending: boolean;
 	onDelete: () => void;
 	onSave: (spec: ScheduleSpec) => void;
 	/** The narrower set a schedule may be pointed at — see `schedulable`. */
@@ -336,7 +332,6 @@ function ScheduleRow({
 				<ScheduleEditor
 					devices={schedulable}
 					error={editError}
-					isPending={isPending}
 					onDelete={onDelete}
 					onSave={onSave}
 					schedule={schedule}

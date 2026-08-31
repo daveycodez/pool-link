@@ -104,7 +104,6 @@ function errorMessage(error: unknown): string {
 export function ScheduleEditor({
 	devices,
 	error,
-	isPending,
 	onDelete,
 	onSave,
 	schedule,
@@ -114,7 +113,6 @@ export function ScheduleEditor({
 }: {
 	devices: ScheduleDevice[];
 	error: unknown;
-	isPending: boolean;
 	/** Absent for a new schedule: there is nothing yet to remove. */
 	onDelete?: () => void;
 	onSave: (spec: ScheduleSpec) => void;
@@ -368,7 +366,6 @@ export function ScheduleEditor({
 							{onDelete ? (
 								<Button
 									className="me-auto"
-									isDisabled={isPending}
 									onPress={onDelete}
 									slot="close"
 									variant="danger-soft"
@@ -380,8 +377,15 @@ export function ScheduleEditor({
 							<Button slot="close" variant="tertiary">
 								Cancel
 							</Button>
+							{/* Never disabled, and deliberately so. These sit on one
+							    mutation shared by the whole page, so a pending flag here
+							    greyed out every other program's dialog the moment any one
+							    of them was deleted — a control going dead because of
+							    something happening elsewhere on the screen. Nor is a
+							    same-time window worth blocking on: it is said in the form
+							    above while it can still be corrected, and past that the
+							    panel is the thing entitled to refuse it. */}
 							<Button
-								isDisabled={isPending || empty || !deviceId}
 								onPress={() =>
 									onSave({
 										// Swapped back into the panel's own arrangement — the
