@@ -128,14 +128,21 @@ export function InstallPrompt() {
 				</Alert.Content>
 				{canPrompt ? (
 					<Button
-						className="hidden shrink-0 sm:block"
+						// The alert lays its row out from the top, which is right for
+						// the mark beside the title and wrong for a control that
+						// answers the whole card.
+						className="hidden shrink-0 self-center sm:block"
 						onPress={accept}
 						size="sm"
 					>
 						Install
 					</Button>
 				) : null}
-				<CloseButton aria-label="Dismiss" onPress={dismiss} />
+				<CloseButton
+					aria-label="Dismiss"
+					className="self-center"
+					onPress={dismiss}
+				/>
 			</Alert>
 		</div>
 	);
