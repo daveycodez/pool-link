@@ -7,7 +7,9 @@ import {
 	TimeField,
 } from "@heroui/react";
 import { Time } from "@internationalized/date";
+import { Trash2, Zap } from "lucide-react";
 import { useState } from "react";
+import { presetIcon } from "#/components/preset-icons";
 import type {
 	Schedule,
 	ScheduleDevice,
@@ -105,28 +107,48 @@ export function ScheduleEditor({
 						</AlertDialog.Header>
 						<AlertDialog.Body>
 							<div className="flex flex-col gap-4">
+								{/* Secondary throughout, the lower-emphasis variant meant for
+								    fields on a raised surface: a dialog is already lifted off
+								    the page, and the default carries a shadow of its own that
+								    reads as a second layer stacked on the first. */}
 								<Select
 									onSelectionChange={(key) => setDeviceId(Number(key))}
 									placeholder="Select equipment"
 									selectedKey={String(deviceId)}
+									variant="secondary"
 								>
 									<Label>Equipment</Label>
 									<Select.Trigger>
-										<Select.Value />
+										{/* The trigger echoes the chosen item's own contents, so
+										    now that an item is an icon beside a name it needs to
+										    be laid out as a row — the base rule is a block that
+										    breaks words, which put the icon on one line and "Jet
+										    Pump" on the next. `min-w-0` with a truncating name so
+										    a long one shortens instead of pushing the chevron. */}
+										<Select.Value className="flex min-w-0 items-center gap-2" />
 										<Select.Indicator />
 									</Select.Trigger>
 									<Select.Popover>
 										<ListBox>
-											{devices.map((d) => (
-												<ListBox.Item
-													id={String(d.id)}
-													key={d.id}
-													textValue={d.name}
-												>
-													{d.name}
-													<ListBox.ItemIndicator />
-												</ListBox.Item>
-											))}
+											{devices.map((d) => {
+												// The same mark the row and the equipment page give
+												// this device, so the picker is recognisable as a
+												// list of the owner's own equipment rather than a
+												// list of words. `textValue` stays the bare name, so
+												// type-ahead still matches what is written.
+												const Icon = presetIcon(d.name) ?? Zap;
+												return (
+													<ListBox.Item
+														id={String(d.id)}
+														key={d.id}
+														textValue={d.name}
+													>
+														<Icon className="size-4 shrink-0 text-muted" />
+														<span className="truncate">{d.name}</span>
+														<ListBox.ItemIndicator />
+													</ListBox.Item>
+												);
+											})}
 										</ListBox>
 									</Select.Popover>
 								</Select>
@@ -168,6 +190,7 @@ export function ScheduleEditor({
 								<Select
 									onSelectionChange={(key) => setDays(String(key))}
 									selectedKey={days}
+									variant="secondary"
 								>
 									<Label>Days</Label>
 									<Select.Trigger>
@@ -221,6 +244,7 @@ export function ScheduleEditor({
 									slot="close"
 									variant="danger-soft"
 								>
+									<Trash2 className="size-4" />
 									Delete
 								</Button>
 							) : null}

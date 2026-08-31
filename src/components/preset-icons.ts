@@ -50,7 +50,10 @@ type Icon = React.ComponentType<{ className?: string }>;
  * `get_master_device_list` names the same equipment slightly differently — it
  * says "Pool Heat" where a relay preset says "Heater" — so those spellings sit
  * here alongside, which is what lets a schedule wear the same mark its
- * equipment does.
+ * equipment does. That list also names the panel's macros, which is why a
+ * couple of MACRO_ICONS' entries are repeated here: the two tables answer
+ * different questions and neither can defer to the other, since `macroIcon`
+ * always returns something and would swallow every unmatched name.
  */
 const PRESET_ICONS: Record<string, Icon> = {
 	aerator: Wind,
@@ -59,6 +62,7 @@ const PRESET_ICONS: Record<string, Icon> = {
 	backwash: RefreshCcw,
 	"booster pump": Droplets,
 	"chem feed": FlaskConical,
+	"clean mode": BroomSparkles,
 	cleaner: Bot,
 	"color wheel": Palette,
 	"deck jets": Droplets,

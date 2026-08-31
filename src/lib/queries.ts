@@ -427,6 +427,44 @@ export function usePanel(serial: string | undefined) {
 				: skipToken,
 		...panelOptions(quiet, ONETOUCH_POLL_MS),
 	});
+	/**
+	 * The panel's own timed programs, read here rather than only by the page
+	 * that lists them.
+	 *
+	 * They belong to the whole system, not to one screen. A schedule is enforced
+	 * at the pad and overrules anything this app asks for, so a relay sitting
+	 * inside an active window is not really a switch — and saying so on the
+	 * screens that show those switches means the programs have to be in hand
+	 * wherever equipment is drawn, not fetched when somebody happens to open a
+	 * tab.
+	 *
+	 * Slow, like the macros: configuration moves when a person moves it. The two
+	 * reads keep different company, though. The programs themselves ride the
+	 * poll, because this app can change them and a second device can too. The
+	 * id↔name table underneath does not move at all — it is how the pad is
+	 * wired — so it has no interval and is kept across reloads, which is what
+	 * lets a returning device name equipment before the network answers.
+	 */
+	const schedules = useQuery({
+		queryKey: keys.schedules(uid, serial ?? "-"),
+		queryFn: ready && serial ? () => getScheduleList(serial) : skipToken,
+		...panelOptions(quiet, ONETOUCH_POLL_MS),
+		// Persisted, so like the macros it has to outlive maxAge to come back.
+		gcTime: PERSIST_GC_TIME_MS,
+	});
+	const scheduleDevices = useQuery({
+		queryKey: keys.scheduleDevices(uid, serial ?? "-"),
+		queryFn:
+			ready && serial ? () => getScheduleDevices(serial, "1") : skipToken,
+		staleTime: Number.POSITIVE_INFINITY,
+		refetchOnWindowFocus: false,
+		retry: (count: number, error: unknown) =>
+			error instanceof AqualinkError && error.status === 401
+				? false
+				: count < 2,
+		// Persisted, so like the macros it has to outlive maxAge to come back.
+		gcTime: PERSIST_GC_TIME_MS,
+	});
 
 	const snapshot = useMemo(
 		() =>
@@ -449,10 +487,24 @@ export function usePanel(serial: string | undefined) {
 
 	return {
 		data,
-		// All three, so the screen never paints half-built. Macros can satisfy
-		// this from storage where the readings cannot — which is the point of
-		// splitting them: the cacheable one stops holding up the rest.
-		isPending: home.isPending || devices.isPending || onetouch.isPending,
+		schedules,
+		scheduleDevices,
+		// All of them, so the screen never paints half-built. Macros and the
+		// schedule device table can satisfy this from storage where the readings
+		// cannot — which is the point of splitting them: the cacheable ones stop
+		// holding up the rest. Safe to gate on, unlike the colour zones below:
+		// these are always sent when there is a serial, so they always settle,
+		// where a skipToken never leaves pending at all. A panel that rejects
+		// schedules settles too, as an error.
+		isPending:
+			home.isPending ||
+			devices.isPending ||
+			onetouch.isPending ||
+			schedules.isPending ||
+			scheduleDevices.isPending,
+		// Liveness is the two live screens and nothing else. The programs are
+		// configuration on a minute-long cycle, so folding them in here would
+		// have the header call the pad stale for being unhurried about them.
 		isFetching: home.isFetching || devices.isFetching,
 		isSuccess: home.isSuccess && devices.isSuccess,
 		isStale: home.isStale || devices.isStale,
@@ -461,6 +513,8 @@ export function usePanel(serial: string | undefined) {
 			home.refetch();
 			devices.refetch();
 			onetouch.refetch();
+			schedules.refetch();
+			scheduleDevices.refetch();
 			// Kept out of isPending/isFetching above and only refetched here: on
 			// nearly every pad this query is a skipToken, which never leaves the
 			// pending state — folding it into those would hold the whole screen on
@@ -1638,18 +1692,17 @@ export function useAddDevice() {
 // -- Schedules --
 
 /**
- * The panel's own timed programs.
+ * The panel's own timed programs, for a screen that wants only these.
  *
- * These are the reason a switch in this app can lose an argument it appears to
- * win: a schedule is enforced at the pad, so equipment inside an active window
- * goes back to what the program says regardless of what anyone asked for. They
- * were unreachable until the command behind this was run against a pad; it
- * answers, and this is the query that puts the answer on screen.
+ * The same two queries `usePanel` runs, under the same keys, so a page reached
+ * from anywhere that mounts the panel finds them already in hand — react-query
+ * serves both from the one cache entry and no second request is sent. They stay
+ * separate hooks so that landing directly on a schedules URL, where no panel is
+ * mounted, still fetches what it needs.
  *
- * Slow cadence, like the macros. A schedule is configuration and changes when a
- * person changes it, so polling at the live rate would only ever find this
- * app's own last write. Held quiet during a mutation for the same reason every
- * other panel read is — see `panelOptions`.
+ * Kept in step with `usePanel`'s copies deliberately: two sets of options on
+ * one key is one set too many, and whichever mounted first would decide the
+ * cadence for both.
  */
 export function useSchedules(serial: string | undefined) {
 	const uid = useUserId();
@@ -1658,6 +1711,8 @@ export function useSchedules(serial: string | undefined) {
 		queryKey: keys.schedules(uid, serial ?? "-"),
 		queryFn: uid && serial ? () => getScheduleList(serial) : skipToken,
 		...panelOptions(quiet, ONETOUCH_POLL_MS),
+		// Persisted, so like the macros it has to outlive maxAge to come back.
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }
 
@@ -1683,6 +1738,8 @@ export function useScheduleDevices(serial: string | undefined) {
 			error instanceof AqualinkError && error.status === 401
 				? false
 				: count < 2,
+		// Persisted, so like the macros it has to outlive maxAge to come back.
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }
 

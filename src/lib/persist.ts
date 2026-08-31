@@ -75,17 +75,22 @@ const PERSISTED = new Set([
 	// names, where home and devices are water temperature and which relays are
 	// closed. A restored reading would be a lie the app cannot detect.
 	"panel:onetouch",
-	// The equipment a schedule can name — names again, and the same argument as
-	// `vsp`: this is how the pad is wired, and it changes when somebody installs
-	// something, not while anyone is looking at it.
+	// The panel's timed programs and the equipment they can name. Configuration
+	// on both counts, which is the same argument `vsp` makes: these change when
+	// somebody edits a program or rewires the pad, not while anyone is watching.
 	//
-	// `panel:schedules` is deliberately not here beside it. Schedules are
-	// configuration and would survive a reload perfectly well, but they are also
-	// the one thing this page exists to state precisely: it was a schedule
-	// nobody could see that made equipment turn itself back on with no
-	// explanation. A window restored from storage and shown as current is that
-	// same failure with an extra step, and the page refetches on mount anyway —
-	// so persisting them would buy a spinner and risk a wrong answer.
+	// A schedule is the one thing here that is neither a reading nor purely a
+	// name, so it was worth arguing over. What settles it is that a schedule
+	// window is not a claim about this moment. "The spa runs 4PM to 4AM" is as
+	// true from storage as it is from the wire, where "the spa is on" is not —
+	// and the window is exactly what an owner needs on screen to understand
+	// equipment that turns itself back on. Restoring it also puts the programs
+	// in hand for the screens that mark held equipment, which cannot wait on a
+	// request to know whether a switch is about to lose.
+	//
+	// It is refetched on mount regardless, so the worst a restore can do is show
+	// a correct answer from a minute ago until the poll replaces it.
+	"panel:schedules",
 	"panel:scheduleDevices",
 ]);
 

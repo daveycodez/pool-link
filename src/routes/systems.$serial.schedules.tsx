@@ -18,12 +18,7 @@ import {
 	useScheduleDevices,
 	useSchedules,
 } from "#/lib/queries";
-import {
-	dayLabel,
-	isOvernight,
-	minutesOfDay,
-	windowLabel,
-} from "#/lib/schedule";
+import { dayLabel, isOvernight, windowLabel } from "#/lib/schedule";
 import { useRequireSession } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/schedules")({
@@ -31,15 +26,23 @@ export const Route = createFileRoute("/systems/$serial/schedules")({
 });
 
 /**
- * Reading order, which the panel's own is not: this pool returned its programs
- * as ids 0, 1, 2, 4, 3, 5. Sorted by when they start, then by equipment, so the
- * list reads as a day rather than as whatever order the pad happened to store.
+ * Oldest program first, which is the order the panel's own app shows and so the
+ * order an owner can cross-reference against it.
+ *
+ * The id is what carries that: the panel counts up as programs are made, so
+ * ascending id is the order they were created in. It has to be sorted for
+ * rather than taken as it arrives — this pool listed its six as 0, 1, 2, 4, 3,
+ * 5, so the reply is in some storage order of the pad's own and not in this
+ * one.
+ *
+ * The id is only a proxy for age, not a record of it. Nothing timestamps a
+ * schedule, and a panel that reuses the ids of deleted programs would seat a
+ * new one wherever the gap was. That is the right trade anyway: matching what
+ * the other app shows is worth more here than being defensibly chronological
+ * on a pad nobody can check against.
  */
-function byStart(a: Schedule, b: Schedule): number {
-	return (
-		minutesOfDay(a.startHrs, a.startMins) -
-			minutesOfDay(b.startHrs, b.startMins) || a.deviceId - b.deviceId
-	);
+function byAge(a: Schedule, b: Schedule): number {
+	return a.id - b.id;
 }
 
 /**
@@ -84,7 +87,7 @@ function Schedules() {
 
 	const list = schedules.data;
 	const known = devices.data ?? [];
-	const rows = [...(list?.schedules ?? [])].sort(byStart);
+	const rows = [...(list?.schedules ?? [])].sort(byAge);
 
 	/**
 	 * What a new schedule may be pointed at.
@@ -106,7 +109,10 @@ function Schedules() {
 			onSave={(spec) => add.mutate(spec)}
 			title="New schedule"
 			trigger={
-				<Button isDisabled={schedulable.length === 0} variant="secondary">
+				// Solid, which is the default: adding a program is what this page is
+				// for, and a solid fill is reserved for exactly that. The equipment
+				// rows around it carry no competing call to action.
+				<Button isDisabled={schedulable.length === 0}>
 					<Plus className="size-4" />
 					Add schedule
 				</Button>
@@ -256,13 +262,18 @@ function ScheduleRow({
 				schedule={schedule}
 				title="Edit schedule"
 				trigger={
+					// Labelled rather than icon-only. The pencil alone had to carry the
+					// whole meaning of the row's one action, and an icon-only control
+					// wants a tooltip to say what it does — which a phone has no way to
+					// show. The word says it outright and costs a few points of a row
+					// that has them to spare.
 					<Button
 						aria-label={`Edit ${name} schedule`}
-						isIconOnly
 						size="sm"
-						variant="ghost"
+						variant="tertiary"
 					>
-						<Pencil />
+						<Pencil className="size-3.5" />
+						Edit
 					</Button>
 				}
 			/>

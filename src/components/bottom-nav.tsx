@@ -81,15 +81,27 @@ export function BottomNav({ serial }: { serial: string }) {
 							// for it. `app-layout` reserves the taller bar at the same
 							// breakpoint, so the page above never sits under it.
 							<Tabs.Tab
-								className="h-auto flex-col gap-0.5 px-3 py-1.5 text-xs sm:h-8 sm:flex-row sm:gap-2 sm:px-4 sm:py-0 sm:text-sm"
+								className="h-auto flex-col gap-0.5 px-4 py-1.5 text-xs sm:h-8 sm:flex-row sm:gap-2 sm:py-0 sm:text-sm"
 								id={to}
 								key={to}
 							>
 								{/* A step larger where it is the main thing carrying the tab:
 							    stacked over a small label on a phone, the icon is what the
 							    eye lands on, and at the inline size it read as an accent to
-							    the word rather than the other way round. */}
-								<Icon className="size-5 shrink-0 sm:size-4" />
+							    the word rather than the other way round.
+
+							    `will-change-transform` is for Safari, which shifts these by
+							    a fraction of a point as the selection moves. The indicator
+							    animates translate, width and height together for 250ms, so
+							    everything sharing its layer is re-rasterised each frame, and
+							    Safari rounds the icons to a different subpixel from one
+							    frame to the next — the labels, being text, are laid out on
+							    whole points and stay put, which is what makes only the icons
+							    appear to wander. Naming the property promotes them to a
+							    layer of their own, so they are composited rather than
+							    redrawn. It stays on the three icons rather than the tab, so
+							    the promotion covers what actually moves. */}
+								<Icon className="size-5 shrink-0 will-change-transform sm:size-4" />
 								{label}
 								<Tabs.Indicator />
 							</Tabs.Tab>
