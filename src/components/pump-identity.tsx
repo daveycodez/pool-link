@@ -31,8 +31,6 @@ export function PumpIdentity({
 
 	return (
 		<div className="space-y-4">
-			<h2 className="px-1 text-sm font-medium text-muted">Pump</h2>
-
 			<SettingsRow Icon={Tag} title="Name">
 				<TextField
 					aria-label="Pump name"
