@@ -140,6 +140,20 @@ function LoginScreen() {
 						</a>
 					</div>
 				</form>
+
+				{/* Account creation is Zodiac's too — same reCAPTCHA wall as the
+				    reset above, so it can only be handed off to their portal. */}
+				<p className="text-center text-sm text-muted">
+					Don’t have an account?{" "}
+					<a
+						className="link font-normal"
+						href="https://www.iaqualink.net/sign-up"
+						rel="noreferrer"
+						target="_blank"
+					>
+						Sign up
+					</a>
+				</p>
 			</Card>
 
 			<p className="max-w-sm text-center text-xs text-balance text-muted">
