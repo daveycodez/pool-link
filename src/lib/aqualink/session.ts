@@ -146,9 +146,27 @@ async function retryRefusal(): Promise<void> {
 	// Nothing to put back, or a sign-in landed while that read was out. Either
 	// way there is no retry to make.
 	if (!stored || !refused) return;
-	// Another tab's token is a different credential, not another go at this
-	// one, so it starts again from a full budget.
-	retries = stored.refreshToken === refusedToken ? retries + 1 : 0;
+
+	// Only a token that has actually moved on is worth putting back. `refresh`
+	// reads storage and adopts a newer copy before it ever refuses, so finding
+	// the same token here means nothing has changed since — and sending it
+	// again would ask the pool a question it has already answered. Worse, it
+	// would answer it in front of the owner: lifting the refusal returns them
+	// to their pool, the refusal lands again a moment later, and the screen
+	// bounces between the pool and the login form until the budget runs out.
+	//
+	// So this waits rather than tries. What it is waiting for is another tab
+	// finishing a rotation whose write had not landed when `refresh` looked —
+	// the one case a retry can genuinely win, and the one that needs no request
+	// to find out about.
+	if (stored.refreshToken === refusedToken) {
+		retries += 1;
+		if (retries < REFUSAL_RETRIES)
+			retryTimer = setTimeout(() => void retryRefusal(), REFUSAL_RETRY_MS);
+		return;
+	}
+
+	retries = 0;
 	queryClient.setQueryData(keys.session(), stored);
 	refusedToken = null;
 	setRefused(false);
