@@ -384,10 +384,10 @@ function PoolSpaHero({
 			<div className="flex items-start justify-between gap-4">
 				<div>
 					<div className="flex h-6 items-center gap-2 text-xs font-medium uppercase tracking-widest text-muted">
-						{/* Spa carries the same warning tone as the switch that selects
-						    it, so the card's state reads at a glance. */}
+						{/* Both bodies wear the accent: the mark says which one is up,
+						    and the switch beside it already carries the state. */}
 						{spaMode ? (
-							<Bubbles className="size-4 text-warning" />
+							<Bubbles className="size-4 text-accent" />
 						) : (
 							<WavesLadder className="size-4 text-accent" />
 						)}
