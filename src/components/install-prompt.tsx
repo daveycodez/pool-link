@@ -1,5 +1,4 @@
 import { Alert, Button, CloseButton } from "@heroui/react";
-import { Waves } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useInstall } from "#/lib/use-install";
 import { useOnline } from "#/lib/use-online";
@@ -93,11 +92,17 @@ export function InstallPrompt() {
 				className="pointer-events-auto w-full max-w-md animate-in shadow-surface duration-300 fade-in slide-in-from-top-4"
 				status="accent"
 			>
-				{/* The app's own mark, the same one the header and the sign-in card
-				    carry — this is asking for a home-screen icon, so it should show
-				    the icon being offered rather than a generic arrow. */}
+				{/* The manifest's own 192, not the app's stroke mark: this is asking
+				    for a home-screen icon, so it shows the very tile that would land
+				    there — plate, accent and all. The plate's corners are cut here
+				    rather than in the file, which is flattened square so a launcher
+				    can round it its own way. */}
 				<Alert.Indicator>
-					<Waves className="size-4" />
+					<img
+						alt=""
+						className="size-8 rounded-lg"
+						src={`${import.meta.env.BASE_URL}icons/icon-192.png`}
+					/>
 				</Alert.Indicator>
 				<Alert.Content>
 					<Alert.Title>Install Pool Link</Alert.Title>
