@@ -1,5 +1,5 @@
 import { Alert, Button, CloseButton } from "@heroui/react";
-import { Download } from "lucide-react";
+import { Waves } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useInstall } from "#/lib/use-install";
 import { useOnline } from "#/lib/use-online";
@@ -78,6 +78,14 @@ export function InstallPrompt() {
 	// already carries a warning, and the water on screen is old.
 	if (!armed || !online || !(canPrompt || manual)) return null;
 
+	// The prompt has to be raised inside the press to count as a gesture, so the
+	// dismissal is recorded after it. Either outcome is an answer: a declined
+	// dialog is not a question worth putting again next week.
+	function accept() {
+		install();
+		dismiss();
+	}
+
 	return (
 		// Landscape puts the insets on the sides, same as the layout's own floor.
 		<div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))]">
@@ -85,8 +93,11 @@ export function InstallPrompt() {
 				className="pointer-events-auto w-full max-w-md animate-in shadow-surface duration-300 fade-in slide-in-from-top-4"
 				status="accent"
 			>
+				{/* The app's own mark, the same one the header and the sign-in card
+				    carry — this is asking for a home-screen icon, so it should show
+				    the icon being offered rather than a generic arrow. */}
 				<Alert.Indicator>
-					<Download className="size-4" />
+					<Waves className="size-4" />
 				</Alert.Indicator>
 				<Alert.Content>
 					<Alert.Title>Install Pool Link</Alert.Title>
@@ -95,23 +106,24 @@ export function InstallPrompt() {
 							? "Tap Share, then Add to Home Screen, to open straight to the pool."
 							: "Add it to your home screen to open straight to the pool."}
 					</Alert.Description>
+					{/* The action sits beside the text where there is room for it and
+					    under the text where there is not — one button per width, so
+					    neither is a cramped column nor a stranded row. */}
 					{canPrompt ? (
-						<Button
-							className="mt-2"
-							// The prompt has to be raised inside the press to count as a
-							// gesture, so the dismissal is recorded after it. Either
-							// outcome is an answer: a declined dialog is not a question
-							// worth putting again next week.
-							onPress={() => {
-								install();
-								dismiss();
-							}}
-							size="sm"
-						>
+						<Button className="mt-2 sm:hidden" onPress={accept} size="sm">
 							Install
 						</Button>
 					) : null}
 				</Alert.Content>
+				{canPrompt ? (
+					<Button
+						className="hidden shrink-0 sm:block"
+						onPress={accept}
+						size="sm"
+					>
+						Install
+					</Button>
+				) : null}
 				<CloseButton aria-label="Dismiss" onPress={dismiss} />
 			</Alert>
 		</div>
