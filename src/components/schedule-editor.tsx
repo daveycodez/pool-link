@@ -7,13 +7,14 @@ import {
 	TimeField,
 } from "@heroui/react";
 import { Time } from "@internationalized/date";
-import { Clock, Trash2, Zap } from "lucide-react";
+import { Clock, Gauge, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { presetIcon } from "#/components/preset-icons";
 import type {
 	Schedule,
 	ScheduleDevice,
 	ScheduleSpec,
+	ScheduleSpeed,
 } from "#/lib/aqualink/client";
 import { AqualinkError } from "#/lib/aqualink/types";
 import {
@@ -41,6 +42,19 @@ function dayOptions(current: string): string[] {
 		: [current, ...SCHEDULE_DAYS];
 }
 
+/**
+ * How a device reads in the picker.
+ *
+ * A pump appears in the panel's list twice under one name — once as the relay
+ * that switches it and once as the speeds behind it — so the second needs a
+ * word to tell it from the first, or the menu offers "Waterfall" twice and the
+ * owner has no way to tell which is which. The panel's own web UI suffixes
+ * these "SPD"; this is that, spelled out.
+ */
+function deviceLabel(device: ScheduleDevice): string {
+	return device.isVsp ? `${device.name} Speed` : device.name;
+}
+
 function errorMessage(error: unknown): string {
 	if (error instanceof AqualinkError) return error.message;
 	return error instanceof Error ? error.message : String(error);
@@ -61,6 +75,7 @@ export function ScheduleEditor({
 	onDelete,
 	onSave,
 	schedule,
+	speeds,
 	title,
 	trigger,
 }: {
@@ -72,11 +87,27 @@ export function ScheduleEditor({
 	onSave: (spec: ScheduleSpec) => void;
 	/** The schedule being changed, or undefined when adding one. */
 	schedule?: Schedule;
+	/** Every speed the panel's pumps offer, for the equipment that has them. */
+	speeds: ScheduleSpeed[];
 	title: string;
 	trigger: React.ReactNode;
 }) {
+	/**
+	 * The equipment field holds a *pump* for a speed program, not the speed.
+	 *
+	 * Which means unpicking what the panel stores, because it keeps the pair the
+	 * other way round: `deviceId` is the speed and `vspId` is the pump that owns
+	 * it. A form asking "what does this run, and how fast" wants those in the
+	 * order a person would say them, so they are swapped apart here and swapped
+	 * back on save. Getting this backwards points a program at equipment nobody
+	 * chose, which is why it is done in one place at each end rather than
+	 * threaded through the fields.
+	 */
 	const [deviceId, setDeviceId] = useState(
-		schedule?.deviceId ?? devices[0]?.id ?? 0,
+		schedule?.vspId ?? schedule?.deviceId ?? devices[0]?.id ?? 0,
+	);
+	const [speedId, setSpeedId] = useState<number | null>(
+		schedule?.vspId == null ? null : schedule.deviceId,
 	);
 	const [days, setDays] = useState(schedule?.days || DEFAULT_SCHEDULE_DAYS);
 	const [start, setStart] = useState(
@@ -87,17 +118,16 @@ export function ScheduleEditor({
 	);
 
 	/**
-	 * Whether this program runs a pump speed rather than a relay.
-	 *
-	 * Such a program is addressed by two ids — the speed in `deviceId` and its
-	 * pump in `vspId` — and this form can only offer the one list. So the
-	 * equipment field is fixed for it, and the pair is carried back untouched on
-	 * save: the times and the days are still the owner's to change, and what
-	 * they must not do by accident is have the speed silently rewritten into a
-	 * device number that means nothing without its pump. Offering the speeds
-	 * properly is a feature; quietly breaking one is a bug.
+	 * The speeds belonging to whatever equipment is currently chosen, which is
+	 * empty for a relay and is what decides whether the second field exists at
+	 * all. A pump with no speeds the panel would name leaves it hidden rather
+	 * than showing an empty menu.
 	 */
-	const speedProgram = schedule?.vspId != null;
+	const pumpSpeeds = speeds.filter((s) => s.pumpId === deviceId);
+	const needsSpeed = pumpSpeeds.length > 0;
+	const speed = needsSpeed
+		? (pumpSpeeds.find((s) => s.id === speedId) ?? pumpSpeeds[0])
+		: null;
 
 	const overnight = isOvernight(
 		start.hour,
@@ -125,8 +155,14 @@ export function ScheduleEditor({
 								    the page, and the default carries a shadow of its own that
 								    reads as a second layer stacked on the first. */}
 								<Select
-									isDisabled={speedProgram}
-									onSelectionChange={(key) => setDeviceId(Number(key))}
+									onSelectionChange={(key) => {
+										// A speed belongs to the pump that was chosen, so it
+										// cannot survive choosing a different one. Cleared rather
+										// than carried, and the field below reopens on whatever
+										// the new equipment offers.
+										setDeviceId(Number(key));
+										setSpeedId(null);
+									}}
 									placeholder="Select equipment"
 									selectedKey={String(deviceId)}
 									variant="secondary"
@@ -150,15 +186,22 @@ export function ScheduleEditor({
 												// list of the owner's own equipment rather than a
 												// list of words. `textValue` stays the bare name, so
 												// type-ahead still matches what is written.
-												const Icon = presetIcon(d.name) ?? Zap;
+												// A pump entry is about how fast, not about what, so
+												// it takes the gauge rather than the equipment's own
+												// mark — which its plain relay twin is already
+												// wearing one line away.
+												const Icon = d.isVsp
+													? Gauge
+													: (presetIcon(d.name) ?? Zap);
+												const label = deviceLabel(d);
 												return (
 													<ListBox.Item
 														id={String(d.id)}
 														key={d.id}
-														textValue={d.name}
+														textValue={label}
 													>
 														<Icon className="size-4 shrink-0 text-muted" />
-														<span className="truncate">{d.name}</span>
+														<span className="truncate">{label}</span>
 														<ListBox.ItemIndicator />
 													</ListBox.Item>
 												);
@@ -206,6 +249,39 @@ export function ScheduleEditor({
 										</TimeField.Group>
 									</TimeField>
 								</div>
+
+								{/* Only for equipment that has speeds, and only once the panel
+								    has named them. A pump program is two choices — which pump,
+								    then how fast — and the second has nowhere to live until the
+								    first is made, so it appears rather than sitting greyed out
+								    on every relay that will never use it. */}
+								{speed ? (
+									<Select
+										onSelectionChange={(key) => setSpeedId(Number(key))}
+										selectedKey={String(speed.id)}
+										variant="secondary"
+									>
+										<Label>Speed</Label>
+										<Select.Trigger>
+											<Select.Value />
+											<Select.Indicator />
+										</Select.Trigger>
+										<Select.Popover>
+											<ListBox>
+												{pumpSpeeds.map((s) => (
+													<ListBox.Item
+														id={String(s.id)}
+														key={s.id}
+														textValue={s.name}
+													>
+														{s.name}
+														<ListBox.ItemIndicator />
+													</ListBox.Item>
+												))}
+											</ListBox>
+										</Select.Popover>
+									</Select>
+								) : null}
 
 								<Select
 									onSelectionChange={(key) => setDays(String(key))}
@@ -275,13 +351,16 @@ export function ScheduleEditor({
 								isDisabled={isPending || empty || !deviceId}
 								onPress={() =>
 									onSave({
-										deviceId,
+										// Swapped back into the panel's own arrangement — the
+										// speed in deviceId, its pump in vspId — which is the
+										// reverse of how the form asks for them.
+										deviceId: speed ? speed.id : deviceId,
 										startHrs: start.hour,
 										startMins: start.minute,
 										stopHrs: stop.hour,
 										stopMins: stop.minute,
 										days,
-										vspId: schedule?.vspId ?? null,
+										vspId: speed ? deviceId : null,
 									})
 								}
 								slot="close"

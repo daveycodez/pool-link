@@ -1,6 +1,6 @@
 import { Button, Card, Chip } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Gauge, Pencil, Plus, Zap } from "lucide-react";
+import { Pencil, Plus, Zap } from "lucide-react";
 import { useMemo } from "react";
 import { CardColumns } from "#/components/card-columns";
 import { IconCircle } from "#/components/device-row";
@@ -84,7 +84,11 @@ function scheduleTarget(
 	if (schedule.vspId == null)
 		return { name: deviceName(schedule.deviceId, devices), speed: null };
 	return {
-		name: deviceName(schedule.vspId, devices),
+		// Named apart from the relay of the same name, because they are two
+		// different programs an owner can hold at once and the device list calls
+		// both of them "Waterfall". The panel's own web UI settles the wording by
+		// suffixing these "SPD"; this is that, spelled out.
+		name: `${deviceName(schedule.vspId, devices)} Speed`,
 		speed:
 			speeds.find((s) => s.id === schedule.deviceId)?.name ??
 			`Speed ${schedule.deviceId}`,
@@ -129,18 +133,16 @@ function Schedules() {
 	const rows = [...(list?.schedules ?? [])].sort(byAge);
 
 	/**
-	 * What a new schedule may be pointed at.
+	 * What a program may be pointed at: everything the panel says it can
+	 * schedule, pumps included.
 	 *
-	 * The pump slots are held back, though no longer for want of knowing how
-	 * they work. `listType=1` lists them alongside the relays — the same
-	 * equipment appears twice, once plain and once with `isVSP` set — and a
-	 * program against one is written speed-in-`deviceId`, pump-in-`vspId`. What
-	 * is missing is the rest of the form: choosing a pump means then choosing
-	 * one of its speeds, and a picker that offered the pump alone would be
-	 * asking for half an answer. Existing speed programs still list and still
-	 * take a new time, so nothing here is unreachable — only unaddable.
+	 * `listType=1` lists a variable-speed pump twice — once as the relay that
+	 * switches it and once, with `isVSP` set, as the speeds behind it. Both are
+	 * real destinations and they do different things, so both are offered; the
+	 * editor tells them apart in the menu and asks for a speed once the second
+	 * is chosen.
 	 */
-	const schedulable = known.filter((d) => !d.isVsp);
+	const schedulable = known;
 
 	const addButton = list?.canAdd ? (
 		<ScheduleEditor
@@ -148,6 +150,7 @@ function Schedules() {
 			error={add.error}
 			isPending={add.isPending}
 			onSave={(spec) => add.mutate(spec)}
+			speeds={knownSpeeds}
 			title="New schedule"
 			trigger={
 				// Solid, which is the default: adding a program is what this page is
@@ -268,7 +271,19 @@ function ScheduleRow({
 				    standing alone above a description, and at three deep it reads as a
 				    list of unrelated things. */}
 				<div className="min-w-0">
-					<Card.Title className="leading-5">{name}</Card.Title>
+					{/* The speed sits with the name because it is part of what this
+					    program is, not something it is doing: "Waterfall Speed" alone
+					    does not say which one, and the two read as one phrase. The
+					    chips below are all circumstances — when it runs, and whether
+					    that crosses midnight. */}
+					<div className="flex min-w-0 items-center gap-2">
+						<Card.Title className="truncate leading-5">{name}</Card.Title>
+						{speed ? (
+							<Chip color="accent" size="sm" variant="soft">
+								{speed}
+							</Chip>
+						) : null}
+					</div>
 					<Card.Description className="text-xs leading-4 tabular-nums">
 						{windowLabel(
 							schedule.startHrs,
@@ -278,23 +293,9 @@ function ScheduleRow({
 						)}
 					</Card.Description>
 					<div className="mt-1.5 flex flex-wrap items-center gap-2">
-						{/* Only the narrower selections carry accent: a program that runs
-						    every day is the ordinary case and should not shout. */}
-						{/* Which speed the pump is held at, for a program that runs one.
-						    Without it two programs on the same pump — one holding it at
-						    Low, one simply switching it on — are the same row twice, and
-						    the speed is the whole difference between them. */}
-						{speed ? (
-							<Chip color="accent" size="sm" variant="soft">
-								<Gauge className="size-3" />
-								{speed}
-							</Chip>
-						) : null}
-						<Chip
-							color={schedule.days === "AllDays" ? "default" : "accent"}
-							size="sm"
-							variant="soft"
-						>
+						{/* Neutral, so the speed beside the name stays the coloured thing
+						    on the card. Days are on every row and a speed is on few. */}
+						<Chip color="default" size="sm" variant="soft">
 							{dayLabel(schedule.days)}
 						</Chip>
 						{/* The schedule that started all of this ran 4PM to 4AM, and read
@@ -311,31 +312,13 @@ function ScheduleRow({
 			</div>
 
 			<ScheduleEditor
-				// Whatever this schedule already points at stays selectable, so opening
-				// a program and saving it cannot silently move it to other equipment.
-				// A speed program is the case that needs saying twice: its `deviceId`
-				// is a speed and appears in no device list at all, so it is handed in
-				// as an entry of its own, named the way the row above names it. The
-				// editor fixes that field rather than offering the list — see
-				// `speedProgram` there.
-				devices={
-					speed
-						? [
-								{
-									id: schedule.deviceId,
-									name: `${name} — ${speed}`,
-									isVsp: false,
-								},
-							]
-						: schedulable.some((d) => d.id === schedule.deviceId)
-							? schedulable
-							: devices.filter((d) => !d.isVsp || d.id === schedule.deviceId)
-				}
+				devices={schedulable}
 				error={editError}
 				isPending={isPending}
 				onDelete={onDelete}
 				onSave={onSave}
 				schedule={schedule}
+				speeds={speeds}
 				title="Edit schedule"
 				trigger={
 					// Labelled rather than icon-only. The pencil alone had to carry the
