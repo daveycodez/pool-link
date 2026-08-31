@@ -49,6 +49,22 @@ export const keys = {
 	 */
 	phorpCalib: (uid: string, serial: string) =>
 		[uid, "panel", serial, "phorpCalib"] as const,
+	/**
+	 * The panel's own timed programs. A seventh panel screen, under the same
+	 * prefix so an edit made here refreshes with one invalidation like the rest.
+	 */
+	schedules: (uid: string, serial: string) =>
+		[uid, "panel", serial, "schedules"] as const,
+	/**
+	 * The id↔name table a schedule has to be read through, since the schedule
+	 * list names "device 12" and never "Waterfall". Separate from `schedules`
+	 * because the two keep completely different time: this is the pad's wiring
+	 * and moves when somebody installs equipment, where a schedule moves when
+	 * somebody changes their mind. A shared entry would drag the wiring to the
+	 * schedules' cadence and stop it being safe to keep across a reload.
+	 */
+	scheduleDevices: (uid: string, serial: string) =>
+		[uid, "panel", serial, "scheduleDevices"] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,

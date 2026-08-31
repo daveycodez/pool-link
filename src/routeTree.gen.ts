@@ -17,6 +17,7 @@ import { Route as SignOutRouteImport } from './routes/sign-out'
 import { Route as SystemsSerialIndexRouteImport } from './routes/systems.$serial.index'
 import { Route as SystemsSerialDiagnosticsRouteImport } from './routes/systems.$serial.diagnostics'
 import { Route as SystemsSerialEquipmentRouteImport } from './routes/systems.$serial.equipment'
+import { Route as SystemsSerialSchedulesRouteImport } from './routes/systems.$serial.schedules'
 import { Route as SystemsSerialSettingsRouteImport } from './routes/systems.$serial.settings'
 
 const IndexRoute = IndexRouteImport.update({
@@ -60,6 +61,11 @@ const SystemsSerialEquipmentRoute = SystemsSerialEquipmentRouteImport.update({
   path: '/systems/$serial/equipment',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SystemsSerialSchedulesRoute = SystemsSerialSchedulesRouteImport.update({
+  id: '/systems/$serial/schedules',
+  path: '/systems/$serial/schedules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SystemsSerialSettingsRoute = SystemsSerialSettingsRouteImport.update({
   id: '/systems/$serial/settings',
   path: '/systems/$serial/settings',
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/sign-out': typeof SignOutRoute
   '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
   '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
+  '/systems/$serial/schedules': typeof SystemsSerialSchedulesRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
   '/systems/$serial/': typeof SystemsSerialIndexRoute
 }
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/sign-out': typeof SignOutRoute
   '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
   '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
+  '/systems/$serial/schedules': typeof SystemsSerialSchedulesRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
   '/systems/$serial': typeof SystemsSerialIndexRoute
 }
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/sign-out': typeof SignOutRoute
   '/systems/$serial/diagnostics': typeof SystemsSerialDiagnosticsRoute
   '/systems/$serial/equipment': typeof SystemsSerialEquipmentRoute
+  '/systems/$serial/schedules': typeof SystemsSerialSchedulesRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
   '/systems/$serial/': typeof SystemsSerialIndexRoute
 }
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/sign-out'
     | '/systems/$serial/diagnostics'
     | '/systems/$serial/equipment'
+    | '/systems/$serial/schedules'
     | '/systems/$serial/settings'
     | '/systems/$serial/'
   fileRoutesByTo: FileRoutesByTo
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/sign-out'
     | '/systems/$serial/diagnostics'
     | '/systems/$serial/equipment'
+    | '/systems/$serial/schedules'
     | '/systems/$serial/settings'
     | '/systems/$serial'
   id:
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/sign-out'
     | '/systems/$serial/diagnostics'
     | '/systems/$serial/equipment'
+    | '/systems/$serial/schedules'
     | '/systems/$serial/settings'
     | '/systems/$serial/'
   fileRoutesById: FileRoutesById
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   SignOutRoute: typeof SignOutRoute
   SystemsSerialDiagnosticsRoute: typeof SystemsSerialDiagnosticsRoute
   SystemsSerialEquipmentRoute: typeof SystemsSerialEquipmentRoute
+  SystemsSerialSchedulesRoute: typeof SystemsSerialSchedulesRoute
   SystemsSerialSettingsRoute: typeof SystemsSerialSettingsRoute
   SystemsSerialIndexRoute: typeof SystemsSerialIndexRoute
 }
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SystemsSerialEquipmentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/systems/$serial/schedules': {
+      id: '/systems/$serial/schedules'
+      path: '/systems/$serial/schedules'
+      fullPath: '/systems/$serial/schedules'
+      preLoaderRoute: typeof SystemsSerialSchedulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/systems/$serial/settings': {
       id: '/systems/$serial/settings'
       path: '/systems/$serial/settings'
@@ -224,6 +244,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignOutRoute: SignOutRoute,
   SystemsSerialDiagnosticsRoute: SystemsSerialDiagnosticsRoute,
   SystemsSerialEquipmentRoute: SystemsSerialEquipmentRoute,
+  SystemsSerialSchedulesRoute: SystemsSerialSchedulesRoute,
   SystemsSerialSettingsRoute: SystemsSerialSettingsRoute,
   SystemsSerialIndexRoute: SystemsSerialIndexRoute,
 }

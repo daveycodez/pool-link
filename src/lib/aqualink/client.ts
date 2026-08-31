@@ -1518,7 +1518,13 @@ export interface Schedule {
 	startMins: number;
 	stopHrs: number;
 	stopMins: number;
-	/** Free-form days descriptor the panel echoes, e.g. "All Days". */
+	/**
+	 * When the schedule runs, as one of a closed set of words — "AllDays",
+	 * "Weekdays", "Weekends" or a single day like "Wednesday". Never a list and
+	 * never a mask: the panel holds one of these, not a set of days. Typed as a
+	 * plain string because a pad may name a day some spelling nobody has seen,
+	 * and a schedule this app cannot name is still a schedule it must list.
+	 */
 	days: string;
 	/** Set when the schedule drives a variable-speed pump rather than a relay. */
 	vspId: number | null;
@@ -1527,14 +1533,33 @@ export interface Schedule {
 export interface ScheduleList {
 	schedules: Schedule[];
 	/**
-	 * The panel's own count, which can exceed `schedules.length`: the reply is
-	 * paginated and no parameter for asking after page one is documented, so a
-	 * disagreement between these two is the signal that programs exist which
-	 * this app cannot see — worth surfacing rather than quietly truncating.
+	 * The panel's own count. `getScheduleList` pages until it has them all, so
+	 * this should equal `schedules.length`; a shortfall means the panel stopped
+	 * answering mid-walk and is worth surfacing rather than quietly truncating.
 	 */
 	total: number;
 	/** Whether the panel has room for another schedule. */
 	canAdd: boolean;
+}
+
+/**
+ * Whether the panel will accept another schedule.
+ *
+ * `isNewScheduleAllowed` is a *string* — this pad says "Allowed" — where the
+ * protocol reference calls it a boolean. That mismatch is not cosmetic: the
+ * obvious `!== false` test passes for "Allowed" and for "NotAllowed" alike, so
+ * a full panel would still be offered an Add button that could only fail.
+ *
+ * Read as a yes rather than as a list of noes, which is the opposite of how
+ * `iclPresent` reads its field, and deliberately: there the cost of guessing
+ * wrong is one rejected request, while here it is a control that lies about
+ * what the hardware can do. An absent field still means yes, because a panel
+ * old enough not to report this is a panel with nothing to say against it.
+ */
+function readCanAdd(value: unknown): boolean {
+	if (typeof value === "boolean") return value;
+	if (value === undefined || value === null) return true;
+	return String(value).trim().toLowerCase() === "allowed";
 }
 
 /**
@@ -1562,28 +1587,101 @@ function readScheduleList(raw: Raw): ScheduleList | null {
 	return {
 		schedules,
 		total: int(raw.totalCount) ?? schedules.length,
-		canAdd: raw.isNewScheduleAllowed !== false,
+		canAdd: readCanAdd(raw.isNewScheduleAllowed),
 	};
 }
 
 /**
- * Read the panel's timed programs.
+ * How many pages of schedules to ask for before giving up on the walk.
+ *
+ * `pageNum` is a real request parameter — the panel accepts it and echoes it
+ * back, both in the JSON and in the raw byte header — which the protocol
+ * reference does not mention at all. What it does not say is how many
+ * schedules fit on a page: this pad returned six on page zero and nothing
+ * after, so the size is only known to be at least six.
+ *
+ * The walk therefore stops on the panel's own `totalCount` or on an empty
+ * page, and this is the backstop for neither happening. A pad that answered
+ * every page with the same schedules would otherwise spin here forever, and
+ * ten pages is far past any plausible number of programs while still being a
+ * bounded number of requests to a device that answers one command at a time.
+ */
+const SCHEDULE_PAGE_LIMIT = 10;
+
+/**
+ * Read the panel's timed programs, walking the pages until it has them all.
  *
  * Until this command, schedules were the headline example of something this app
  * could not reach — `webtouchUrl`'s comment names them as the reason that link
- * exists at all. The protocol reference says they are plain session reads; no
- * client anywhere implements them and no capture exists, so an answer here is
- * genuinely new information and the diagnostics probe is how it is obtained.
+ * exists at all. They are readable: the pad answers, and the reply is the
+ * panel's own programs, the ones that re-assert themselves over anything this
+ * app asks for.
  *
  * Throws with the raw body attached when the reply is not a schedule list, so a
  * rejection reads as its own explanation rather than as an empty schedule.
  */
 export async function getScheduleList(serial: string): Promise<ScheduleList> {
 	const raw = await client.sessionRequest(serial, CMD_GET_SCHEDULE_LIST);
-	const list = readScheduleList(raw);
-	if (!list)
+	const first = readScheduleList(raw);
+	if (!first)
 		throw new AqualinkError("No schedule list reported", undefined, raw);
-	return list;
+
+	const schedules = [...first.schedules];
+	for (
+		let page = 1;
+		schedules.length < first.total && page < SCHEDULE_PAGE_LIMIT;
+		page++
+	) {
+		const next = readScheduleList(
+			await client.sessionRequest(serial, CMD_GET_SCHEDULE_LIST, {
+				pageNum: String(page),
+			}),
+		);
+		// A page that is empty or unreadable ends the walk rather than failing
+		// it: the schedules already in hand are real, and reporting them with a
+		// short `total` says so more usefully than throwing them away.
+		if (!next?.schedules.length) break;
+		schedules.push(...next.schedules);
+	}
+
+	return { ...first, schedules };
+}
+
+/** One entry in the panel's id↔name table. */
+export interface ScheduleDevice {
+	id: number;
+	name: string;
+	/** Whether this id addresses a pump's speed rather than a plain relay. */
+	isVsp: boolean;
+}
+
+/**
+ * The equipment a schedule can name, by the id space schedules actually use.
+ *
+ * `listType` is what decides the question asked. `1` is everything the panel
+ * can schedule and is what an Add picker wants; `0` is narrower and, on this
+ * pad, returned exactly the devices that already had a schedule — it grew from
+ * three entries to six in step with schedules being added, which is what
+ * settles it as "already scheduled" rather than "basic equipment". `2` needs a
+ * `vspId` alongside it and answers with one pump's named speeds instead.
+ *
+ * Names arrive padded with NULs in the panel's own byte payload; the JSON is
+ * already trimmed, so nothing here has to undo that.
+ */
+export async function getScheduleDevices(
+	serial: string,
+	listType: "0" | "1" = "1",
+): Promise<ScheduleDevice[]> {
+	const raw = await getMasterDeviceList(serial, listType);
+	if (!Array.isArray(raw.deviceList))
+		throw new AqualinkError("No device list reported", undefined, raw);
+	return rows(raw.deviceList).map(
+		(d): ScheduleDevice => ({
+			id: int(d.id) ?? 0,
+			name: String(d.name ?? "").trim(),
+			isVsp: String(d.isVSP ?? "").toLowerCase() === "yes",
+		}),
+	);
 }
 
 /** The fields an added or edited schedule carries. */
@@ -1594,9 +1692,10 @@ export interface ScheduleSpec {
 	stopHrs: number;
 	stopMins: number;
 	/**
-	 * Days descriptor. The reference only ever shows "All Days" and documents no
-	 * grammar for anything narrower, so the safe move is to echo back a string
-	 * the panel itself reported rather than to compose one.
+	 * One of the words the panel uses for when a schedule runs — see
+	 * `SCHEDULE_DAYS`. The reference's "All Days" is not one of them; the pad
+	 * says "AllDays", and it also says "Weekdays", "Weekends" and single days
+	 * like "Wednesday". Only ever one value, never a list.
 	 */
 	days: string;
 }
@@ -1619,7 +1718,13 @@ function scheduleParams(spec: ScheduleSpec): Payload {
  * taking every parameter optionally would let a caller send an edit with no id
  * — which is an add the panel was not asked for.
  *
- * All three are unverified. Nothing has ever written a schedule over this API.
+ * All three are unverified, and more sharply so than the read they sit beside.
+ * The read has now been exercised against a pad and the reference was wrong
+ * about it five separate ways — a day value with no space in it, a string where
+ * it promised a boolean, a page parameter it never documented. Every parameter
+ * name below comes from that same reference and has never been sent to
+ * anything, so the first write to a real pool is an experiment, not a feature
+ * working as designed.
  */
 export async function addSchedule(
 	serial: string,

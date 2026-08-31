@@ -8,18 +8,25 @@ import {
 } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type {
+	ScheduleList,
+	ScheduleSpec,
 	SwcBoostControl,
 	SwcConfig,
 	VspPump,
 } from "#/lib/aqualink/client";
 import {
 	addDevice,
+	addSchedule,
 	calibrateOrp,
 	calibratePh1Point,
 	controlSwcBoost,
+	deleteSchedule,
 	devicesScreen,
+	editSchedule,
 	enableHpm,
 	getDeviceStatus,
+	getScheduleDevices,
+	getScheduleList,
 	getSwcConfig,
 	homeScreen,
 	iclGetInfo,
@@ -1625,5 +1632,158 @@ export function useAddDevice() {
 		// Awaited, not fired and forgotten: whoever added the system is about to
 		// be shown the list, and it should already have the new one in it.
 		onSuccess: () => qc.refetchQueries({ queryKey: keys.systems(uid) }),
+	});
+}
+
+// -- Schedules --
+
+/**
+ * The panel's own timed programs.
+ *
+ * These are the reason a switch in this app can lose an argument it appears to
+ * win: a schedule is enforced at the pad, so equipment inside an active window
+ * goes back to what the program says regardless of what anyone asked for. They
+ * were unreachable until the command behind this was run against a pad; it
+ * answers, and this is the query that puts the answer on screen.
+ *
+ * Slow cadence, like the macros. A schedule is configuration and changes when a
+ * person changes it, so polling at the live rate would only ever find this
+ * app's own last write. Held quiet during a mutation for the same reason every
+ * other panel read is — see `panelOptions`.
+ */
+export function useSchedules(serial: string | undefined) {
+	const uid = useUserId();
+	const quiet = useIsMutating({ mutationKey: holdKey(serial) }) > 0;
+	return useQuery({
+		queryKey: keys.schedules(uid, serial ?? "-"),
+		queryFn: uid && serial ? () => getScheduleList(serial) : skipToken,
+		...panelOptions(quiet, ONETOUCH_POLL_MS),
+	});
+}
+
+/**
+ * The equipment a schedule can name, which a schedule list cannot say for
+ * itself — it reports "device 12" and never "Waterfall".
+ *
+ * Deliberately not on `panelOptions`: this is how the pad is wired, not what it
+ * is doing. It changes when somebody installs equipment, which is to say
+ * roughly never, so there is no interval at all and it is allowed to go stale
+ * indefinitely. It is also the one half of this page that may be kept across a
+ * reload — see `persist.ts` — so on a device that has been here before this
+ * costs nothing and the names are on screen before the network answers.
+ */
+export function useScheduleDevices(serial: string | undefined) {
+	const uid = useUserId();
+	return useQuery({
+		queryKey: keys.scheduleDevices(uid, serial ?? "-"),
+		queryFn: uid && serial ? () => getScheduleDevices(serial, "1") : skipToken,
+		staleTime: Number.POSITIVE_INFINITY,
+		refetchOnWindowFocus: false,
+		retry: (count: number, error: unknown) =>
+			error instanceof AqualinkError && error.status === 401
+				? false
+				: count < 2,
+	});
+}
+
+/**
+ * The cached schedule list, in the shape the three writes need.
+ *
+ * The same split `usePanelCache` makes, and for the same reason: a mutation has
+ * to cancel in-flight reads, keep a copy to put back, and edit the list in
+ * place, and doing that inline three times over would be three chances to get
+ * the rollback wrong.
+ */
+function useScheduleCache(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.schedules(uid, serial ?? "-");
+	return {
+		cancel: () => qc.cancelQueries({ queryKey: qk }),
+		snapshot: () => qc.getQueryData<ScheduleList>(qk),
+		restore: (prev: ScheduleList | undefined) => qc.setQueryData(qk, prev),
+		/** Rewrite the schedules in place, leaving the panel's own counts alone. */
+		write: (
+			fn: (schedules: ScheduleList["schedules"]) => ScheduleList["schedules"],
+		) => {
+			const cur = qc.getQueryData<ScheduleList>(qk);
+			if (cur) qc.setQueryData(qk, { ...cur, schedules: fn(cur.schedules) });
+		},
+		/**
+		 * Take the panel's own reply as the new truth when it sent one. All three
+		 * operations answer with the whole list, which is better than anything
+		 * this side could compose — an add in particular, where the panel picks
+		 * the id and nothing here can predict it.
+		 */
+		seed: (list: ScheduleList | null) => {
+			if (list) qc.setQueryData(qk, list);
+		},
+		/**
+		 * The whole panel, not just the schedules. A program whose window covers
+		 * the present moment starts acting the instant it exists, so the relay
+		 * states on the other screens can change as a result of an edit made
+		 * here — refreshing only this list would leave the equipment page showing
+		 * the state from before.
+		 */
+		invalidate: () =>
+			qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") }),
+	};
+}
+
+/**
+ * Add a program.
+ *
+ * No optimistic insert, unlike the two below. The panel assigns the id, and the
+ * ids it hands out are neither sequential nor gap-free — this pool returned 0,
+ * 1, 2, 4, 3, 5 — so a placeholder would be a guess at the one field the rest
+ * of the page addresses rows by. The reply carries the real list instead.
+ */
+export function useAddSchedule(serial: string | undefined) {
+	const cache = useScheduleCache(serial);
+	return useMutation({
+		mutationFn: (spec: ScheduleSpec) => addSchedule(serial as string, spec),
+		onSuccess: (list) => cache.seed(list),
+		onSettled: () => cache.invalidate(),
+	});
+}
+
+/** Change a program's equipment, times or days. */
+export function useEditSchedule(serial: string | undefined) {
+	const cache = useScheduleCache(serial);
+	return useMutation({
+		mutationFn: ({ id, spec }: { id: number; spec: ScheduleSpec }) =>
+			editSchedule(serial as string, id, spec),
+		onMutate: async ({ id, spec }) => {
+			await cache.cancel();
+			const prev = cache.snapshot();
+			cache.write((schedules) =>
+				schedules.map((s) => (s.id === id ? { ...s, ...spec } : s)),
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx) cache.restore(ctx.prev);
+		},
+		onSuccess: (list) => cache.seed(list),
+		onSettled: () => cache.invalidate(),
+	});
+}
+
+/** Remove a program. */
+export function useDeleteSchedule(serial: string | undefined) {
+	const cache = useScheduleCache(serial);
+	return useMutation({
+		mutationFn: (id: number) => deleteSchedule(serial as string, id),
+		onMutate: async (id) => {
+			await cache.cancel();
+			const prev = cache.snapshot();
+			cache.write((schedules) => schedules.filter((s) => s.id !== id));
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx) cache.restore(ctx.prev);
+		},
+		onSuccess: (list) => cache.seed(list),
+		onSettled: () => cache.invalidate(),
 	});
 }

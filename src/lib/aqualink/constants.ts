@@ -196,15 +196,23 @@ export const CMD_SET_SPEEDNAME_VALUE = "set_speedname_value";
 export const CMD_ENABLE_PUMP_SPEED_VALUE = "enable_pump_speed_value";
 
 /**
- * The panel's own timed programs. Until now this app treated schedules as
- * WebTouch-only and sent owners to the panel's embedded web UI for them; the
- * protocol reference says they are readable and writable over the same session
- * endpoint as everything else. Nobody has confirmed that against a pad, which
- * is the entire reason `get_schedule_list` is wired to a diagnostics probe.
+ * The panel's own timed programs. This app used to treat schedules as
+ * WebTouch-only and sent owners to the panel's embedded web UI for them.
+ * `get_schedule_list` has since been run against a pad and answers properly, so
+ * the programs that quietly overrule every switch in this app are readable
+ * after all — which is what the Schedules page is built on.
+ *
+ * The reference this was ported from was wrong about the reply in several ways
+ * worth remembering, because the same reference is still the only source for
+ * `do_schedule_operation`, which nothing has ever sent. `scheduleDays` is a
+ * closed set of words with no spaces in them ("AllDays", "Weekdays",
+ * "Weekends", "Wednesday") rather than a free descriptor or a day mask,
+ * `isNewScheduleAllowed` is the string "Allowed" rather than a boolean, and
+ * `pageNum` is an accepted request parameter that goes undocumented.
  *
  * A schedule names a `deviceId`, not an aux key — the id space is
- * `get_master_device_list`'s, so the two reads have to be joined before a
- * schedule can be shown as belonging to anything an owner recognises.
+ * `get_master_device_list`'s low range, and `listType=1` is the join that turns
+ * "device 12" into "Waterfall".
  */
 export const CMD_GET_SCHEDULE_LIST = "get_schedule_list";
 export const CMD_DO_SCHEDULE_OPERATION = "do_schedule_operation";

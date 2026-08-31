@@ -75,6 +75,18 @@ const PERSISTED = new Set([
 	// names, where home and devices are water temperature and which relays are
 	// closed. A restored reading would be a lie the app cannot detect.
 	"panel:onetouch",
+	// The equipment a schedule can name — names again, and the same argument as
+	// `vsp`: this is how the pad is wired, and it changes when somebody installs
+	// something, not while anyone is looking at it.
+	//
+	// `panel:schedules` is deliberately not here beside it. Schedules are
+	// configuration and would survive a reload perfectly well, but they are also
+	// the one thing this page exists to state precisely: it was a schedule
+	// nobody could see that made equipment turn itself back on with no
+	// explanation. A window restored from storage and shown as current is that
+	// same failure with an extra step, and the page refetches on mount anyway —
+	// so persisting them would buy a spinner and risk a wrong answer.
+	"panel:scheduleDevices",
 ]);
 
 const persister = createAsyncStoragePersister({

@@ -148,8 +148,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 			// horizontal padding is a floor rather than a fixed value — 1rem when
 			// there is no inset, the inset when it is larger.
 			className={`mx-auto flex min-h-svh w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] duration-200 fade-in ${
+				// How much of the page the tab bar covers, which is not one number:
+				// below `sm` the bar stacks each label under its icon to fit three
+				// destinations across a phone, so it stands taller there than it does
+				// inline. Both values are the bar's own height plus the offset it
+				// floats at — see BottomNav, and keep the breakpoint the same as its.
 				onTab
-					? "pb-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]"
+					? "pb-[calc(max(1rem,env(safe-area-inset-bottom))+4.5rem)] sm:pb-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]"
 					: "pb-6"
 			}`}
 		>
