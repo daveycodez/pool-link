@@ -187,7 +187,9 @@ function SpeedCard({
 								</TextField>
 
 								<div className="flex items-center justify-between gap-4">
-									<div>
+									{/* The label and its range are outside a field wrapper, so
+									    HeroUI is not spacing them for us. */}
+									<div className="flex flex-col gap-1">
 										<Label>Speed</Label>
 										<Description className="tabular-nums">
 											{setup.min}–{setup.max} {unit}
