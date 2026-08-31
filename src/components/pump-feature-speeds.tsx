@@ -13,6 +13,7 @@ import {
 import { Pencil, Plug } from "lucide-react";
 import { useState } from "react";
 import type { VspSlotSetup, VspSpeed } from "#/lib/aqualink/client";
+import { auxPosition } from "#/lib/aqualink/client";
 import { errorMessage } from "#/lib/aqualink/types";
 import type { PoolDevice } from "#/lib/iaqualink/types";
 import { useSetAuxSpeed, useSetSpeed } from "#/lib/queries";
@@ -39,14 +40,13 @@ export function speedStep(unit: string): number {
 
 /** The aux positions the panel can bind a speed to, named as the owner named them. */
 function auxOptions(devices: PoolDevice[], auxCount: number) {
-	// Position n of the panel's assignment list is the nth aux the devices
-	// screen names — which is `aux_n` for the first seven and then runs into the
-	// lettered expansion banks, so the position has to come from the order and
-	// never from the name.
-	const auxes = devices.filter((d) => d.name.startsWith("aux_"));
-	return auxes
-		.slice(0, auxCount)
-		.map((d, i) => ({ auxId: i + 1, label: d.label }));
+	// Position from the name rather than from where it fell in the list: a pad
+	// that leaves a gap in the devices it reports would otherwise shift every
+	// label after the gap onto the wrong relay.
+	return devices
+		.map((d) => ({ auxId: auxPosition(d.name), label: d.label }))
+		.filter((o) => o.auxId > 0 && o.auxId <= auxCount)
+		.sort((a, b) => a.auxId - b.auxId);
 }
 
 export function PumpFeatureSpeeds({

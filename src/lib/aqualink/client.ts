@@ -1372,14 +1372,62 @@ export async function getVspSlotSpeeds(
 	};
 }
 
+/**
+ * Seven numbered aux relays, then three banks of eight, then one more.
+ *
+ * The panel's aux naming stops being a number after the seventh: aux_1 to
+ * aux_7, then aux_B1 to aux_D8 for the expansion banks, then aux_EA. Every
+ * panel answers with the whole space whatever its size, which is why this can
+ * be worked out from a name rather than counted off a device list — and why it
+ * still holds for a pad that leaves gaps in the one it sends.
+ */
+const AUX_NUMBERED = 7;
+const AUX_BANKS = ["B", "C", "D"];
+const AUX_BANK_SIZE = 8;
+
+/**
+ * Where an aux sits in the panel's own aux order, 1-based, or 0 for a name
+ * that is not one.
+ *
+ * This is the number `aux_speed_assignments` is indexed by — position n of
+ * that list is the nth aux — so it is the only thing that ties a pump's speed
+ * to the relay that runs it. Reading the trailing digits as the position is
+ * what it used to do, and that is right for exactly the first seven: aux_B1 is
+ * the eighth aux and not the first, so a pump wired to any expansion bank
+ * resolved to the wrong relay or to none.
+ */
+export function auxPosition(deviceName: string | undefined): number {
+	const m = /^aux_([A-Za-z]?)(\d+|[Aa])$/.exec(deviceName ?? "");
+	if (!m) return 0;
+	const bank = m[1].toUpperCase();
+	const slot = m[2].toUpperCase();
+
+	if (!bank) {
+		const n = Number(slot);
+		return n >= 1 && n <= AUX_NUMBERED ? n : 0;
+	}
+
+	const b = AUX_BANKS.indexOf(bank);
+	if (b >= 0) {
+		const n = Number(slot);
+		return n >= 1 && n <= AUX_BANK_SIZE
+			? AUX_NUMBERED + b * AUX_BANK_SIZE + n
+			: 0;
+	}
+
+	// The last one is lettered rather than numbered, so it is named outright.
+	if (bank === "E" && slot === "A")
+		return AUX_NUMBERED + AUX_BANKS.length * AUX_BANK_SIZE + 1;
+	return 0;
+}
+
 /** The pump driving a device, matched on the aux relay the device sits on. */
 export function pumpForDevice(
 	pumps: VspPump[] | undefined,
 	deviceName: string | undefined,
 ): VspPump | undefined {
-	const aux = /^aux_(\d+)$/.exec(deviceName ?? "");
-	if (!aux) return undefined;
-	const n = Number(aux[1]);
+	const n = auxPosition(deviceName);
+	if (!n) return undefined;
 	return pumps?.find((p) => p.auxes.includes(n));
 }
 
