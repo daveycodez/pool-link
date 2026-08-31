@@ -25,7 +25,7 @@ import { useEffect, useMemo } from "react";
 import { tempRange } from "#/components/temp-stepper";
 import { timeToGo } from "#/lib/format";
 import type { HeatPump, PoolDevice } from "#/lib/iaqualink/types";
-import { PAD_SETTLE_MS } from "#/lib/queries";
+import { PAD_SETTLE_MS } from "#/lib/pad";
 
 /** A reading the estimator kept: a whole-degree temperature, and when. */
 export interface Step {

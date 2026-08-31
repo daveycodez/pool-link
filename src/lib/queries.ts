@@ -57,6 +57,7 @@ import { clearHeatRuns } from "#/lib/heat-eta";
 import { iclPresent, normalize } from "#/lib/iaqualink/normalize";
 import type { PoolDevice, PoolSnapshot, Raw } from "#/lib/iaqualink/types";
 import { keys } from "#/lib/keys";
+import { PAD_SETTLE_MS } from "#/lib/pad";
 import { PERSIST_GC_TIME_MS } from "#/lib/persist";
 
 /**
@@ -107,15 +108,6 @@ export const STALE_MS = 30_000;
  * for an effect pick, and for switching on, which programs Alpine White.
  */
 const LIGHT_HOLD_MS = 15_000;
-
-/**
- * How long the pad needs before it answers sanely after a light's relay
- * drops. The refetch that releases a hold reads the whole pad, and one taken
- * right after the command lands mid-transient — turning a light off painted
- * every temperature as 0 until the next poll, with the light itself reading
- * a perfectly agreeable "off".
- */
-export const PAD_SETTLE_MS = 5_000;
 
 /** Pump speeds are near-static, so they ride a much slower cycle. */
 const VSP_POLL_MS = POLL_MS * 2;
