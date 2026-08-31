@@ -952,8 +952,12 @@ export interface VspDefinition {
  * the error body instead of arriving as a pump made entirely of nulls. That is
  * the same test `readSwcConfig` applies to its set points, for the same reason.
  *
- * Unverified: upstream never sends this command, so nothing has seen a real
- * answer. Probeable from diagnostics, which is how that changes.
+ * The two field names carrying `vsp_pump_` were read as `vsp_appId` and
+ * `vsp_speed_unit` when this was written from the protocol reference alone.
+ * A live answer names them `vsp_pump_appId` and `vsp_pump_unit`, so both read
+ * undefined: every slot claimed an appId of 0, and — the one that mattered —
+ * every pump reported an empty unit, which is the field that exists to stop a
+ * flow pump's speeds being labelled RPM.
  */
 export async function getVspDefinition(
 	serial: string,
@@ -967,9 +971,9 @@ export async function getVspDefinition(
 		throw new AqualinkError("No pump definition reported", undefined, raw);
 	return {
 		slotId: int(raw.slot_id) ?? slotId,
-		appId: int(raw.vsp_appId) ?? 0,
+		appId: int(raw.vsp_pump_appId) ?? 0,
 		appName: String(raw.vsp_pump_appName ?? ""),
-		unit: String(raw.vsp_speed_unit ?? "").toLowerCase(),
+		unit: String(raw.vsp_pump_unit ?? "").toLowerCase(),
 		min: int(raw.vsp_min_speed),
 		max,
 		model: String(raw.vsp_model_type ?? ""),
@@ -1010,16 +1014,38 @@ export function setVspName(
 	});
 }
 
-export function setVspDefinition(
+/**
+ * The seven things `set_vsp_definition` can change, one per request.
+ *
+ * The first port of this command sent `app_id` and `model_typeid` together,
+ * which is the one shape no source anywhere shows. The vendor's own client
+ * builds this query string seven different ways and never puts two fields in
+ * one request — so a partial update it is, and the other five fields, which
+ * that port could not express at all, are what the panel's own priming and
+ * freeze-protection speeds are set through.
+ *
+ * `freezeprotect_speed` has no underscore between "freeze" and "protect", while
+ * the field it sets back is read as `vsp_freeze_protect_speed`. That asymmetry
+ * is the wire's, not a typo.
+ */
+export type VspDefinitionField =
+	| "app_id"
+	| "model_typeid"
+	| "min_speed"
+	| "max_speed"
+	| "prime_speed"
+	| "prime_duration"
+	| "freezeprotect_speed";
+
+export function setVspDefinitionField(
 	serial: string,
 	slotId: number,
-	appId: number,
-	modelTypeId: number,
+	field: VspDefinitionField,
+	value: number,
 ): Promise<Raw> {
 	return client.sessionRequest(serial, CMD_SET_VSP_DEFINITION, {
 		slot_id: String(slotId),
-		app_id: String(appId),
-		model_typeid: String(modelTypeId),
+		[field]: String(Math.round(value)),
 	});
 }
 
@@ -1047,7 +1073,13 @@ export function unassignVspSerial(
  * Bind an aux relay to one of a pump's speeds. This is the write side of the
  * `aux_speed_assignments` list `getPumpSpeeds` reads to work out which relay a
  * pump belongs to, so changing it moves a pump from one relay to another as far
- * as the whole app is concerned. Unverified.
+ * as the whole app is concerned.
+ *
+ * `auxId` is 1-based and indexes the panel's own aux order — position 1 is the
+ * first aux `get_devices` lists, which is `aux_1` on a bare panel but keeps
+ * counting into the lettered expansion banks past the seventh, where the names
+ * stop being `aux_N`. Clearing an assignment is `speedId: 0` with the aux still
+ * named; there is no unassign command and the aux is never omitted.
  */
 export function setAuxSpeed(
 	serial: string,
@@ -1065,10 +1097,12 @@ export function setAuxSpeed(
 /**
  * Rename a speed preset, and set what it is worth.
  *
- * These address a preset by `speedname_id`, which the reference names separately
- * from the `speed_id` the run commands take. Whether the two id spaces are the
- * same is not documented anywhere and has never been observed, so a caller must
- * not assume a preset's run id is its name id. Unverified.
+ * These spell the preset `speedname_id` where the run commands spell it
+ * `speed_id`, which read as two id spaces nobody had reconciled. They are one
+ * number: the vendor's client parses `speedid` out of `get_vsp_speedauxinfo`
+ * once and emits that single value under whichever name the command in hand
+ * wants. So a preset's run id *is* its name id — but the two spellings stay,
+ * because the panel is what insists on them.
  */
 export function setSpeedName(
 	serial: string,
@@ -1218,6 +1252,123 @@ async function getPumpSpeeds(serial: string, pumpId: number) {
 		max: Number(raw.maxSpeed),
 		speeds: named.length > 0 ? named : all,
 		auxes,
+	};
+}
+
+/** One of the panel's twenty pump slots, whether or not a pump answers for it. */
+export interface VspSlot {
+	/** 1-based, and the `slot_id` every VSP command takes. */
+	slotId: number;
+	name: string;
+	appId: number;
+	/** "Filtration", "Aux Pump", or "Not Installed" for an empty slot. */
+	appName: string;
+	model: string;
+	modelTypeId: number;
+	/** The physical pump's own serial. Empty for slots 1-4, which have none. */
+	pumpSerial: string;
+	installed: boolean;
+}
+
+/**
+ * Every pump slot the panel has, empty ones included.
+ *
+ * Two requests for all twenty, not one per slot: `get_vsp_names` and
+ * `get_vsp_appmodelserials` each answer for the whole table. `listVspPumps`
+ * already asks both and then throws the empty slots away, which is right for a
+ * screen that runs pumps and wrong for one that sets them up — an empty slot is
+ * a row a setup page has to draw.
+ *
+ * `appId` is what separates a real pump from a stub, not the name: an
+ * unconfigured slot is still called "PumpN" and still reports a full speed
+ * table, all of it factory defaults.
+ */
+export async function getVspSlots(serial: string): Promise<VspSlot[]> {
+	const [names, models] = await Promise.all([
+		getVspNames(serial),
+		getVspAppModelSerials(serial),
+	]);
+
+	const named = new Map<number, string>();
+	for (const n of rows(names.vsp_names)) {
+		named.set(Number(n.pumpId), String(n.pumpName ?? ""));
+	}
+
+	return rows(models.vsp_app_model_serials).map((m) => {
+		const slotId = Number(m.pumpId);
+		const appId = int(m.appId) ?? 0;
+		return {
+			slotId,
+			name: named.get(slotId) || `Pump ${slotId}`,
+			appId,
+			appName: String(m.appName ?? ""),
+			model: String(m.modelName ?? ""),
+			modelTypeId: int(m.modelType) ?? 0,
+			pumpSerial: String(m.pumpSerial ?? ""),
+			installed: appId !== 0,
+		};
+	});
+}
+
+/** A slot's eight speeds and its aux bindings, as configuration rather than state. */
+export interface VspSlotSetup {
+	min: number;
+	max: number;
+	/** All eight, placeholder names kept — naming them is the point here. */
+	speeds: VspSpeed[];
+	/** How many aux positions the panel offers bindings for. */
+	auxCount: number;
+	/**
+	 * Position n (1-based) holds the speed id that aux runs at, or 0 for none.
+	 * Both directions of the mapping come off this: which aux a speed drives is
+	 * a search through it.
+	 */
+	auxSpeeds: number[];
+}
+
+/**
+ * One slot's speed table, read for editing rather than for running.
+ *
+ * Deliberately not `getPumpSpeeds`, which drops the speeds still carrying a
+ * placeholder name. That is the correct read for a control that offers speeds
+ * to pick between, and exactly the wrong one here: a speed called "Speed4" is
+ * the one the owner has come to this page to name.
+ *
+ * `enabled` is not read at all. It reports which speed the pump is running now,
+ * which is state this page has no business showing — the equipment page owns
+ * that, and a setup screen that redrew itself because someone turned a pump on
+ * would be lying about what it edits.
+ */
+export async function getVspSlotSpeeds(
+	serial: string,
+	slotId: number,
+): Promise<VspSlotSetup> {
+	const raw = await getVspSpeeds(serial, slotId);
+	const speeds: VspSpeed[] = rows(raw.vsp_speedInfo).map((s) => ({
+		id: Number(s.speedid),
+		name: String(s.speedName ?? ""),
+		rpm: Number(s.speedvalue),
+		active: s.enabled === "true",
+	}));
+
+	// The list runs one entry longer than `aux_count` and ends in "Absent",
+	// a terminator rather than a thirty-third aux, so the count is what bounds
+	// it. Every other entry is a speed id or "No".
+	const auxCount = int(raw.aux_count) ?? 0;
+	const assignments = Array.isArray(raw.aux_speed_assignments)
+		? (raw.aux_speed_assignments as unknown[])
+		: [];
+	const auxSpeeds = Array.from({ length: auxCount }, (_, i) => {
+		const a = String(assignments[i] ?? "");
+		return /^\d+$/.test(a) ? Number(a) : 0;
+	});
+
+	return {
+		min: Number(raw.minSpeed),
+		max: Number(raw.maxSpeed),
+		speeds,
+		auxCount,
+		auxSpeeds,
 	};
 }
 
