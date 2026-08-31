@@ -7,7 +7,7 @@ import {
 	TimeField,
 } from "@heroui/react";
 import { Time } from "@internationalized/date";
-import { Clock, Gauge, Trash2, Zap } from "lucide-react";
+import { Clock, Gauge, Plug, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { presetIcon } from "#/components/preset-icons";
 import type {
@@ -216,7 +216,7 @@ export function ScheduleEditor({
 												// wearing one line away.
 												const Icon = d.isVsp
 													? Gauge
-													: (presetIcon(d.name) ?? Zap);
+													: (presetIcon(d.name) ?? Plug);
 												const label = deviceLabel(d);
 												return (
 													<ListBox.Item

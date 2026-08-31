@@ -3,8 +3,8 @@ import {
 	Droplets,
 	Flame,
 	Lightbulb,
+	Plug,
 	SlidersHorizontal,
-	Zap,
 } from "lucide-react";
 import { DIMMER_STEP } from "#/lib/aqualink/enums";
 import type { PoolDevice } from "#/lib/iaqualink/types";
@@ -33,7 +33,7 @@ export function IconCircle({
 /**
  * The label first — a relay is named from the panel's own preset list, so the
  * name says what the equipment is in a way its position never could. Failing
- * that, the device's kind, which the protocol supplies. Failing both, the bolt.
+ * that, the device's kind, which the protocol supplies. Failing both, the plug.
  */
 export function DeviceIcon({ device }: { device: PoolDevice }) {
 	const Preset = presetIcon(device.label);
@@ -49,7 +49,7 @@ export function DeviceIcon({ device }: { device: PoolDevice }) {
 		case "climate":
 			return <Flame className="size-4" />;
 		default:
-			return <Zap className="size-4" />;
+			return <Plug className="size-4" />;
 	}
 }
 

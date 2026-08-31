@@ -1,6 +1,6 @@
 import { Button, Card, Chip, Spinner } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Zap } from "lucide-react";
+import { Pencil, Plug, Plus } from "lucide-react";
 import { useMemo } from "react";
 import { CardColumns } from "#/components/card-columns";
 import { IconCircle } from "#/components/device-row";
@@ -263,7 +263,7 @@ function ScheduleRow({
 	 * specific" rather than becoming a mark that means "schedule", which every
 	 * row here would equally deserve and none would be told apart by.
 	 */
-	const Icon = presetIcon(name) ?? Zap;
+	const Icon = presetIcon(name) ?? Plug;
 
 	return (
 		<Card className="flex-row items-center justify-between gap-4">
