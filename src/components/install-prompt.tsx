@@ -1,4 +1,5 @@
 import { Alert, Button, CloseButton } from "@heroui/react";
+import { Share } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useInstall } from "#/lib/use-install";
 import { useOnline } from "#/lib/use-online";
@@ -116,8 +117,20 @@ export function InstallPrompt() {
 					<Alert.Description>
 						Add it to your home screen
 						{/* No button to press on iOS, so the one line it gets has to
-						    carry the way there as well as the reason. */}
-						{manual ? " — tap Share, then Add to Home Screen" : null}
+						    carry the way there as well as the reason — and the way
+						    there is a glyph in Safari's toolbar, not a word, so the
+						    line shows the glyph. */}
+						{manual ? (
+							<>
+								{" — tap "}
+								<Share
+									aria-label="Share"
+									className="inline size-4 align-text-bottom"
+									role="img"
+								/>
+								{", then Add to Home Screen"}
+							</>
+						) : null}
 					</Alert.Description>
 					{/* The action sits beside the text where there is room for it and
 					    under the text where there is not — one button per width, so
