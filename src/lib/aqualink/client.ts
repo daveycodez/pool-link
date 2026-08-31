@@ -242,8 +242,14 @@ export class AqualinkClient implements AqualinkClientLike {
 				data.RefreshToken,
 				(data.userPoolOAuth as Raw)?.RefreshToken,
 			),
-			clientId: pick(data.session_id, claims["custom:per_session_id"]),
-			userId: pick(data.userId, data.user_id, claims["custom:rubie_user_id"]),
+			// `perl` and `ruby`, not `per` and `rubie`. Both spellings here were
+			// wrong, which went unnoticed because each is a fallback behind a
+			// field the login reply does carry — so they could never fire, and
+			// the claim was dead weight rather than the safety net it reads as.
+			// Checked against a real idToken from this pool, whose custom claims
+			// are `custom:perl_session_id` and `custom:ruby_user_id`.
+			clientId: pick(data.session_id, claims["custom:perl_session_id"]),
+			userId: pick(data.userId, data.user_id, claims["custom:ruby_user_id"]),
 			appClientId: pick((data.cognitoPool as Raw)?.appClientId, claims.aud),
 			country: (
 				pick(data.country, claims["custom:country"]) || "us"
@@ -363,12 +369,34 @@ export class AqualinkClient implements AqualinkClientLike {
 			);
 		}
 		const data = await jsonBody(res, CLOUD_TIMEOUT_MS);
+		const idToken = idTokenOf(data) || existing.idToken;
+		const claims = decodeJwtClaims(idToken);
 		const merged: Session = {
 			...existing,
-			idToken: idTokenOf(data) || existing.idToken,
+			idToken,
 			refreshToken:
 				pick(data.RefreshToken, (data.userPoolOAuth as Raw)?.RefreshToken) ||
 				existing.refreshToken,
+			/**
+			 * Taken from the token just issued rather than carried over.
+			 *
+			 * `clientId` is the `sessionID` on every p-api command, and the pool
+			 * calls it a per-session id — it arrives as `custom:perl_session_id`
+			 * on the idToken, which is a claim of the token and not of the
+			 * account. Spreading the old session kept the one minted at login for
+			 * as long as the tab lived, so if the pool issues a new id with each
+			 * refresh, every request after the first refresh carried an id the
+			 * pool had retired. That is a 401 on a token that has not expired,
+			 * arriving about an hour after signing in, which is a thing this app
+			 * has been seen to do and could not otherwise explain.
+			 *
+			 * Falls back to what was already held, so a reply that names no id
+			 * changes nothing — and if the pool does not rotate it, the claim is
+			 * the same string and this is a no-op.
+			 */
+			clientId:
+				pick(data.session_id, claims["custom:perl_session_id"]) ||
+				existing.clientId,
 		};
 		this.session = merged;
 		await saveSession(merged);
