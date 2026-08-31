@@ -148,16 +148,6 @@ function Schedules() {
 			</CardColumns>
 
 			<div className="flex justify-end">{addButton}</div>
-
-			{/* The panel counts its own programs, and this walks its pages to
-			    collect them. A shortfall means the walk stopped early, which is
-			    worth saying plainly — the alternative is a page quietly claiming
-			    to be the whole truth about when equipment runs. */}
-			{list && list.total > rows.length ? (
-				<p className="text-xs text-muted">
-					Showing {rows.length} of {list.total} schedules this panel reports.
-				</p>
-			) : null}
 		</div>
 	);
 }
