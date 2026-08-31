@@ -91,11 +91,11 @@ const PERSISTED = new Set([
 	// It is refetched on mount regardless, so the worst a restore can do is show
 	// a correct answer from a minute ago until the poll replaces it.
 	"panel:schedules",
-	"panel:scheduleDevices",
+	"scheduleDevices",
 	// The speeds those devices offer, on the same argument and at a higher
 	// price: one request per pump, for names that change when a pump is
 	// reconfigured and not otherwise.
-	"panel:scheduleSpeeds",
+	"scheduleSpeeds",
 ]);
 
 const persister = createAsyncStoragePersister({

@@ -1835,9 +1835,19 @@ function useScheduleCache(serial: string | undefined) {
 		 * states on the other screens can change as a result of an edit made
 		 * here — refreshing only this list would leave the equipment page showing
 		 * the state from before.
+		 *
+		 * Started and not awaited, which is the part that matters. React Query
+		 * dispatches a mutation's success only after `onSettled` resolves, so
+		 * returning this promise keeps `isPending` true until every panel screen
+		 * has refetched — and the panel answers one command at a time. Deleting a
+		 * program left its own dialog's buttons disabled for as long as that took,
+		 * as though the delete were still running when it had long finished. The
+		 * optimistic write already shows the right answer; the refetch only
+		 * confirms it, and nothing needs to wait on being told it was right.
 		 */
-		invalidate: () =>
-			qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") }),
+		invalidate: () => {
+			void qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") });
+		},
 	};
 }
 

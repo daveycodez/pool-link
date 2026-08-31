@@ -57,22 +57,26 @@ export const keys = {
 		[uid, "panel", serial, "schedules"] as const,
 	/**
 	 * The id↔name table a schedule has to be read through, since the schedule
-	 * list names "device 12" and never "Waterfall". Separate from `schedules`
-	 * because the two keep completely different time: this is the pad's wiring
-	 * and moves when somebody installs equipment, where a schedule moves when
-	 * somebody changes their mind. A shared entry would drag the wiring to the
-	 * schedules' cadence and stop it being safe to keep across a reload.
+	 * list names "device 12" and never "Waterfall".
+	 *
+	 * Outside the `panel` prefix, where `vsp` already sits and for the same
+	 * reason: this is the pad's wiring, not its state. Every panel mutation
+	 * invalidates that prefix and waits on what it refetches, so anything filed
+	 * under it is something a person waits for after flipping a switch. Wiring
+	 * changes when equipment is installed; making a light toggle re-read it
+	 * would be paying a request to learn nothing.
 	 */
 	scheduleDevices: (uid: string, serial: string) =>
-		[uid, "panel", serial, "scheduleDevices"] as const,
+		[uid, "scheduleDevices", serial] as const,
 	/**
-	 * The pump speeds a schedule can name. Separate from the device table above
-	 * because it costs one request per pump and is only wanted where a schedule
-	 * actually names a speed — and because it cannot be asked for until that
-	 * table has said which devices are pumps.
+	 * The pump speeds a schedule can name — the same argument as above and a
+	 * dearer one, since this costs a request per pump and the panel answers
+	 * commands one at a time. It also cannot be asked for until the device table
+	 * has said which ids are pumps, so it is the slowest thing here to refetch
+	 * and the least likely ever to have changed.
 	 */
 	scheduleSpeeds: (uid: string, serial: string) =>
-		[uid, "panel", serial, "scheduleSpeeds"] as const,
+		[uid, "scheduleSpeeds", serial] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,
