@@ -14,7 +14,7 @@ import {
 	SystemSerialRow,
 	WebTouchRow,
 } from "#/components/settings-rows";
-import { useRequireSession } from "#/lib/use-pool";
+import { useRequireSystem } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/settings")({
 	component: SystemSettings,
@@ -23,10 +23,10 @@ export const Route = createFileRoute("/systems/$serial/settings")({
 /** The account rows plus what only makes sense with a system in scope. */
 function SystemSettings() {
 	const { serial } = Route.useParams();
-	const { pending, signedIn } = useRequireSession();
+	const { pending, signedIn, owned } = useRequireSystem(serial);
 
 	if (pending) return <Loading />;
-	if (!signedIn) return null;
+	if (!signedIn || !owned) return null;
 
 	return (
 		<CardColumns>

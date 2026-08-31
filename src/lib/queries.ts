@@ -927,13 +927,35 @@ export function useSetPoint(serial: string | undefined) {
 			} else {
 				// set_temps carries both bodies, so the untouched one is read back
 				// out of the cache rather than left blank, which would clear it.
+				//
+				// The read has to tell two empties apart, and only one of them is a
+				// value. A pad with no spa plumbed still reports `spa_set_point`,
+				// as "" — fixed keys are in the payload whether or not the hardware
+				// is, which `isReported` exists to say — and echoing that "" back is
+				// how every pool-only pad has always written its pool set point.
+				// What must not be sent is the other empty: a body the snapshot does
+				// not carry at all, because the poll has not landed or a restore
+				// dropped it. That "" is not the panel's answer, it is the absence
+				// of one, and it rides out on the same command as the value the
+				// owner just chose — so it lands, and a set point nobody touched is
+				// cleared by a write that looked like it worked.
+				//
+				// Hence "absent" rather than "" as the missing case — a set point the
+				// panel named always carries a string, so nullish here means the
+				// snapshot has nothing to say about that body. Refusing is the
+				// recoverable failure: the toast says so, the stepper snaps back, and
+				// the next poll makes the same tap work.
 				const at = (n: string) =>
-					snap?.devices.find((d) => d.name === n)?.value ?? "";
-				res = await setTemps(
-					serial as string,
-					name === "spa_set_point" ? String(value) : at("spa_set_point"),
-					name === "pool_set_point" ? String(value) : at("pool_set_point"),
-				);
+					snap?.devices.find((d) => d.name === n)?.value;
+				const spa =
+					name === "spa_set_point" ? String(value) : at("spa_set_point");
+				const pool =
+					name === "pool_set_point" ? String(value) : at("pool_set_point");
+				if (spa == null || pool == null)
+					throw new AqualinkError(
+						"Set point unavailable — waiting on the panel",
+					);
+				res = await setTemps(serial as string, spa, pool);
 			}
 			return res;
 		},

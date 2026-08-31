@@ -1,4 +1,14 @@
-/** Port of `iaqualink/utils/crypto.py` plus JWT helpers for browser-direct use. */
+/**
+ * JWT helpers for browser-direct use.
+ *
+ * This was a port of `iaqualink/utils/crypto.py`, which is an HMAC-SHA1 request
+ * signer over the public mobile API key. Nothing here ever signed anything —
+ * every endpoint this app talks to authenticates with the bearer idToken — and
+ * leaving the signer in place invited exactly the wrong conclusion: a reviewer
+ * reading it inferred that these endpoints authenticate by signature rather
+ * than by account, and built a whole severity assessment on top of that. Dead
+ * code that misleads is not free, so it is gone.
+ */
 
 /** Decode a JWT payload WITHOUT verifying. We are the client, not a verifier. */
 export function decodeJwtClaims(
@@ -19,28 +29,4 @@ export function decodeJwtClaims(
 export function jwtExpiry(token: string): number | null {
 	const exp = decodeJwtClaims(token).exp;
 	return typeof exp === "number" ? exp : null;
-}
-
-/** HMAC-SHA1 hexdigest over `parts` joined by "," (port of `sign()`). */
-export async function sign(parts: string[], secret: string): Promise<string> {
-	const message = parts.join(",");
-	return hmacSha1Hex(secret, message);
-}
-
-async function hmacSha1Hex(secret: string, message: string): Promise<string> {
-	const key = await crypto.subtle.importKey(
-		"raw",
-		new TextEncoder().encode(secret),
-		{ name: "HMAC", hash: "SHA-1" },
-		false,
-		["sign"],
-	);
-	const mac = await crypto.subtle.sign(
-		"HMAC",
-		key,
-		new TextEncoder().encode(message),
-	);
-	return Array.from(new Uint8Array(mac))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join("");
 }

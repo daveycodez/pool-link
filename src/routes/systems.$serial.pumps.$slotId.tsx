@@ -10,7 +10,7 @@ import {
 	useVspSlotSpeeds,
 	useVspSlots,
 } from "#/lib/queries";
-import { useRequireSession } from "#/lib/use-pool";
+import { useRequireSystem } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/pumps/$slotId")({
 	component: PumpDetail,
@@ -32,7 +32,7 @@ export const Route = createFileRoute("/systems/$serial/pumps/$slotId")({
  */
 function PumpDetail() {
 	const { serial, slotId: raw } = Route.useParams();
-	const { pending, signedIn } = useRequireSession();
+	const { pending, signedIn, owned } = useRequireSystem(serial);
 	const slotId = Number(raw);
 
 	const slots = useVspSlots(serial);
@@ -41,7 +41,7 @@ function PumpDetail() {
 	const panel = usePanel(serial);
 
 	if (pending) return <Loading />;
-	if (!signedIn) return null;
+	if (!signedIn || !owned) return null;
 
 	if (slots.isPending) return <Loading />;
 	const slot = slots.data?.find((s) => s.slotId === slotId);

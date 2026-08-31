@@ -63,11 +63,12 @@ import {
 	loadSession,
 	refuseSession,
 	type Session,
+	sameAccount,
 	saveSession,
 	sessionRefused,
 	storedSession,
 } from "./session";
-import { type AqualinkClientLike, IaquaSystem, mergeScreen } from "./system";
+import { type AqualinkClientLike, mergeScreen } from "./system";
 import {
 	AqualinkError,
 	type Payload,
@@ -334,8 +335,17 @@ export class AqualinkClient implements AqualinkClientLike {
 				// out, and nothing on this side of the wire can change that — it
 				// wants either a longer-lived token or a pool that does not rotate.
 				// Within one browser, this is the whole of the problem.
+				//
+				// And only when it is the same account's. Nothing in the blob says
+				// whose session it holds, so on a browser two people share the newer
+				// token is as likely to be the person who signed in after — see
+				// `sameAccount`, which is where that goes wrong and why.
 				const newer = adopted ? null : await storedSession();
-				if (newer && newer.refreshToken !== existing.refreshToken)
+				if (
+					newer &&
+					newer.refreshToken !== existing.refreshToken &&
+					sameAccount(newer, existing)
+				)
 					return this.adopt(newer);
 				// And when that lookup finds nothing newer, the session is refused
 				// rather than deleted. Deleting it is not a local act: the session
@@ -359,7 +369,7 @@ export class AqualinkClient implements AqualinkClientLike {
 				// tell "the same token again" from "the token another tab rotated to
 				// while we were failing".
 				this.session = null;
-				refuseSession(existing.refreshToken);
+				refuseSession(existing);
 				throw new AqualinkError("Session expired — sign in again", 401, body);
 			}
 			throw new AqualinkError(
@@ -578,11 +588,6 @@ export class AqualinkClient implements AqualinkClientLike {
 		});
 	}
 
-	/** Build an iaqua system bound to this client (for OO use). */
-	system(serial: string, name = "Pool"): IaquaSystem {
-		return new IaquaSystem(this, { serial, name });
-	}
-
 	async account(): Promise<Raw> {
 		const s = await this.currentSession();
 		return this.prm(accountUrl(s.userId).replace(PRM, ""));
@@ -614,17 +619,25 @@ export class AqualinkClient implements AqualinkClientLike {
 	 */
 	async getDeviceStatus(serial: string): Promise<Raw> {
 		const s = await this.currentSession();
-		return this.prm(`/device/${serial}/status`, {
+		return this.prm(`/device/${encodeURIComponent(serial)}/status`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ userId: s.userId }),
 		});
 	}
 
-	/** Attach a system to this account by serial. */
+	/**
+	 * Attach a system to this account by serial.
+	 *
+	 * The serial reaches the path rather than a query parameter, so it is encoded
+	 * here rather than trusted to arrive clean. The add form strips it to
+	 * alphanumerics today and every other caller passes a serial the pool itself
+	 * reported — but a path built by interpolation is one edit away from taking
+	 * a slash, and the edit that does it will not be in this file.
+	 */
 	async addDevice(serial: string, name: string): Promise<Raw> {
 		const s = await this.currentSession();
-		return this.prm(`/device/${serial}/add_device`, {
+		return this.prm(`/device/${encodeURIComponent(serial)}/add_device`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ name, userId: s.userId }),
@@ -638,7 +651,7 @@ export class AqualinkClient implements AqualinkClientLike {
 	 */
 	async setDeviceName(serial: string, name: string): Promise<Raw> {
 		const s = await this.currentSession();
-		return this.prm(`/device/${serial}/name`, {
+		return this.prm(`/device/${encodeURIComponent(serial)}/name`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ name, userId: s.userId }),

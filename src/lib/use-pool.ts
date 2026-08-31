@@ -18,6 +18,7 @@ import {
 	usePhOrpCalibration,
 	useSession,
 	useSwc,
+	useSystems,
 	useVspPumps,
 } from "#/lib/queries";
 
@@ -207,6 +208,48 @@ export function useRequireSession() {
 	}, [session.isPending, session.data, navigate]);
 
 	return { pending: session.isPending, signedIn: Boolean(session.data) };
+}
+
+/**
+ * The session guard, plus: this account has to actually own the serial in the
+ * URL. Every route under /systems/$serial uses this in place of the bare one.
+ *
+ * The serial is a path parameter, so it is whatever the address bar says, and
+ * until now nothing compared it to the account's own list — every screen took
+ * it on faith and every command went out with it. That is not a lock, and it
+ * cannot be one: this app runs entirely in the browser, so anyone willing to
+ * open a terminal is talking to the pool's cloud directly and none of this code
+ * is in their way. Only Zodiac can refuse a command for somebody else's pad.
+ *
+ * What it does fix is the accident, which is the failure that actually happens:
+ * a bookmark or a shared link outliving the system it names, a serial that got
+ * renamed, a browser two accounts share where one tab is left on the other's
+ * pool. Landing on a control surface for hardware that is not yours is a bad
+ * place to be even when every button on it will be refused upstream — so the
+ * screen goes back to the systems list instead of drawing itself.
+ *
+ * Only a definite answer counts. While the list is loading the page renders as
+ * it always did, and a failed list — offline, which this app is built to keep
+ * working through — never evicts anyone: the redirect needs a successful list
+ * that does not contain this serial, not merely the absence of one that does.
+ */
+export function useRequireSystem(serial: string) {
+	const navigate = useNavigate();
+	const { pending, signedIn } = useRequireSession();
+	const systems = useSystems(signedIn);
+
+	// Case-folded, because the serial goes on the wire from here but comes from
+	// an address bar, and a bookmark that lowercased it names the same pad.
+	const owned =
+		!systems.isSuccess ||
+		!systems.data ||
+		systems.data.some((s) => s.serial.toLowerCase() === serial.toLowerCase());
+
+	useEffect(() => {
+		if (signedIn && !owned) navigate({ to: "/", replace: true });
+	}, [signedIn, owned, navigate]);
+
+	return { pending, signedIn, owned };
 }
 
 /**

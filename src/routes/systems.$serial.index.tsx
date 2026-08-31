@@ -60,7 +60,7 @@ import {
 	isJandyLight,
 	isReported,
 	usePool,
-	useRequireSession,
+	useRequireSystem,
 } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/")({
@@ -69,7 +69,7 @@ export const Route = createFileRoute("/systems/$serial/")({
 
 function Pool() {
 	const { serial } = Route.useParams();
-	const { pending, signedIn } = useRequireSession();
+	const { pending, signedIn, owned } = useRequireSystem(serial);
 	const {
 		loading,
 		snap,
@@ -99,8 +99,9 @@ function Pool() {
 	const held = useLightHolds(serial);
 
 	if (pending || loading) return <Loading />;
-	// No session: useRequireSession is already redirecting to /login.
-	if (!signedIn) return null;
+	// No session, or a serial this account does not own: useRequireSystem is
+	// already redirecting — to /login and to the systems list respectively.
+	if (!signedIn || !owned) return null;
 
 	/**
 	 * The hero's Spa switch is one touch. Throwing the valves without the heat

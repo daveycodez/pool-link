@@ -36,7 +36,7 @@ import {
 	isHidden,
 	isReported,
 	usePool,
-	useRequireSession,
+	useRequireSystem,
 } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/equipment")({
@@ -45,7 +45,7 @@ export const Route = createFileRoute("/systems/$serial/equipment")({
 
 function Equipment() {
 	const { serial } = Route.useParams();
-	const { pending, signedIn } = useRequireSession();
+	const { pending, signedIn, owned } = useRequireSystem(serial);
 	const {
 		chem,
 		controls,
@@ -68,8 +68,9 @@ function Equipment() {
 	const setDimmer = useSetDimmer(serial);
 
 	if (pending || loading) return <Loading />;
-	// No session: useRequireSession is already redirecting to /login.
-	if (!signedIn) return null;
+	// No session, or a serial this account does not own: useRequireSystem is
+	// already redirecting — to /login and to the systems list respectively.
+	if (!signedIn || !owned) return null;
 
 	// Which command carries a set point depends on the equipment, so the hook
 	// decides — the page only says which one moved.

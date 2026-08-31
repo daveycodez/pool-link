@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DiagnosticsPanel } from "#/components/diagnostics-panel";
 import { Loading } from "#/components/loading";
-import { useRequireSession } from "#/lib/use-pool";
+import { useRequireSystem } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/diagnostics")({
 	component: SystemDiagnostics,
@@ -10,10 +10,10 @@ export const Route = createFileRoute("/systems/$serial/diagnostics")({
 /** The account probes plus this system's screens and VSP commands. */
 function SystemDiagnostics() {
 	const { serial } = Route.useParams();
-	const { pending, signedIn } = useRequireSession();
+	const { pending, signedIn, owned } = useRequireSystem(serial);
 
 	if (pending) return <Loading />;
-	if (!signedIn) return null;
+	if (!signedIn || !owned) return null;
 
 	return <DiagnosticsPanel serial={serial} />;
 }

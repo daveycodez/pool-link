@@ -16,7 +16,6 @@ export {
 } from "./client";
 export * from "./constants";
 export * from "./crypto";
-export * from "./device";
 export * from "./enums";
 export * from "./session";
 export * from "./system";

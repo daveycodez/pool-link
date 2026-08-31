@@ -48,6 +48,32 @@ export async function storedSession(): Promise<Session | null> {
 	return stored?.refreshToken ? stored : null;
 }
 
+/**
+ * Whether two sessions are the same signed-in account.
+ *
+ * Storage holds one session for the whole origin, and nothing in it says whose
+ * it is — so every recovery that reaches for the stored copy has to ask. A
+ * browser two people share is the ordinary case here: one account signs in, the
+ * other signs in later in another tab, and the first tab's next refresh is
+ * refused because its token was retired. The recovery that was written for a
+ * rotation race then hands that tab the *other* account's session, and the tab
+ * carries on against the serial in its URL under a principal its owner never
+ * chose. Every command after that is attributed to the wrong person, and if the
+ * two accounts share the pad, the hardware moves for them.
+ *
+ * Both fields must agree. Email is what login was given and userId is what prm
+ * resolved it to; a session stored before either was resolved carries an empty
+ * string, does not match, and is refused rather than adopted — which costs a
+ * sign-in and never costs the wrong account.
+ */
+export function sameAccount(a: Session, b: Session): boolean {
+	return (
+		a.userId === b.userId &&
+		a.email.toLowerCase() === b.email.toLowerCase() &&
+		Boolean(a.email)
+	);
+}
+
 export async function saveSession(session: Session): Promise<void> {
 	forgetRefusal();
 	queryClient.setQueryData(keys.session(), session);
@@ -110,6 +136,14 @@ const watchers = new Set<() => void>();
  * is a second opinion on a rejection that may never have been about the token.
  */
 let refusedToken: string | null = null;
+/**
+ * The account the refusal was about, when the refusing tab knew one.
+ *
+ * Kept so the retry can tell a rotation from a different person: only a stored
+ * session for this same account may be put back. Null when the tab held no
+ * session to name — see `retryRefusal`, which says what that case may do.
+ */
+let refusedAccount: Session | null = null;
 let retries = 0;
 let announced = false;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,6 +159,7 @@ function forgetRefusal(): void {
 	if (retryTimer !== null) clearTimeout(retryTimer);
 	retryTimer = null;
 	refusedToken = null;
+	refusedAccount = null;
 	retries = 0;
 	announced = false;
 	setRefused(false);
@@ -166,9 +201,25 @@ async function retryRefusal(): Promise<void> {
 		return;
 	}
 
+	// A token that moved on is only worth putting back if it is still this
+	// account's. On a shared browser the newer copy is just as likely to be the
+	// person who signed in after — and seeding that one here would return this
+	// tab to its pool screen as somebody else, holding their token against the
+	// serial in its own URL. There is no recovery to make in that case: this
+	// account's session really is over on this device, so the refusal stands and
+	// the login form is the right answer.
+	//
+	// When the refusal named no account there is nothing to compare — the tab
+	// held no session at the time, so it is not signed in as anyone and taking
+	// what storage holds is the same thing a reload would do. The membership
+	// gate on the system routes is what keeps that from landing on a stranger's
+	// serial.
+	if (refusedAccount && !sameAccount(stored, refusedAccount)) return;
+
 	retries = 0;
 	queryClient.setQueryData(keys.session(), stored);
 	refusedToken = null;
+	refusedAccount = null;
 	setRefused(false);
 }
 
@@ -205,9 +256,14 @@ async function retryRefusal(): Promise<void> {
  * announced. Silence was half the problem: a 401 is a signal this app expects,
  * the toast was suppressed for it, and the screen simply became a login form
  * for no stated reason.
+ *
+ * Takes the whole refused session rather than its token alone, so the retry
+ * knows both which token was refused and whose it was. Null when the refusing
+ * tab held no session to name.
  */
-export function refuseSession(token: string | null = null): void {
-	refusedToken = token;
+export function refuseSession(session: Session | null = null): void {
+	refusedToken = session?.refreshToken ?? null;
+	refusedAccount = session;
 	setRefused(true);
 	if (!announced) {
 		announced = true;

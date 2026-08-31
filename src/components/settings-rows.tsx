@@ -330,6 +330,14 @@ export function WebTouchRow({ serial }: { serial: string }) {
 			// where browsers count it, not a click.
 			onClick={() => {
 				const tab = window.open("about:blank", "_blank");
+				// Severed by hand, because the usual way cannot be used here: the
+				// "noopener" window feature makes window.open return null, and this
+				// call needs the handle to navigate the tab once the token arrives.
+				// Without this the panel's own web UI keeps a live reference back
+				// into this app and can navigate it — a login form that looks like
+				// this one, on the tab the owner left their pool on, is the whole of
+				// that attack and it costs one line to close.
+				if (tab) tab.opener = null;
 				webtouchUrl(system.webtouchId).then(
 					(url) => {
 						if (tab) tab.location.href = url;

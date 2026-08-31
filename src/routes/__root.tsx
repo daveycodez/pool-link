@@ -11,6 +11,53 @@ import appCss from "../styles.css?url";
 /** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
 const base = import.meta.env.BASE_URL;
 
+/**
+ * What this page is allowed to load, and where it may talk.
+ *
+ * The reason it is worth having is in IndexedDB: a refresh token that renews
+ * itself for thirty days and outlives signing out, sitting in plain JSON on the
+ * origin. Nothing about that is comfortable, and the architecture is what makes
+ * it so — the pool's cloud is spoken to straight from the browser, so the
+ * credential has to live where the browser can reach it. Given that, the useful
+ * question is not how to hide it but how much a script that finds it could do
+ * with it, and `connect-src` is the answer: this origin and the three Zodiac
+ * hosts the app genuinely speaks to, and nowhere for a token to be posted to.
+ *
+ * `script-src` keeps 'unsafe-inline', which is the honest compromise here and
+ * worth stating plainly rather than dressing up. Two inline scripts run in this
+ * shell — the install-prompt listener below, and the theme script next-themes
+ * writes to set the class before first paint — and the alternative to allowing
+ * them is a nonce, which needs a server to mint one per response. This app is
+ * prerendered to static files on GitHub Pages; there is no such server. Hashes
+ * would cover our own script and break silently the day next-themes changes
+ * theirs. So inline stays allowed, and what the policy still buys is real: no
+ * remote script may be loaded, no <base> may be rewritten, no plugin may be
+ * embedded, and nothing may be sent anywhere but the hosts named below.
+ *
+ * Production only. Vite's dev server needs eval and a websocket for HMR, and a
+ * policy that forbade them would make `bun run dev` useless.
+ */
+const CSP = [
+	"default-src 'self'",
+	"base-uri 'none'",
+	"object-src 'none'",
+	"form-action 'self'",
+	"script-src 'self' 'unsafe-inline'",
+	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+	"font-src 'self' https://fonts.gstatic.com",
+	"img-src 'self' data:",
+	"manifest-src 'self'",
+	[
+		"connect-src 'self'",
+		// Login and refresh.
+		"https://prod.zodiac-io.com",
+		// Telemetry and every command.
+		"https://p-api.iaqualink.net",
+		// The account and its system list.
+		"https://prm.iaqualink.net",
+	].join(" "),
+].join("; ");
+
 export const Route = createRootRoute({
 	head: () => ({
 		meta: [
@@ -91,6 +138,17 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		// kind of mismatch suppressHydrationWarning exists for.
 		<html lang="en" suppressHydrationWarning>
 			<head>
+				{/* Before HeadContent, so the policy is in force by the time the
+				    parser reaches the font link and the two inline scripts — a meta
+				    CSP governs only what follows it. */}
+				{import.meta.env.PROD ? (
+					<meta content={CSP} httpEquiv="Content-Security-Policy" />
+				) : null}
+				{/* The WebTouch tab is opened with the idToken in its URL, and a
+				    referrer would hand that same URL to anything the panel's own web
+				    UI goes on to load. Nothing in this app needs to be introduced by
+				    where it came from. */}
+				<meta content="no-referrer" name="referrer" />
 				<HeadContent />
 				{/*
 				 * Chrome fires beforeinstallprompt the moment it judges the page

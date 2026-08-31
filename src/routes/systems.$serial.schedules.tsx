@@ -23,7 +23,7 @@ import {
 	useSchedules,
 } from "#/lib/queries";
 import { dayLabel, isOvernight, windowLabel } from "#/lib/schedule";
-import { useRequireSession } from "#/lib/use-pool";
+import { useRequireSystem } from "#/lib/use-pool";
 
 export const Route = createFileRoute("/systems/$serial/schedules")({
 	component: Schedules,
@@ -98,7 +98,7 @@ function scheduleTarget(
 
 function Schedules() {
 	const { serial } = Route.useParams();
-	const { pending, signedIn } = useRequireSession();
+	const { pending, signedIn, owned } = useRequireSystem(serial);
 	const schedules = useSchedules(serial);
 	const devices = useScheduleDevices(serial);
 	const pumps = useMemo(
@@ -111,8 +111,9 @@ function Schedules() {
 	const remove = useDeleteSchedule(serial);
 
 	if (pending || schedules.isPending) return <Loading />;
-	// No session: useRequireSession is already redirecting to /login.
-	if (!signedIn) return null;
+	// No session, or a serial this account does not own: useRequireSystem is
+	// already redirecting — to /login and to the systems list respectively.
+	if (!signedIn || !owned) return null;
 
 	/**
 	 * A panel that cannot answer the command at all, which is a different fact

@@ -142,8 +142,14 @@ function LoginScreen() {
 				</form>
 
 				{/* Account creation is Zodiac's too — same reCAPTCHA wall as the
-				    reset above, so it can only be handed off to their portal. */}
-				<p className="text-center text-sm text-muted">
+				    reset above, so it can only be handed off to their portal.
+
+				    Pulled up by the difference between the card's gap and the 4 this
+				    one wants. It sits closer than the card's own rhythm because it is
+				    the second half of what the link above it starts — two ways out to
+				    the same portal, read as one block — where the gap that rhythm is
+				    really for is the one under the heading. */}
+				<p className="-mt-2 text-center text-sm text-muted">
 					Don’t have an account?{" "}
 					<a
 						className="link font-normal"
