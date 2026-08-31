@@ -112,10 +112,10 @@ export function InstallPrompt() {
 					    and the description below is the longer line of the two. */}
 					<Alert.Title className="font-semibold">Install Web App</Alert.Title>
 					<Alert.Description>
-						Add Pool Link to your home screen.
+						Add Pool Link to your home screen
 						{/* No button to press on iOS, so the one line it gets has to
 						    carry the way there as well as the reason. */}
-						{manual ? " Tap Share, then Add to Home Screen." : null}
+						{manual ? " — tap Share, then Add to Home Screen" : null}
 					</Alert.Description>
 					{/* The action sits beside the text where there is room for it and
 					    under the text where there is not — one button per width, so
