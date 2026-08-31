@@ -1718,13 +1718,16 @@ function scheduleParams(spec: ScheduleSpec): Payload {
  * taking every parameter optionally would let a caller send an edit with no id
  * — which is an add the panel was not asked for.
  *
- * All three are unverified, and more sharply so than the read they sit beside.
- * The read has now been exercised against a pad and the reference was wrong
- * about it five separate ways — a day value with no space in it, a string where
- * it promised a boolean, a page parameter it never documented. Every parameter
- * name below comes from that same reference and has never been sent to
- * anything, so the first write to a real pool is an experiment, not a feature
- * working as designed.
+ * All three have now been run against a real panel — added, edited and deleted
+ * — which is worth recording because for a while nothing had. The parameter
+ * names came from a protocol reference that was wrong about the *read* in five
+ * separate ways: a day value with no space in it, a string where it promised a
+ * boolean, a page parameter it never documented. On the write it was right.
+ *
+ * What that does not settle is every value these can carry. The operation
+ * names, the field names and the id both edit and delete take are confirmed;
+ * the individual weekday spellings in `SCHEDULE_DAYS` are a separate question,
+ * and most of those are still inferred rather than seen.
  */
 export async function addSchedule(
 	serial: string,

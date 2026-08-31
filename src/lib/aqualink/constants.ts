@@ -202,13 +202,15 @@ export const CMD_ENABLE_PUMP_SPEED_VALUE = "enable_pump_speed_value";
  * the programs that quietly overrule every switch in this app are readable
  * after all — which is what the Schedules page is built on.
  *
- * The reference this was ported from was wrong about the reply in several ways
- * worth remembering, because the same reference is still the only source for
- * `do_schedule_operation`, which nothing has ever sent. `scheduleDays` is a
- * closed set of words with no spaces in them ("AllDays", "Weekdays",
- * "Weekends", "Wednesday") rather than a free descriptor or a day mask,
- * `isNewScheduleAllowed` is the string "Allowed" rather than a boolean, and
- * `pageNum` is an accepted request parameter that goes undocumented.
+ * `do_schedule_operation` has since been run too — programs added, edited and
+ * deleted from this app against a real pad.
+ *
+ * The reference both were ported from was wrong about the reply in several
+ * ways worth remembering, since it remains the only written source for either.
+ * `scheduleDays` is a closed set of words with no spaces in them ("AllDays",
+ * "Weekdays", "Weekends", "Wednesday") rather than a free descriptor or a day
+ * mask, `isNewScheduleAllowed` is the string "Allowed" rather than a boolean,
+ * and `pageNum` is an accepted request parameter that goes undocumented.
  *
  * A schedule names a `deviceId`, not an aux key — the id space is
  * `get_master_device_list`'s low range, and `listType=1` is the join that turns
