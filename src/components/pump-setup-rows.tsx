@@ -7,6 +7,7 @@ import type { VspSlot } from "#/lib/aqualink/client";
 import { useVspSlots } from "#/lib/queries";
 import { CardColumns } from "./card-columns";
 import { Loading } from "./loading";
+import { presetIcon } from "./preset-icons";
 
 /**
  * The last slot addressed by switches on the pump itself.
@@ -52,20 +53,31 @@ export function PumpSetupRow({ serial }: { serial: string }) {
 }
 
 function SlotCard({ slot, serial }: { slot: VspSlot; serial: string }) {
-	// No address here: a serial is thirteen characters of noise in a list, and
-	// the slot number is already in an unconfigured slot's name. The pump's own
-	// page says which it is, which is where somebody asking has gone anyway.
+	// The mark the same pump wears on the equipment page, off the panel's own
+	// name for it — "Filter Pump" and "Waterfall" are from the fixed list the
+	// panel offers when a relay is named, so matching them is reading its
+	// vocabulary rather than guessing at one owner's wording. An unconfigured
+	// slot is called "Pump 8" and matches nothing, which is what the gauge is.
+	const Icon = presetIcon(slot.name) ?? Gauge;
+
+	// No address and no application here: a serial is thirteen characters of
+	// noise in a list, and "Filtration" under a pump called Filter Pump is the
+	// same fact twice. The pump's own page carries both, which is where anybody
+	// asking has already gone. An empty slot keeps its line, because "Not
+	// Installed" is the only thing distinguishing it from a pump.
 	const body = (
 		<Card className="flex-row items-center justify-between gap-4">
 			<div className="flex min-w-0 items-center gap-4">
 				<IconCircle on={false}>
-					<Gauge className="size-4" />
+					<Icon className="size-4" />
 				</IconCircle>
 				<div className="min-w-0">
 					<Card.Title className="truncate">{slot.name}</Card.Title>
-					<Card.Description className="truncate">
-						{slot.appName}
-					</Card.Description>
+					{slot.installed ? null : (
+						<Card.Description className="truncate">
+							{slot.appName}
+						</Card.Description>
+					)}
 				</div>
 			</div>
 			{slot.installed ? (
