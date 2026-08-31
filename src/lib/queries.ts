@@ -190,6 +190,11 @@ export function useLogin() {
 	const uid = useUserId();
 	const qc = useQueryClient();
 	return useMutation({
+		// A rejected sign-in answers 401 like an expired session does, and the
+		// mutation cache reads that as "signed out" — which on this page means
+		// invalidating a null session, redirecting to the page already showing,
+		// and never raising the toast. This is how it tells the two apart.
+		meta: { signIn: true },
 		mutationFn: ({ email, password }: { email: string; password: string }) =>
 			login(email, password),
 		onSuccess: (session) => {

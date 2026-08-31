@@ -21,6 +21,12 @@ function toastError(error: unknown) {
  * time this runs. Re-reading it turns useRequireSession's guard from something
  * that only fires on a cold start into one that catches a session dying
  * mid-use, and the redirect to /login says it better than a toast would.
+ *
+ * With one exception, which the caller has to supply because this cannot see
+ * it: signing in answers 401 for a password that was simply wrong, and there
+ * is no session behind that to have expired. Handled here it would invalidate
+ * a session query holding null, redirect to the page already on screen, and
+ * swallow the one message the person needed.
  */
 function signedOut(error: unknown) {
 	if (!(error instanceof AqualinkError) || error.status !== 401) return false;
@@ -57,8 +63,11 @@ export const queryClient: QueryClient = new QueryClient({
 		},
 	}),
 	mutationCache: new MutationCache({
-		onError: (error) => {
-			if (signedOut(error)) return;
+		onError: (error, _variables, _context, mutation) => {
+			// `signIn` opts a mutation out of the sign-out reading of a 401 — see
+			// signedOut. Only the sign-in mutation sets it, because it is the only
+			// one whose 401 is about credentials rather than a session.
+			if (!mutation.meta?.signIn && signedOut(error)) return;
 			toastError(error);
 		},
 	}),
