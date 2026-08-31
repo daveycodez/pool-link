@@ -25,10 +25,11 @@ const BG = BG_LIGHT;
  * Tailwind step — the same mix `--accent` is defined as in styles.css, resolved
  * here because an SVG cannot call color-mix and a PNG cannot carry a variable.
  *
- * The app uses two of them: 600 against light backgrounds, 400 against dark.
- * The transparent icons that cannot adapt take the 500 between them, which is
- * the point of a middle step — dark enough to hold its own on a white tab
- * strip, bright enough not to disappear into a black one.
+ * The app uses two of them: 600 against light backgrounds, 500 against dark,
+ * and the tab favicons follow it one for one. The .ico, which ships as a single
+ * file for every browser and theme at once, takes the 500 as well — dark enough
+ * to hold its own on a white tab strip, bright enough not to vanish in a black
+ * one.
  */
 const ACCENT_LIGHT = "#0095A1"; // cyan-600 + teal-600
 const ACCENT_MID = "#00BAC1"; // cyan-500 + teal-500
@@ -134,14 +135,13 @@ const tabSvg = (ink) =>
 	icon({ bare: true, coverage: 0.9, ink, radius: 0, size: 512, stroke: 3.2 });
 
 await writeFile("public/icon-light.svg", tabSvg(ACCENT_LIGHT));
-await writeFile("public/icon-dark.svg", tabSvg(ACCENT_DARK));
+await writeFile("public/icon-dark.svg", tabSvg(ACCENT_MID));
 
 /**
- * One raster mark for everywhere a theme cannot be asked about: the .ico, which
- * is a single file answering /favicon.ico for every browser and theme at once,
- * and the apple-touch-icon, which iOS repaints its own backdrop behind. Both
- * take the middle accent for the same reason — it is the one step dark enough
- * to hold a white ground and bright enough to hold a black one.
+ * One raster mark for the place a theme cannot be asked about at all: the .ico,
+ * a single file answering /favicon.ico for every browser and theme at once. It
+ * takes the middle accent, the one step dark enough to hold a white ground and
+ * bright enough to hold a black one.
  */
 const flatSvg = tabSvg(ACCENT_MID);
 
@@ -154,11 +154,14 @@ const flatSvg = tabSvg(ACCENT_MID);
  * square in front of a wallpaper the system was going to darken anyway, and the
  * tinted one is a flat monochrome block, because the plate is most of the
  * luminance it has to work with. Transparency hands that job back.
+ *
+ * Inked at the 600, the deepest of the three, which is the step with the most
+ * to give the light and tinted backdrops — and the least on the dark one.
  */
 const appleSvg = icon({
 	bare: true,
 	coverage: 0.72,
-	ink: ACCENT_MID,
+	ink: ACCENT_LIGHT,
 	radius: 0,
 	size: 512,
 	stroke: 2.6,
