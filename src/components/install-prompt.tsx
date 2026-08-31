@@ -100,12 +100,17 @@ export function InstallPrompt() {
 				<Alert.Indicator>
 					<img
 						alt=""
-						className="size-8 rounded-lg"
+						// shrink-0 or the flex row squeezes the width and leaves the
+						// height alone, which turns a square tile into a letterbox.
+						className="size-8 shrink-0 rounded-lg"
 						src={`${import.meta.env.BASE_URL}icons/icon-192.png`}
 					/>
 				</Alert.Indicator>
 				<Alert.Content>
-					<Alert.Title>Install Pool Link</Alert.Title>
+					{/* The base styles separate title from description by one weight
+					    step at the same size, which at 14px is barely a difference —
+					    and the description below is the longer line of the two. */}
+					<Alert.Title className="font-semibold">Install Pool Link</Alert.Title>
 					<Alert.Description>
 						{manual
 							? "Tap Share, then Add to Home Screen, to open straight to the pool."
