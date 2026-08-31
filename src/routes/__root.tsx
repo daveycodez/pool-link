@@ -92,6 +92,22 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 		<html lang="en" suppressHydrationWarning>
 			<head>
 				<HeadContent />
+				{/*
+				 * Chrome fires beforeinstallprompt the moment it judges the page
+				 * installable, and on a return visit — where the engagement it waits
+				 * for was satisfied on some earlier one — that can land before the
+				 * bundle has even parsed. The event is offered once and never again,
+				 * so a listener that arrives with the app arrives too late. This one
+				 * is in the document itself: it parks the event on `window`, and
+				 * useInstall picks it up from there whenever it does mount.
+				 */}
+				<script
+					// biome-ignore lint/security/noDangerouslySetInnerHtml: a literal in the shell, the only listener early enough to catch the event
+					dangerouslySetInnerHTML={{
+						__html:
+							'addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__poolLinkInstall=e});addEventListener("appinstalled",function(){window.__poolLinkInstall=null})',
+					}}
+				/>
 			</head>
 			<body>
 				<Toast.Provider />

@@ -88,7 +88,11 @@ const CAN_EVENT =
 const IOS = typeof navigator === "undefined" ? false : ios();
 
 if (typeof window !== "undefined") {
-	snapshot = { event: null, installed: standalone() };
+	// Whatever the shell's inline listener has already caught. See __root: the
+	// event can arrive before this module exists, and it is never offered twice.
+	const parked = (window as { __poolLinkInstall?: InstallPromptEvent })
+		.__poolLinkInstall;
+	snapshot = { event: parked ?? null, installed: standalone() };
 
 	addEventListener("beforeinstallprompt", (event) => {
 		// Catching it is the whole point: left alone, the browser shows its own
