@@ -1,7 +1,6 @@
 import { toast } from "@heroui/react";
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { AqualinkError, errorMessage } from "#/lib/aqualink/types";
-import { keys } from "#/lib/keys";
 
 /** Repeats of the same message are one event, not several. */
 const TOAST_DEDUPE_MS = 10_000;
@@ -22,20 +21,31 @@ function toastError(error: unknown) {
  * and retried, or refused the session — and a refusal announces itself, from
  * `refuseSession`, where it also knows whether it is about to retry.
  *
- * The invalidation is what carries the news to the screens. It turns
- * useRequireSession's guard from something that only fires on a cold start
- * into one that catches a session dying mid-use.
+ * It deliberately no longer invalidates the session query, and that line was
+ * signing people out of accounts that were perfectly alive. Not every 401 here
+ * comes from a server: `currentSession` raises one locally, with no request
+ * made, whenever it is asked for a session before one has loaded. A full page
+ * reload is exactly that moment — the module-scope client is rebuilt holding no
+ * session while the persister is still reading IndexedDB — and in development
+ * every save of a module that declines HMR forces one.
+ *
+ * From there it closed a loop. The session query's fetcher reads the session
+ * out of the query cache, because signing in is what puts it there; so
+ * invalidating that query on a 401 asked the cache what the cache held, and in
+ * that window the honest answer was nothing. Nothing became the stored session,
+ * the persister wrote it to IndexedDB on the next tick, and the tab redirected
+ * to the login screen holding a valid token it had simply not finished reading.
+ *
+ * Nothing is lost by dropping it. A session that genuinely dies goes through
+ * `refuseSession`, which every reader already subscribes to.
  *
  * With one exception, which the caller has to supply because this cannot see
- * it: signing in answers 401 for a password that was simply wrong, and there
- * is no session behind that to have expired. Handled here it would invalidate
- * a session query holding null, redirect to the page already on screen, and
- * swallow the one message the person needed.
+ * it: signing in answers 401 for a password that was simply wrong, and there is
+ * no session behind that to have expired — so its message must not be
+ * swallowed as though there were.
  */
 function signedOut(error: unknown) {
-	if (!(error instanceof AqualinkError) || error.status !== 401) return false;
-	queryClient.invalidateQueries({ queryKey: keys.session() });
-	return true;
+	return error instanceof AqualinkError && error.status === 401;
 }
 
 /**
