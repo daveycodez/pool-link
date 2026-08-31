@@ -110,11 +110,12 @@ export function InstallPrompt() {
 					{/* The base styles separate title from description by one weight
 					    step at the same size, which at 14px is barely a difference —
 					    and the description below is the longer line of the two. */}
-					<Alert.Title className="font-semibold">Install Pool Link</Alert.Title>
+					<Alert.Title className="font-semibold">Install Web App</Alert.Title>
 					<Alert.Description>
-						{manual
-							? "Tap Share, then Add to Home Screen, to open straight to the pool."
-							: "Add it to your home screen to open straight to the pool."}
+						Add Pool Link to your home screen.
+						{/* No button to press on iOS, so the one line it gets has to
+						    carry the way there as well as the reason. */}
+						{manual ? " Tap Share, then Add to Home Screen." : null}
 					</Alert.Description>
 					{/* The action sits beside the text where there is room for it and
 					    under the text where there is not — one button per width, so

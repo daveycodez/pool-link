@@ -269,7 +269,7 @@ export function InstallRow() {
 	if (!canPrompt && !manual) return null;
 
 	return (
-		<SettingsRow Icon={Download} title="Install app">
+		<SettingsRow Icon={Download} title="Install Web App">
 			{canPrompt ? (
 				<Button onPress={install} size="sm" variant="secondary">
 					Install
