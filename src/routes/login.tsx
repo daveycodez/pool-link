@@ -106,7 +106,7 @@ function LoginScreen() {
 						    reCAPTCHA token, which is bound to the domain that minted it
 						    and so cannot be produced here. */}
 						<a
-							className="link mx-auto text-sm"
+							className="link mx-auto font-normal text-sm"
 							href="https://iaqualink.zodiacpoolsystems.com/resetPassword"
 							rel="noreferrer"
 							target="_blank"
