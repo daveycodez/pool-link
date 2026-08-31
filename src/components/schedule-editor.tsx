@@ -55,6 +55,39 @@ function deviceLabel(device: ScheduleDevice): string {
 	return device.isVsp ? `${device.name} Speed` : device.name;
 }
 
+/**
+ * The equipment menu, with each pump's speeds entry beneath the pump itself.
+ *
+ * The panel lists them nowhere near each other. It answers with its own
+ * ordering — the three speed entries together near the front, the relays they
+ * belong to further down — so straight off the wire this menu offered
+ * "Waterfall Speed" four rows above "Waterfall", and the pair that an owner
+ * thinks of as one piece of equipment read as two unrelated entries.
+ *
+ * Paired on the name, because that is the only thing tying them: the two ids
+ * are unrelated numbers from different ranges, and the panel gives both rows
+ * the same name and distinguishes them by a flag alone. Anything left unpaired
+ * keeps its place at the end rather than being dropped — a speeds entry whose
+ * relay this app cannot see is still somewhere a program can point.
+ */
+function orderDevices(devices: ScheduleDevice[]): ScheduleDevice[] {
+	const key = (d: ScheduleDevice) => d.name.trim().toLowerCase();
+	const speeds = devices.filter((d) => d.isVsp);
+	const taken = new Set<number>();
+	const ordered: ScheduleDevice[] = [];
+
+	for (const device of devices) {
+		if (device.isVsp) continue;
+		ordered.push(device);
+		for (const speed of speeds)
+			if (key(speed) === key(device) && !taken.has(speed.id)) {
+				ordered.push(speed);
+				taken.add(speed.id);
+			}
+	}
+	return [...ordered, ...speeds.filter((s) => !taken.has(s.id))];
+}
+
 function errorMessage(error: unknown): string {
 	if (error instanceof AqualinkError) return error.message;
 	return error instanceof Error ? error.message : String(error);
@@ -180,7 +213,7 @@ export function ScheduleEditor({
 									</Select.Trigger>
 									<Select.Popover>
 										<ListBox>
-											{devices.map((d) => {
+											{orderDevices(devices).map((d) => {
 												// The same mark the row and the equipment page give
 												// this device, so the picker is recognisable as a
 												// list of the owner's own equipment rather than a

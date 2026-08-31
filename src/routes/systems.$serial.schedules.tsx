@@ -1,4 +1,4 @@
-import { Button, Card, Chip } from "@heroui/react";
+import { Button, Card, Chip, Spinner } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, Zap } from "lucide-react";
 import { useMemo } from "react";
@@ -320,32 +320,45 @@ function ScheduleRow({
 				</div>
 			</div>
 
-			<ScheduleEditor
-				devices={schedulable}
-				error={editError}
-				isPending={isPending}
-				onDelete={onDelete}
-				onSave={onSave}
-				schedule={schedule}
-				speeds={speeds}
-				title="Edit schedule"
-				trigger={
-					// Labelled rather than icon-only. The pencil alone had to carry the
-					// whole meaning of the row's one action, and an icon-only control
-					// wants a tooltip to say what it does — which a phone has no way to
-					// show. The word says it outright and costs a few points of a row
-					// that has them to spare.
-					<Button
-						aria-label={`Edit ${name} schedule`}
-						isDisabled={pending}
-						size="sm"
-						variant="tertiary"
-					>
-						<Pencil className="size-3.5" />
-						Edit
-					</Button>
-				}
-			/>
+			{/* A program the panel has not answered for yet has nothing to edit —
+			    its id names nothing on the pad. A spinner says that plainly, where
+			    a greyed-out button looked like a control that had stopped working
+			    and gave no reason. It stands in the same place so the row does not
+			    resize when the real one arrives a moment later. */}
+			{pending ? (
+				<Spinner
+					aria-label={`Saving ${name} schedule`}
+					className="me-3 text-muted"
+					color="current"
+					size="sm"
+				/>
+			) : (
+				<ScheduleEditor
+					devices={schedulable}
+					error={editError}
+					isPending={isPending}
+					onDelete={onDelete}
+					onSave={onSave}
+					schedule={schedule}
+					speeds={speeds}
+					title="Edit schedule"
+					trigger={
+						// Labelled rather than icon-only. The pencil alone had to carry the
+						// whole meaning of the row's one action, and an icon-only control
+						// wants a tooltip to say what it does — which a phone has no way to
+						// show. The word says it outright and costs a few points of a row
+						// that has them to spare.
+						<Button
+							aria-label={`Edit ${name} schedule`}
+							size="sm"
+							variant="tertiary"
+						>
+							<Pencil className="size-3.5" />
+							Edit
+						</Button>
+					}
+				/>
+			)}
 		</Card>
 	);
 }
