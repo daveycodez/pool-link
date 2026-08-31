@@ -2,6 +2,7 @@ import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persi
 import {
 	defaultShouldDehydrateQuery,
 	dehydrate,
+	hashKey,
 	type Query,
 } from "@tanstack/react-query";
 import { del, get, set } from "idb-keyval";
@@ -115,6 +116,34 @@ export const persistOptions = {
 	maxAge: PERSIST_MAX_AGE_MS,
 	persister,
 };
+
+/**
+ * One query's data as it sits in storage right now, rather than as this tab
+ * remembers it.
+ *
+ * The in-memory cache is per-tab. The persister reads IndexedDB exactly once, at
+ * boot, and nothing subscribes to it afterwards — so `queryClient.getQueryData`
+ * cannot see a write another tab made a minute ago, however durable that write
+ * was. This is the only way back to the shared copy, and it exists for one
+ * caller: the refresh path, where a second tab on the same account may already
+ * hold the rotated token this one is about to be signed out over.
+ *
+ * Both of the boot restore's own guards are applied here, so the two agree about
+ * what is readable at all. A blob written under a previous BUSTER is not this
+ * shape and start-up would throw it away rather than read it; one older than
+ * PERSIST_MAX_AGE_MS is not offered to the app either. Reading past either rule
+ * here would mean acting on a session start-up would have refused.
+ */
+export async function readPersisted<T>(
+	queryKey: readonly unknown[],
+): Promise<T | undefined> {
+	const stored = await persister.restoreClient();
+	if (!stored || stored.buster !== BUSTER) return undefined;
+	if (Date.now() - stored.timestamp > PERSIST_MAX_AGE_MS) return undefined;
+	const hash = hashKey(queryKey);
+	return stored.clientState.queries.find((q) => q.queryHash === hash)?.state
+		.data as T | undefined;
+}
 
 /** Write the cache out now rather than waiting for the next change to trigger it. */
 export async function flushPersisted() {

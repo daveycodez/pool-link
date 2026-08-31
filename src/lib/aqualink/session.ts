@@ -1,5 +1,5 @@
 import { keys } from "#/lib/keys";
-import { flushPersisted } from "#/lib/persist";
+import { flushPersisted, readPersisted } from "#/lib/persist";
 import { queryClient } from "#/lib/query-client";
 
 /**
@@ -29,6 +29,22 @@ export interface Session {
  */
 export async function loadSession(): Promise<Session | null> {
 	return queryClient.getQueryData<Session | null>(keys.session()) ?? null;
+}
+
+/**
+ * The session as it sits in shared storage, which is not necessarily the one
+ * this tab is holding.
+ *
+ * `loadSession` reads this tab's own cache and can only ever return what this
+ * tab last wrote or restored at boot. This reads the copy every tab on the
+ * origin writes through, which is the only place one tab can learn that another
+ * has rotated the refresh token out from under it. Null when there is nothing
+ * stored, or when what is stored carries no refresh token — there is nothing to
+ * try with a session that cannot be renewed.
+ */
+export async function storedSession(): Promise<Session | null> {
+	const stored = await readPersisted<Session | null>(keys.session());
+	return stored?.refreshToken ? stored : null;
 }
 
 export async function saveSession(session: Session): Promise<void> {

@@ -63,6 +63,7 @@ import {
 	loadSession,
 	type Session,
 	saveSession,
+	storedSession,
 } from "./session";
 import { type AqualinkClientLike, IaquaSystem, mergeScreen } from "./system";
 import {
@@ -107,6 +108,24 @@ import {
  */
 const PANEL_TIMEOUT_MS = 20_000;
 const CLOUD_TIMEOUT_MS = 10_000;
+
+/**
+ * How much life an idToken must have left to be worth sending.
+ *
+ * A minute, which is generous against a token that lives an hour, and the
+ * generosity is the point: a request that sets out with a valid token and
+ * arrives with an expired one comes back 401, and the app's answer to a 401 is
+ * to refresh and retry — so the cost of being early is nothing, and the cost of
+ * being late is a wasted round trip to a pad that is slow to begin with. It also
+ * has to cover a clock: the expiry is read out of the token's own claims and
+ * compared against this device's idea of the time, which on a phone that has
+ * been asleep is not always the pool's.
+ *
+ * Shared with `adopt`, deliberately. A session picked up from another tab has to
+ * be judged fresh by exactly the same bar as the one this tab is holding, or the
+ * two would disagree about whether the same token is worth using.
+ */
+const TOKEN_MARGIN_MS = 60_000;
 
 /**
  * An abort, as a failure the rest of the app already knows how to handle.
@@ -256,7 +275,15 @@ export class AqualinkClient implements AqualinkClientLike {
 		}
 	}
 
-	private async refresh(existing: Session): Promise<Session> {
+	/**
+	 * Mint a fresh idToken from the refresh token.
+	 *
+	 * `adopted` says this call is already the retry, and it is the whole loop
+	 * guard: the recovery below runs only on the first attempt, so a rejection of
+	 * an adopted token ends in the sign-out rather than in another lookup. It is
+	 * never passed by anything outside this method.
+	 */
+	private async refresh(existing: Session, adopted = false): Promise<Session> {
 		const res = await fetchWithin(CLOUD_TIMEOUT_MS, REFRESH_URL, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -274,6 +301,34 @@ export class AqualinkClient implements AqualinkClientLike {
 			// anyone out. Rejections are rethrown as 401 whatever the pool
 			// answered, so there is one signal for "sign in again".
 			if ([400, 401, 403].includes(res.status)) {
+				// Except that a rejection here does not only mean the session died.
+				// This pool rotates refresh tokens: every successful refresh mints a
+				// new one and kills the old. Two tabs on one account each start from
+				// the same copy, and the moment either refreshes, the other is
+				// holding a token the pool has already retired — so the next time
+				// that tab wakes it refreshes, is rejected, and signs itself out of
+				// an account that is perfectly alive. That is the failure the owner
+				// has actually hit.
+				//
+				// The recovery is to look where the other tab wrote. `loadSession`
+				// cannot help: it reads this tab's own query cache, which the
+				// persister fills once at boot and never again, so it would hand back
+				// the very token that was just refused. `storedSession` reads the
+				// IndexedDB blob every tab writes through, which is the one thing the
+				// two tabs genuinely share, and `saveSession` flushes it
+				// synchronously for exactly this reason. A token there that differs
+				// from the one just rejected is the other tab's newer copy, and it is
+				// worth one more attempt.
+				//
+				// What this cannot fix is the same account on two devices. Their
+				// storage is not shared by any mechanism a browser offers, so a phone
+				// and a laptop rotating against each other will still sign each other
+				// out, and nothing on this side of the wire can change that — it
+				// wants either a longer-lived token or a pool that does not rotate.
+				// Within one browser, this is the whole of the problem.
+				const newer = adopted ? null : await storedSession();
+				if (newer && newer.refreshToken !== existing.refreshToken)
+					return this.adopt(newer);
 				this.session = null;
 				await clearSession();
 				throw new AqualinkError("Session expired — sign in again", 401, body);
@@ -297,6 +352,28 @@ export class AqualinkClient implements AqualinkClientLike {
 		return merged;
 	}
 
+	/**
+	 * Take on a session another tab stored, in place of the one just refused.
+	 *
+	 * Refreshing it again would be the obvious move and it is the wrong one: it
+	 * would rotate the token the other tab is holding, retiring that tab's copy
+	 * and handing the problem straight back. So the stored idToken is used as it
+	 * stands wherever it still has life in it, and both tabs carry on. Only when
+	 * it is itself at the margin is a refresh sent — the rotation then has to
+	 * happen anyway, and once round the loop is where this stops.
+	 *
+	 * Written into this tab's cache either way, so what `useSession` reads and
+	 * what the request layer holds are the same session.
+	 */
+	private async adopt(stored: Session): Promise<Session> {
+		this.session = stored;
+		const exp = jwtExpiry(stored.idToken);
+		if (!exp || exp * 1000 - Date.now() < TOKEN_MARGIN_MS)
+			return this.refresh(stored, true);
+		await saveSession(stored);
+		return stored;
+	}
+
 	private async restore(): Promise<Session | null> {
 		if (this.session) return this.session;
 		this.session = await loadSession();
@@ -307,7 +384,7 @@ export class AqualinkClient implements AqualinkClientLike {
 		const s = await this.restore();
 		if (!s?.idToken) throw new AqualinkError("Not authenticated", 401);
 		const exp = jwtExpiry(s.idToken);
-		if (exp && exp * 1000 - Date.now() < 60_000) {
+		if (exp && exp * 1000 - Date.now() < TOKEN_MARGIN_MS) {
 			this.refreshing ??= this.refresh(s).finally(() => {
 				this.refreshing = null;
 			});
