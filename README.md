@@ -1,207 +1,73 @@
-Welcome to your new TanStack Start app!
+# Pool Link
 
-# Getting Started
+A fast control surface for your iAqualink pool and spa.
 
-To run this application:
+Pool Link is an installable web app (PWA) that talks to Jandy's iAqualink APIs
+straight from the browser — no server of your own, no account beyond the one
+you already use in the iAqualink app. Sign in and you get your pumps, heaters,
+lights, aux relays, one-touch macros, schedules, chemistry readings, and pump
+setup, all on one screen that loads instantly and works from your phone at the
+poolside.
 
-```bash
-bun install
-bun --bun run dev
-```
+Your password is never stored: signing in exchanges it for a refresh token that
+lives in the browser's own storage, on your device only.
 
-# Building For Production
+## Run it locally
 
-To build this application for production:
-
-```bash
-bun --bun run build
-```
-
-## Styling
-
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
-
-### Removing Tailwind CSS
-
-If you prefer not to use Tailwind CSS:
-
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
-
-## Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting. The following scripts are available:
-
+Install [Bun](https://bun.sh), then:
 
 ```bash
-bun --bun run lint
-bun --bun run format
-bun --bun run check
+git clone https://github.com/daveycodez/pool-link.git
 ```
 
-
-## Deploy to Cloudflare Workers
-
-This project uses the Cloudflare Vite plugin (configured in `vite.config.ts`) and `wrangler.jsonc`:
-
-1. Install Wrangler: `npm install -g wrangler`
-2. Authenticate: `wrangler login`
-3. Deploy: `npx wrangler deploy`
-
-For production env vars, run `wrangler secret put MY_VAR` for each secret listed in `.env.example`. Public (non-secret) vars go in `wrangler.jsonc` under `vars`.
-
-KV, D1, R2, and Durable Object bindings are configured in `wrangler.jsonc` — see https://developers.cloudflare.com/workers/wrangler/configuration/.
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
+```bash
+cd pool-link && bun install && bun run dev
 ```
 
-Then anywhere in your JSX you can use it like so:
+The dev server binds to every interface, so it prints a **Network** URL
+alongside the local one:
 
-```tsx
-<Link to="/about">About</Link>
+```
+➜  Local:   http://localhost:3000/
+➜  Network: http://192.168.1.42:3000/
 ```
 
-This will create a link that will navigate to the `/about` route.
+Open that Network URL on any phone or tablet on the same Wi‑Fi to use the app
+there — including "Add to Home Screen", which installs it like a native app.
 
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
+## Scripts
 
-### Using A Layout
+| Command | What it does |
+| --- | --- |
+| `bun run dev` | Dev server on port 3000, reachable across your LAN |
+| `bun run build` | Static build into `dist/client` |
+| `bun run preview` | Serve the build locally |
+| `bun run check` | Biome lint + format check |
+| `bun run icons` | Regenerate app icons from `public/icon-*.svg` |
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
+## Deploying
 
-Here is an example layout that includes a header:
+Pushing to `main` builds and publishes to GitHub Pages via
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). The build is
+entirely static, so any static host works — set `BASE_PATH` if you serve it
+from a subdirectory.
 
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+## Built with
 
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
+[TanStack Start](https://tanstack.com/start) (SPA mode) and
+[Router](https://tanstack.com/router), [TanStack Query](https://tanstack.com/query),
+[HeroUI](https://heroui.com), [Tailwind CSS](https://tailwindcss.com), and
+[Biome](https://biomejs.dev).
 
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
+## Credits
 
-## Server Functions
+The iAqualink protocol layer in `src/lib/aqualink/` is a TypeScript port of
+[flz/iaqualink-py](https://github.com/flz/iaqualink-py), used under the BSD
+3-Clause License — see [NOTICE](NOTICE).
 
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
+Not affiliated with, endorsed by, or supported by Zodiac Pool Systems, Jandy,
+or Fluidra. iAqualink is their trademark.
 
-```tsx
-import { createServerFn } from '@tanstack/react-start'
+## License
 
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+[MIT](LICENSE)
