@@ -347,13 +347,13 @@ export class AqualinkClient implements AqualinkClientLike {
 				// apart from a session that has genuinely ended, and only the last of
 				// the four deserves to take the stored token down with it.
 				//
-				// So this tab signs out and storage keeps what it holds. The screens
-				// see exactly what they saw before — `useSession` reports a refusal
-				// as no session — and the difference shows on the next reload, which
-				// gets to put the stored token to the pool rather than being handed a
-				// null by a tab that had already given up.
+				// So this tab signs out, storage keeps what it holds, and the token
+				// that was refused is named — `refuseSession` puts the stored one
+				// back to the pool a few seconds from now, and it has to be able to
+				// tell "the same token again" from "the token another tab rotated to
+				// while we were failing".
 				this.session = null;
-				refuseSession();
+				refuseSession(existing.refreshToken);
 				throw new AqualinkError("Session expired — sign in again", 401, body);
 			}
 			throw new AqualinkError(

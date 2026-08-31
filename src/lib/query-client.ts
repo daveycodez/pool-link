@@ -17,10 +17,14 @@ function toastError(error: unknown) {
 }
 
 /**
- * A 401 means the session is gone — the client has already cleared it by the
- * time this runs. Re-reading it turns useRequireSession's guard from something
- * that only fires on a cold start into one that catches a session dying
- * mid-use, and the redirect to /login says it better than a toast would.
+ * A 401 is the session's business, not a screen's, so it is swallowed here
+ * rather than toasted: by the time this runs the client has either refreshed
+ * and retried, or refused the session — and a refusal announces itself, from
+ * `refuseSession`, where it also knows whether it is about to retry.
+ *
+ * The invalidation is what carries the news to the screens. It turns
+ * useRequireSession's guard from something that only fires on a cold start
+ * into one that catches a session dying mid-use.
  *
  * With one exception, which the caller has to supply because this cannot see
  * it: signing in answers 401 for a password that was simply wrong, and there

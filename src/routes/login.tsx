@@ -9,9 +9,9 @@ import {
 } from "@heroui/react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Waves } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ThemeToggle } from "#/components/theme-toggle";
-import { useLogin } from "#/lib/queries";
+import { useLogin, useSession } from "#/lib/queries";
 
 export const Route = createFileRoute("/login")({
 	component: LoginScreen,
@@ -20,8 +20,18 @@ export const Route = createFileRoute("/login")({
 function LoginScreen() {
 	const navigate = useNavigate();
 	const loginMutation = useLogin();
+	const session = useSession();
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+
+	// The way back. A refused session sends the page here, and `refuseSession`
+	// puts the stored one to the pool again seconds later — when that works
+	// there is a session and no reason to be looking at a sign-in form, so this
+	// is the whole of "recovers on its own" as far as anyone watching can tell.
+	// It also covers arriving here signed in, which was previously a dead end.
+	useEffect(() => {
+		if (session.data) navigate({ to: "/", replace: true });
+	}, [session.data, navigate]);
 
 	function submit(e: React.FormEvent) {
 		e.preventDefault();

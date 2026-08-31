@@ -1,3 +1,4 @@
+import { toast } from "@heroui/react";
 import { keys } from "#/lib/keys";
 import { flushPersisted, readPersisted } from "#/lib/persist";
 import { queryClient } from "#/lib/query-client";
@@ -48,7 +49,7 @@ export async function storedSession(): Promise<Session | null> {
 }
 
 export async function saveSession(session: Session): Promise<void> {
-	setRefused(false);
+	forgetRefusal();
 	queryClient.setQueryData(keys.session(), session);
 	// Written through rather than left to the persister's own subscription: the
 	// pool rotates the refresh token, so the moment this returns the previous
@@ -66,10 +67,30 @@ export async function saveSession(session: Session): Promise<void> {
  * merely suspects the session is over may make it — see `refuseSession`.
  */
 export async function clearSession(): Promise<void> {
-	setRefused(false);
+	forgetRefusal();
 	queryClient.setQueryData(keys.session(), null);
 	await flushPersisted();
 }
+
+/**
+ * How long a refused tab waits before putting the stored session back to the
+ * pool, and how many times it will.
+ *
+ * Short, because the whole window is spent on the login screen: the refusal
+ * empties `useSession`, the guard redirects, and until this fires there is
+ * nothing on screen but a sign-in form for an account that may well still be
+ * alive. Three tries at five seconds is fifteen seconds of trying before the
+ * app concedes, and each one costs a single refresh — `refreshOnce` collapses
+ * the ten queries that wake up together into one request.
+ *
+ * Retrying at all is the part `16aa529` left out. It moved the refusal out of
+ * storage so that a reload could put the stored token to the pool again, which
+ * is a real recovery and one that nothing ever performs: the app does not
+ * reload itself, and a person looking at a login form signs in rather than
+ * pressing refresh. So the recovery has to be the app's own.
+ */
+const REFUSAL_RETRY_MS = 5_000;
+const REFUSAL_RETRIES = 3;
 
 /**
  * A refusal this tab is carrying, held in memory and nowhere else.
@@ -79,10 +100,58 @@ export async function clearSession(): Promise<void> {
 let refused = false;
 const watchers = new Set<() => void>();
 
+/**
+ * The refresh token the refusal was about, the tries left to put it back, and
+ * whether this episode has been announced.
+ *
+ * The token is kept so `retryRefusal` can tell the two recoveries apart. A
+ * stored token that differs from this one is another tab's, freshly rotated,
+ * and deserves a full budget of its own; the same token going back up the wire
+ * is a second opinion on a rejection that may never have been about the token.
+ */
+let refusedToken: string | null = null;
+let retries = 0;
+let announced = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
 function setRefused(next: boolean): void {
 	if (refused === next) return;
 	refused = next;
 	for (const watcher of watchers) watcher();
+}
+
+/** Drop the whole episode: no latch, no timer, and a fresh budget. */
+function forgetRefusal(): void {
+	if (retryTimer !== null) clearTimeout(retryTimer);
+	retryTimer = null;
+	refusedToken = null;
+	retries = 0;
+	announced = false;
+	setRefused(false);
+}
+
+/**
+ * Lift the refusal and hand this tab whatever storage holds, so the queries
+ * that switched off wake up and try it.
+ *
+ * Seeding the cache is what makes the retry worth anything. The client caches
+ * its own copy and `restore` reads the query cache, so lifting the flag alone
+ * would only put the same refused token back up the wire; the copy in storage
+ * is the one that may have moved on.
+ */
+async function retryRefusal(): Promise<void> {
+	retryTimer = null;
+	if (!refused) return;
+	const stored = await storedSession();
+	// Nothing to put back, or a sign-in landed while that read was out. Either
+	// way there is no retry to make.
+	if (!stored || !refused) return;
+	// Another tab's token is a different credential, not another go at this
+	// one, so it starts again from a full budget.
+	retries = stored.refreshToken === refusedToken ? retries + 1 : 0;
+	queryClient.setQueryData(keys.session(), stored);
+	refusedToken = null;
+	setRefused(false);
 }
 
 /**
@@ -105,17 +174,29 @@ function setRefused(next: boolean): void {
  * session that has genuinely ended, and from this side of the wire they are
  * indistinguishable.
  *
- * So the refusal is held here, for the life of the tab. `useSession` reports it
- * as an absent session, which is the question every screen was already asking,
- * so the header empties, the account-scoped queries switch off and the route
- * guard sends the page to /login exactly as before. What no longer happens is
- * the write. Storage keeps the session, so a reload gets to put the stored
- * token to the pool instead of being handed a null by a tab that had already
- * given up — which makes a sign-out that should not have happened recoverable
- * by the one gesture anybody would try anyway.
+ * So the refusal is held here rather than written, and it is held briefly.
+ * `useSession` reports it as an absent session, which is the question every
+ * screen was already asking, so the header empties, the account-scoped queries
+ * switch off and the route guard goes to /login. But storage keeps what it
+ * holds, and this tab puts it back to the pool a few seconds later, up to
+ * REFUSAL_RETRIES times — so of those four cases the three that were never
+ * about a dead account recover on their own, without a reload, and the person
+ * who was looking at a login screen is returned to their pool.
+ *
+ * Only a token the pool refuses every time ends the episode, and that one is
+ * announced. Silence was half the problem: a 401 is a signal this app expects,
+ * the toast was suppressed for it, and the screen simply became a login form
+ * for no stated reason.
  */
-export function refuseSession(): void {
+export function refuseSession(token: string | null = null): void {
+	refusedToken = token;
 	setRefused(true);
+	if (!announced) {
+		announced = true;
+		toast.danger("Signed out — iAqualink refused the saved session");
+	}
+	if (retries >= REFUSAL_RETRIES || retryTimer !== null) return;
+	retryTimer = setTimeout(() => void retryRefusal(), REFUSAL_RETRY_MS);
 }
 
 export function sessionRefused(): boolean {
