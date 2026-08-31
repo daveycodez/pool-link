@@ -5,6 +5,7 @@ import { Loading } from "#/components/loading";
 import {
 	AppearanceRow,
 	DiagnosticsRow,
+	InstallRow,
 	SignOutRow,
 } from "#/components/settings-rows";
 import { useRequireSession } from "#/lib/use-pool";
@@ -23,6 +24,7 @@ function Settings() {
 	return (
 		<CardColumns>
 			<AppearanceRow />
+			<InstallRow />
 			<DiagnosticsRow />
 			<AddSystemRow />
 			<SignOutRow />

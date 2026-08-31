@@ -14,6 +14,7 @@ import {
 	CircleUser,
 	Copy,
 	Cpu,
+	Download,
 	ExternalLink,
 	Globe,
 	Hash,
@@ -32,6 +33,7 @@ import { webtouchUrl } from "#/lib/aqualink/client";
 import { errorMessage } from "#/lib/aqualink/types";
 import { groupSerial } from "#/lib/format";
 import { usePanel, useSetDeviceName, useSystems } from "#/lib/queries";
+import { useInstall } from "#/lib/use-install";
 
 export function SettingsRow({
 	Icon,
@@ -252,6 +254,32 @@ export function AppearanceRow() {
 					</ListBox>
 				</Select.Popover>
 			</Select>
+		</SettingsRow>
+	);
+}
+
+/**
+ * The way back to an install the banner offered once and was waved away —
+ * which is what lets that banner ask a single time and then stay quiet.
+ * Absent where there is nothing to offer: already installed, or a browser that
+ * does not install web apps at all.
+ */
+export function InstallRow() {
+	const { canPrompt, manual, install } = useInstall();
+	if (!canPrompt && !manual) return null;
+
+	return (
+		<SettingsRow Icon={Download} title="Install app">
+			{canPrompt ? (
+				<Button onPress={install} size="sm" variant="secondary">
+					Install
+				</Button>
+			) : (
+				// iOS has no gesture to offer, only a menu to point at.
+				<span className="text-end text-muted text-xs">
+					Share → Add to Home Screen
+				</span>
+			)}
 		</SettingsRow>
 	);
 }

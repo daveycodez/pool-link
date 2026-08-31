@@ -10,6 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import { AppHeader, IconBtn } from "#/components/app-header";
 import { BottomNav } from "#/components/bottom-nav";
+import { InstallPrompt } from "#/components/install-prompt";
 import { Loading } from "#/components/loading";
 import { ThemeToggle } from "#/components/theme-toggle";
 import { isCelsius, timeAgo } from "#/lib/format";
@@ -152,6 +153,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 					: "pb-6"
 			}`}
 		>
+			{/* Past the loading gate, so it can only appear over a page with the
+			    pool already on it — and never over the sign-in card. */}
+			{signedIn && !onLogin ? <InstallPrompt /> : null}
+
 			{onLogin ? null : (
 				<AppHeader
 					Icon={serial || !signedIn ? Waves : MapPinHouse}

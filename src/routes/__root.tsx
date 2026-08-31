@@ -2,10 +2,10 @@ import { Toast } from "@heroui/react";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { ThemeProvider } from "next-themes";
-import { useEffect, useState } from "react";
 import { AppLayout } from "#/components/app-layout";
 import { persistOptions } from "#/lib/persist";
 import { queryClient } from "#/lib/query-client";
+import { useOnline } from "#/lib/use-online";
 import appCss from "../styles.css?url";
 
 /** "/" locally, "/<repo>/" on GitHub Pages. Ends with a slash either way. */
@@ -116,19 +116,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 }
 
 function OfflineBanner() {
-	const [offline, setOffline] = useState(false);
-	useEffect(() => {
-		const on = () => setOffline(true);
-		const off = () => setOffline(false);
-		setOffline(!navigator.onLine);
-		addEventListener("offline", on);
-		addEventListener("online", off);
-		return () => {
-			removeEventListener("offline", on);
-			removeEventListener("online", off);
-		};
-	}, []);
-	if (!offline) return null;
+	const online = useOnline();
+	if (online) return null;
 	return (
 		<div className="fixed inset-x-0 bottom-0 z-50 border-t border-warning/30 bg-warning/15 px-4 py-2.5 text-center text-xs font-medium text-warning backdrop-blur-xl">
 			No internet — showing last known state. The panel keeps running its own

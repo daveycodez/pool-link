@@ -5,6 +5,7 @@ import { Loading } from "#/components/loading";
 import {
 	AppearanceRow,
 	DiagnosticsRow,
+	InstallRow,
 	MySystemsRow,
 	PanelModelRow,
 	SignOutRow,
@@ -32,6 +33,7 @@ function SystemSettings() {
 			<SystemSerialRow serial={serial} />
 			<PanelModelRow serial={serial} />
 			<AppearanceRow />
+			<InstallRow />
 			<AddSystemRow />
 			<WebTouchRow serial={serial} />
 			<DiagnosticsRow serial={serial} />
