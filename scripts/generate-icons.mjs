@@ -2,8 +2,9 @@
  * Generates every icon the PWA needs from one source mark.
  *
  * The mark is Lucide's `waves-horizontal` (ISC) — the same glyph the app uses
- * for water — in the dark-theme accent over the control-room background, lit
- * from behind so it reads as the "live channel" the UI is built around.
+ * for water — inked in whichever accent suits the ground each icon lands on,
+ * and on the plated icons lit from behind so it reads as the "live channel"
+ * the UI is built around.
  *
  * Run `bun run icons` after changing anything here.
  */
@@ -11,14 +12,13 @@ import { mkdir, writeFile } from "node:fs/promises";
 import sharp from "sharp";
 
 /**
- * The two grounds, resolved from --background in styles.css. The plated icons
- * take the light one: Android composes nothing on a launcher icon's behalf and
- * the manifest has no way to offer it a second, so the one plate that ships has
- * to be the one that survives a light launcher, a dark launcher and a circular
- * crop — and a pale plate does that where a near-black one becomes a hole.
+ * The one ground, --background from styles.css at its light value. Android
+ * composes nothing on a launcher icon's behalf and the manifest has no way to
+ * offer it a second, so the single plate that ships has to survive a light
+ * launcher, a dark launcher and a circular crop — and a pale plate does that
+ * where a near-black one becomes a hole.
  */
-const BG_LIGHT = "#EFF7FA"; // --background, light
-const BG = BG_LIGHT;
+const BG = "#EFF7FA"; // --background, light
 
 /**
  * The two accents, each the 50/50 oklab mix of a cyan and a teal at one Tailwind
@@ -29,8 +29,6 @@ const BG = BG_LIGHT;
  */
 const ACCENT_LIGHT = "#0095A1"; // cyan-600 + teal-600
 const ACCENT_DARK = "#00BAC1"; // cyan-500 + teal-500
-const ACCENT = ACCENT_DARK; // the glow behind the plate, brighter than the mark on it
-const ACCENT_DEEP = "#00a8bf"; // falloff toward the bottom, like depth
 
 /** Lucide `waves-horizontal`, 24x24 viewBox, stroke-based. */
 const WAVES = [
@@ -44,39 +42,28 @@ const WAVES = [
  * @param coverage  fraction of the canvas the 24x24 mark should span
  * @param radius    corner radius as a fraction of size (0 = full bleed)
  * @param stroke    lucide stroke width, in 24x24 units
- * @param flat      solid accent instead of the gradient; the depth falloff
- *                  costs contrast at tab sizes, where it is invisible anyway
  * @param bare      no plate behind the mark, for the icon iOS repaints itself
- * @param ink       overrides the gradient, for icons that carry no plate and so
- *                  have to be legible against a ground this file cannot see
+ * @param ink       the mark's colour; every caller names its own, because each
+ *                  is read against a different ground this file cannot see
  */
-function icon({
-	size,
-	coverage,
-	radius,
-	stroke = 2,
-	flat = false,
-	bare = false,
-	ink = null,
-}) {
+function icon({ size, coverage, radius, stroke = 2, bare = false, ink }) {
 	const scale = (size * coverage) / 24;
 	const offset = (size - 24 * scale) / 2;
 	const r = size * radius;
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <defs>
-    <linearGradient id="w" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${ACCENT}"/>
-      <stop offset="1" stop-color="${ACCENT_DEEP}"/>
-    </linearGradient>
+	const plate = bare
+		? ""
+		: `  <defs>
     <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="${ACCENT}" stop-opacity="0.18"/>
-      <stop offset="1" stop-color="${ACCENT}" stop-opacity="0"/>
+      <stop offset="0" stop-color="${ACCENT_DARK}" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="${ACCENT_DARK}" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  ${bare ? "" : `<rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="${BG}"/>
-  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="url(#glow)"/>`}
-  <g transform="translate(${offset} ${offset}) scale(${scale})"
-     fill="none" stroke="${ink ?? (flat ? ACCENT : "url(#w)")}" stroke-width="${stroke}"
+  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="${BG}"/>
+  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="url(#glow)"/>
+`;
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+${plate}  <g transform="translate(${offset} ${offset}) scale(${scale})"
+     fill="none" stroke="${ink}" stroke-width="${stroke}"
      stroke-linecap="round" stroke-linejoin="round">
 ${WAVES.map((d) => `    <path d="${d}"/>`).join("\n")}
   </g>
