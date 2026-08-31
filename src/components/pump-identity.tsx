@@ -114,12 +114,6 @@ export function PumpIdentity({
 					{address.value}
 				</span>
 			</SettingsRow>
-
-			<p className="px-1 text-xs text-muted">
-				Application and model are set when the pump is commissioned at the
-				panel. They describe the hardware rather than how it runs, so this app
-				reports them without changing them.
-			</p>
 		</div>
 	);
 }
