@@ -1,57 +1,57 @@
 {
-  "name": "pool-link",
-  "private": true,
-  "type": "module",
-  "imports": {
-    "#/*": "./src/*"
-  },
-  "scripts": {
-    "dev": "vite dev --port 3000",
-    "generate-routes": "tsr generate",
-    "icons": "node scripts/generate-icons.mjs",
-    "build": "vite build && cp dist/client/index.html dist/client/404.html",
-    "preview": "vite preview",
-    "format": "biome format",
-    "lint": "biome lint",
-    "check": "biome check"
-  },
-  "dependencies": {
-    "@heroui/react": "3.2.4",
-    "@heroui/styles": "3.2.4",
-    "@internationalized/date": "3.12.3",
-    "@tailwindcss/vite": "4.3.3",
-    "@tanstack/query-async-storage-persister": "5.102.8",
-    "@tanstack/react-devtools": "0.10.12",
-    "@tanstack/react-query": "5.102.8",
-    "@tanstack/react-query-persist-client": "5.102.8",
-    "@tanstack/react-router": "1.170.32",
-    "@tanstack/react-router-devtools": "1.167.1",
-    "@tanstack/react-start": "1.168.49",
-    "idb-keyval": "6.3.0",
-    "lucide-react": "1.37.0",
-    "next-themes": "0.4.6",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "tailwindcss": "4.3.3"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "2.5.11",
-    "@tanstack/devtools-vite": "0.8.5",
-    "@tanstack/router-cli": "1.167.33",
-    "@types/node": "26.4.0",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.5",
-    "@vitejs/plugin-react": "6.1.1",
-    "sharp": "0.35.4",
-    "typescript": "7.0.2",
-    "vite": "8.2.2"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "lightningcss",
-      "sharp",
-      "workerd"
-    ]
-  }
+	"name": "pool-link",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#/*": "./src/*"
+	},
+	"scripts": {
+		"dev": "vite dev --port 3000",
+		"generate-routes": "tsr generate",
+		"icons": "node scripts/generate-icons.mjs",
+		"build": "vite build && cp dist/client/index.html dist/client/404.html",
+		"preview": "vite preview",
+		"format": "biome format",
+		"lint": "biome lint",
+		"check": "biome check"
+	},
+	"dependencies": {
+		"@heroui/react": "3.2.4",
+		"@heroui/styles": "3.2.4",
+		"@internationalized/date": "3.12.3",
+		"@tailwindcss/vite": "4.3.3",
+		"@tanstack/query-async-storage-persister": "5.102.8",
+		"@tanstack/react-devtools": "0.10.12",
+		"@tanstack/react-query": "5.102.8",
+		"@tanstack/react-query-persist-client": "5.102.8",
+		"@tanstack/react-router": "1.170.32",
+		"@tanstack/react-router-devtools": "1.167.1",
+		"@tanstack/react-start": "1.168.49",
+		"idb-keyval": "6.3.0",
+		"lucide-react": "1.37.0",
+		"next-themes": "0.4.6",
+		"react": "19.2.8",
+		"react-dom": "19.2.8",
+		"tailwindcss": "4.3.3"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.5.11",
+		"@tanstack/devtools-vite": "0.8.5",
+		"@tanstack/router-cli": "1.167.33",
+		"@types/node": "26.4.0",
+		"@types/react": "19.2.18",
+		"@types/react-dom": "19.2.5",
+		"@vitejs/plugin-react": "6.1.1",
+		"sharp": "0.35.4",
+		"typescript": "7.0.2",
+		"vite": "8.2.2"
+	},
+	"pnpm": {
+		"onlyBuiltDependencies": [
+			"esbuild",
+			"lightningcss",
+			"sharp",
+			"workerd"
+		]
+	}
 }

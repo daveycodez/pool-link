@@ -1,20 +1,17 @@
 {
-  "projectName": "pool-link",
-  "mode": "file-router",
-  "typescript": true,
-  "tailwind": true,
-  "packageManager": "bun",
-  "git": true,
-  "install": true,
-  "intent": true,
-  "addOnOptions": {},
-  "projectPreset": "default",
-  "includeExamples": false,
-  "routerOnly": false,
-  "version": 1,
-  "framework": "react",
-  "chosenAddOns": [
-    "biome",
-    "cloudflare"
-  ]
+	"projectName": "pool-link",
+	"mode": "file-router",
+	"typescript": true,
+	"tailwind": true,
+	"packageManager": "bun",
+	"git": true,
+	"install": true,
+	"intent": true,
+	"addOnOptions": {},
+	"projectPreset": "default",
+	"includeExamples": false,
+	"routerOnly": false,
+	"version": 1,
+	"framework": "react",
+	"chosenAddOns": ["biome", "cloudflare"]
 }

@@ -170,8 +170,14 @@ const maskableSvg = icon({
 const out = [
 	["public/icons/icon-192.png", await png(anySvg, 192, { opaque: true })],
 	["public/icons/icon-512.png", await png(anySvg, 512, { opaque: true })],
-	["public/icons/maskable-192.png", await png(maskableSvg, 192, { opaque: true })],
-	["public/icons/maskable-512.png", await png(maskableSvg, 512, { opaque: true })],
+	[
+		"public/icons/maskable-192.png",
+		await png(maskableSvg, 192, { opaque: true }),
+	],
+	[
+		"public/icons/maskable-512.png",
+		await png(maskableSvg, 512, { opaque: true }),
+	],
 	["public/icons/apple-touch-icon.png", await png(appleSvg, 180)],
 	[
 		"public/favicon.ico",
