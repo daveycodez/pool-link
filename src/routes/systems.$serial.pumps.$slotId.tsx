@@ -20,11 +20,15 @@ export const Route = createFileRoute("/systems/$serial/pumps/$slotId")({
  * One pump's setup: what it is, what its eight speeds are worth, and the
  * speeds the panel runs without being asked.
  *
- * Sections appear as their data lands rather than behind one spinner. Identity
- * comes from the slot table, which is persisted and usually already in hand;
- * the speeds are a request of their own and the master speeds another. Holding
- * the whole page for the slowest of the three would blank a screen that mostly
- * knows its own answer.
+ * The page waits for all three of its reads before drawing any of them. Two
+ * come back from storage and one from the panel, so letting each section paint
+ * as it arrived put Master Speeds directly under the pump's name and then shoved
+ * it down the moment Feature Speeds landed above it. Nothing here is urgent
+ * enough to be worth reading while it moves.
+ *
+ * Only the speed table is ever actually awaited after the first visit: the slot
+ * and its definition are persisted, so the spinner is the cost of opening a
+ * given pump once.
  */
 function PumpDetail() {
 	const { serial, slotId: raw } = Route.useParams();
@@ -39,11 +43,14 @@ function PumpDetail() {
 	if (pending) return <Loading />;
 	if (!signedIn) return null;
 
-	const slot = slots.data?.find((s) => s.slotId === slotId);
 	if (slots.isPending) return <Loading />;
+	const slot = slots.data?.find((s) => s.slotId === slotId);
 
 	// A slot number that names nothing, or names an empty slot. Both are reachable
-	// by typing a URL, and neither has anything to configure.
+	// by typing a URL, and neither has anything to configure. This is settled
+	// before the two reads below are waited on, and has to be: a pad with no
+	// pumps at all skips the definitions entirely, so a page that waited on them
+	// first would spin here forever.
 	if (!slot?.installed) {
 		return (
 			<Card>
@@ -56,6 +63,11 @@ function PumpDetail() {
 			</Card>
 		);
 	}
+
+	// Past this point the slot is real and installed, so neither read is skipped
+	// and neither can be pending forever. An error leaves its own section out
+	// rather than the page — which is stable, since nothing arrives late.
+	if (defs.isPending || speeds.isPending) return <Loading />;
 
 	const definition = defs.data?.find((d) => d.slotId === slotId);
 	const unit = (definition?.unit || "rpm").toUpperCase();

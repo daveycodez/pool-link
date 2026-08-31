@@ -1739,7 +1739,16 @@ export function useSpeedUnit(serial: string | undefined, slotId?: number) {
 	return (def?.unit || "rpm").toUpperCase();
 }
 
-/** One slot's eight speeds and aux bindings, for the page that edits them. */
+/**
+ * One slot's eight speeds and aux bindings, for the page that edits them.
+ *
+ * Kept and restored like the slot table and the definitions beside it, so a
+ * second visit to a pump paints from storage instead of spending a request to
+ * be told what it already knew. Unlike those two it does go stale: a speed can
+ * be renamed or revalued at the panel itself, and an aux rebound there. So the
+ * cached answer is shown at once and corrected behind it, which is the shape
+ * that costs a spinner only on the first visit a pump ever gets.
+ */
 export function useVspSlotSpeeds(
 	serial: string | undefined,
 	slotId: number | undefined,
@@ -1753,6 +1762,7 @@ export function useVspSlotSpeeds(
 				: skipToken,
 		staleTime: STALE_MS,
 		refetchOnWindowFocus: false,
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }
 

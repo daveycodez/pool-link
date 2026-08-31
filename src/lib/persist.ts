@@ -106,6 +106,12 @@ const PERSISTED = new Set([
 	// right on the first paint after a reload rather than a request later.
 	"vspSlots",
 	"vspDefs",
+	// The speed tables behind them, one entry per pump that has been opened.
+	// These do move — a speed can be renamed at the panel — so unlike the two
+	// above they are refetched on mount and merely painted from storage while
+	// that lands, which is what keeps a pump's page from starting on a spinner
+	// every time it is opened.
+	"vspSlotSpeeds",
 ]);
 
 const persister = createAsyncStoragePersister({
