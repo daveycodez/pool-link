@@ -154,7 +154,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 				// inline. Both values are the bar's own height plus the offset it
 				// floats at — see BottomNav, and keep the breakpoint the same as its.
 				onTab
-					? "pb-[calc(max(1rem,env(safe-area-inset-bottom))+4.5rem)] sm:pb-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]"
+					? "pb-[calc(max(1rem,env(safe-area-inset-bottom))+4.75rem)] sm:pb-[calc(max(1rem,env(safe-area-inset-bottom))+3.5rem)]"
 					: "pb-6"
 			}`}
 		>

@@ -1,9 +1,10 @@
 import { Button, Card, Chip } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarClock, Pencil } from "lucide-react";
+import { Pencil, Plus, Zap } from "lucide-react";
 import { CardColumns } from "#/components/card-columns";
 import { IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
+import { presetIcon } from "#/components/preset-icons";
 import { ScheduleEditor } from "#/components/schedule-editor";
 import type {
 	Schedule,
@@ -85,15 +86,28 @@ function Schedules() {
 	const known = devices.data ?? [];
 	const rows = [...(list?.schedules ?? [])].sort(byStart);
 
+	/**
+	 * What a new schedule may be pointed at.
+	 *
+	 * The pump slots are held back deliberately. `listType=1` lists them
+	 * alongside the relays — the same equipment appears twice, once as a plain
+	 * device and once with `isVSP` set — but every schedule this panel has ever
+	 * shown names the plain one, and nothing has established whether a pump
+	 * schedule is written as that second id or as the first with a speed beside
+	 * it. Offering the choice would be offering to find out on somebody's pump.
+	 */
+	const schedulable = known.filter((d) => !d.isVsp);
+
 	const addButton = list?.canAdd ? (
 		<ScheduleEditor
-			devices={known}
+			devices={schedulable}
 			error={add.error}
 			isPending={add.isPending}
 			onSave={(spec) => add.mutate(spec)}
 			title="New schedule"
 			trigger={
-				<Button isDisabled={known.length === 0} variant="secondary">
+				<Button isDisabled={schedulable.length === 0} variant="secondary">
+					<Plus className="size-4" />
 					Add schedule
 				</Button>
 			}
@@ -106,7 +120,7 @@ function Schedules() {
 				<Card className="text-sm text-muted">
 					This panel is running no schedules.
 				</Card>
-				{addButton}
+				<div className="flex justify-end">{addButton}</div>
 			</div>
 		);
 
@@ -116,6 +130,7 @@ function Schedules() {
 				{rows.map((schedule) => (
 					<ScheduleRow
 						devices={known}
+						schedulable={schedulable}
 						editError={edit.error}
 						isPending={edit.isPending || remove.isPending}
 						key={schedule.id}
@@ -126,7 +141,7 @@ function Schedules() {
 				))}
 			</CardColumns>
 
-			{addButton}
+			<div className="flex justify-end">{addButton}</div>
 
 			{/* The panel counts its own programs, and this walks its pages to
 			    collect them. A shortfall means the walk stopped early, which is
@@ -147,31 +162,54 @@ function ScheduleRow({
 	isPending,
 	onDelete,
 	onSave,
+	schedulable,
 	schedule,
 }: {
+	/** Everything the panel can name, which is what a row is titled from. */
 	devices: ScheduleDevice[];
 	editError: unknown;
 	isPending: boolean;
 	onDelete: () => void;
 	onSave: (spec: ScheduleSpec) => void;
+	/** The narrower set a schedule may be pointed at — see `schedulable`. */
+	schedulable: ScheduleDevice[];
 	schedule: Schedule;
 }) {
+	const name = deviceName(schedule.deviceId, devices);
 	const overnight = isOvernight(
 		schedule.startHrs,
 		schedule.startMins,
 		schedule.stopHrs,
 		schedule.stopMins,
 	);
+	/**
+	 * The same mark the equipment page gives this device, so a schedule for the
+	 * waterfall is recognisable as the waterfall rather than as a generic entry
+	 * in a list. It works because both sides are reading the panel's own
+	 * vocabulary: `presetIcon` matches the fixed names a relay can be given, and
+	 * the master device list names equipment from that same list.
+	 *
+	 * The fallback is the bolt `DeviceIcon` ends on for the same reason — a name
+	 * with no preset behind it, or an id the device list did not describe. It
+	 * stays the equipment page's answer to "something, but nothing more
+	 * specific" rather than becoming a mark that means "schedule", which every
+	 * row here would equally deserve and none would be told apart by.
+	 */
+	const Icon = presetIcon(name) ?? Zap;
 
 	return (
 		<Card className="flex-row items-center justify-between gap-4">
 			<div className="flex min-w-0 items-center gap-4">
 				<IconCircle on>
-					<CalendarClock className="size-4" />
+					<Icon className="size-4" />
 				</IconCircle>
+				{/* Three lines about one program, so they are set as a block rather
+				    than as separate facts: the card's own leading is sized for a title
+				    standing alone above a description, and at three deep it reads as a
+				    list of unrelated things. */}
 				<div className="min-w-0">
-					<Card.Title>{deviceName(schedule.deviceId, devices)}</Card.Title>
-					<Card.Description className="tabular-nums">
+					<Card.Title className="leading-5">{name}</Card.Title>
+					<Card.Description className="text-xs leading-4 tabular-nums">
 						{windowLabel(
 							schedule.startHrs,
 							schedule.startMins,
@@ -179,7 +217,7 @@ function ScheduleRow({
 							schedule.stopMins,
 						)}
 					</Card.Description>
-					<div className="mt-2 flex flex-wrap items-center gap-2">
+					<div className="mt-1.5 flex flex-wrap items-center gap-2">
 						{/* Only the narrower selections carry accent: a program that runs
 						    every day is the ordinary case and should not shout. */}
 						<Chip
@@ -203,7 +241,14 @@ function ScheduleRow({
 			</div>
 
 			<ScheduleEditor
-				devices={devices}
+				// Whatever this schedule already points at stays selectable even when
+				// it is a pump slot the Add picker withholds, so opening a program and
+				// saving it cannot silently move it to another piece of equipment.
+				devices={
+					schedulable.some((d) => d.id === schedule.deviceId)
+						? schedulable
+						: devices.filter((d) => !d.isVsp || d.id === schedule.deviceId)
+				}
 				error={editError}
 				isPending={isPending}
 				onDelete={onDelete}
@@ -212,7 +257,7 @@ function ScheduleRow({
 				title="Edit schedule"
 				trigger={
 					<Button
-						aria-label={`Edit ${deviceName(schedule.deviceId, devices)} schedule`}
+						aria-label={`Edit ${name} schedule`}
 						isIconOnly
 						size="sm"
 						variant="ghost"

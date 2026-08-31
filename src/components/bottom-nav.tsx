@@ -1,6 +1,6 @@
 import { Tabs } from "@heroui/react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { CalendarClock, House, Lightbulb } from "lucide-react";
+import { Calendar, House, Lightbulb } from "lucide-react";
 
 /**
  * Three destinations, which is one more than this bar could hold laid out the
@@ -28,11 +28,7 @@ import { CalendarClock, House, Lightbulb } from "lucide-react";
 const TABS = [
 	{ to: "/systems/$serial", label: "Home", Icon: House },
 	{ to: "/systems/$serial/equipment", label: "Equipment", Icon: Lightbulb },
-	{
-		to: "/systems/$serial/schedules",
-		label: "Schedules",
-		Icon: CalendarClock,
-	},
+	{ to: "/systems/$serial/schedules", label: "Schedules", Icon: Calendar },
 ] as const;
 
 export function BottomNav({ serial }: { serial: string }) {
@@ -66,7 +62,16 @@ export function BottomNav({ serial }: { serial: string }) {
 				    pill and vanishes, and the secondary and tertiary borders — the
 				    two that are defined as a `color-mix` rather than a literal
 				    colour — do not render at all on iOS. */}
-				<Tabs.ListContainer className="shadow-surface dark:border dark:border-segment">
+				{/* The radius is stated only below `sm`, where the bar is taller than
+				    the stylesheet expects. `--radius * 2.5` is a fixed length tuned for
+				    a one-line bar, and against a stacked one it stops reaching the
+				    corners — it reads as a rounded box rather than a pill, and no
+				    longer agrees with the tab pill sitting inside it. `rounded-full`
+				    tracks whatever height the bar ends up at, which also keeps the
+				    outer and inner radii consistent as the container's own padding
+				    requires. Above `sm` the stylesheet's value is already right and is
+				    left alone. */}
+				<Tabs.ListContainer className="shadow-surface max-sm:rounded-full dark:border dark:border-segment">
 					<Tabs.List aria-label="Sections">
 						{TABS.map(({ to, label, Icon }) => (
 							// Stacked under the icon on a phone, beside it from `sm` up —
@@ -80,7 +85,11 @@ export function BottomNav({ serial }: { serial: string }) {
 								id={to}
 								key={to}
 							>
-								<Icon className="size-4 shrink-0" />
+								{/* A step larger where it is the main thing carrying the tab:
+							    stacked over a small label on a phone, the icon is what the
+							    eye lands on, and at the inline size it read as an accent to
+							    the word rather than the other way round. */}
+								<Icon className="size-5 shrink-0 sm:size-4" />
 								{label}
 								<Tabs.Indicator />
 							</Tabs.Tab>

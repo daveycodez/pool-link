@@ -46,6 +46,11 @@ type Icon = React.ComponentType<{ className?: string }>;
  * (Spa Mode, Pool Cover) are in here too, for the same reason. Anything
  * unlisted falls back to the device's kind, so a label we do not know costs
  * nothing.
+ *
+ * `get_master_device_list` names the same equipment slightly differently — it
+ * says "Pool Heat" where a relay preset says "Heater" — so those spellings sit
+ * here alongside, which is what lets a schedule wear the same mark its
+ * equipment does.
  */
 const PRESET_ICONS: Record<string, Icon> = {
 	aerator: Wind,
@@ -82,6 +87,7 @@ const PRESET_ICONS: Record<string, Icon> = {
 	ozonator: FlaskConical,
 	pond: Waves,
 	"pool cover": Blinds,
+	"pool heat": Flame,
 	"pool light": Lightbulb,
 	pump: Filter,
 	"ray-vac": Bot,
@@ -93,6 +99,7 @@ const PRESET_ICONS: Record<string, Icon> = {
 	"solar heater": Sun,
 	"solar pump": Sun,
 	spa: Bubbles,
+	"spa heat": Flame,
 	"spa light": Lightbulb,
 	"spa mode": Bubbles,
 	spillway: Waves,
