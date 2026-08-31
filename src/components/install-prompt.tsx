@@ -103,7 +103,9 @@ export function InstallPrompt() {
 				    inside a squeezed box rather than letting it overflow. So the
 				    box refuses to shrink, the tile carries a floor of its own, and
 				    object-contain means even a wrong box cannot stretch it. */}
-				<Alert.Indicator className="shrink-0">
+				{/* p-0 undoes the indicator's own padding: it is sized for a stroke
+				    glyph that needs air around it, and a plated tile brings its own. */}
+				<Alert.Indicator className="shrink-0 p-0">
 					<img
 						alt=""
 						className="size-8 min-w-8 shrink-0 rounded-lg object-contain"
