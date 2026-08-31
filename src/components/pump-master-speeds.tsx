@@ -1,4 +1,3 @@
-import { Card } from "@heroui/react";
 import { ArrowDownToLine, ArrowUpToLine, Snowflake, Timer } from "lucide-react";
 import { SettingsRow } from "#/components/settings-rows";
 import type { VspDefinition, VspDefinitionField } from "#/lib/aqualink/client";
@@ -122,15 +121,6 @@ export function PumpMasterSpeeds({
 					value={definition.freezeProtectSpeed ?? min}
 				/>
 			</SettingsRow>
-
-			<Card>
-				<Card.Description>
-					The panel runs these on its own initiative. Priming clears the basket
-					before a filter cycle; freeze protection turns the pump over when the
-					air temperature drops far enough to put the plumbing at risk. Minimum
-					and maximum bound every feature speed above.
-				</Card.Description>
-			</Card>
 		</div>
 	);
 }

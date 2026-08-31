@@ -125,7 +125,7 @@ export function PumpSlotList({ serial }: { serial: string }) {
 	const noneInstalled = installed.length === 0;
 
 	return (
-		<div className="space-y-8">
+		<div className="space-y-6">
 			{noneInstalled ? (
 				<Card>
 					<Card.Title>No pumps installed</Card.Title>
@@ -155,7 +155,7 @@ export function PumpSlotList({ serial }: { serial: string }) {
 						</Button>
 					</Disclosure.Heading>
 					<Disclosure.Content>
-						<Disclosure.Body className="space-y-8 pt-4">
+						<Disclosure.Body className="space-y-6 pt-4">
 							<EmptyGroup
 								description="Legacy Jandy JEP, AUT and SVRS pumps have no serial the panel can read, so these four slots are claimed by the DIP switches on the pump itself."
 								serial={serial}
