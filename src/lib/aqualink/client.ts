@@ -851,9 +851,16 @@ export function getVspAppModelSerials(serial: string): Promise<Raw> {
 export function getMasterDeviceList(
 	serial: string,
 	listType: "0" | "1" | "2" = "0",
+	/**
+	 * Which pump's speeds to list. Mandatory for `listType=2` and meaningless
+	 * for the others — the panel rejects the type outright without it, naming
+	 * the range it wants in the error, which is how the requirement was found.
+	 */
+	vspId?: number,
 ): Promise<Raw> {
 	return client.sessionRequest(serial, CMD_GET_MASTER_DEVICE_LIST, {
 		listType,
+		...(vspId === undefined ? {} : { vspId: String(vspId) }),
 	});
 }
 
@@ -1712,7 +1719,10 @@ export async function getScheduleDevices(
 	serial: string,
 	listType: "0" | "1" = "1",
 ): Promise<ScheduleDevice[]> {
-	const raw = await getMasterDeviceList(serial, listType);
+	return readDeviceList(await getMasterDeviceList(serial, listType));
+}
+
+function readDeviceList(raw: Raw): ScheduleDevice[] {
 	if (!Array.isArray(raw.deviceList))
 		throw new AqualinkError("No device list reported", undefined, raw);
 	return rows(raw.deviceList).map(
@@ -1722,6 +1732,58 @@ export async function getScheduleDevices(
 			isVsp: String(d.isVSP ?? "").toLowerCase() === "yes",
 		}),
 	);
+}
+
+/** One of a pump's configured speeds, in the id space a schedule names. */
+export interface ScheduleSpeed {
+	/** The speed's own id — this is what a speed schedule puts in `deviceId`. */
+	id: number;
+	name: string;
+	/** The pump that owns it, which the schedule carries as `vspId`. */
+	pumpId: number;
+	pumpName: string;
+}
+
+/**
+ * The speeds every variable-speed pump on this panel offers, in one table.
+ *
+ * A schedule against a pump speed is addressed in a way worth stating plainly,
+ * because it is the reverse of what the field names suggest: `deviceId` holds
+ * the *speed* and `vspId` holds the *pump*. A real one from this pad reads
+ * `deviceId: 110, vspId: 54` — speed 110 is "Low", pump 54 is the waterfall.
+ * So the schedule list alone cannot name such a program at all: 110 does not
+ * appear in the device list a schedule is otherwise read through, and without
+ * this table the row says "Device 110".
+ *
+ * One request per pump, because `listType=2` answers about one pump at a time.
+ * They are sent in series rather than at once — the panel works through
+ * commands one by one, and three parallel asks would only queue behind each
+ * other with less to show for it. A pump that fails to answer is skipped
+ * rather than failing the lot, since a table missing one pump still names
+ * every schedule belonging to the others.
+ */
+export async function getScheduleSpeeds(
+	serial: string,
+	pumps: readonly ScheduleDevice[],
+): Promise<ScheduleSpeed[]> {
+	const speeds: ScheduleSpeed[] = [];
+	for (const pump of pumps) {
+		try {
+			const list = readDeviceList(
+				await getMasterDeviceList(serial, "2", pump.id),
+			);
+			for (const s of list)
+				speeds.push({
+					id: s.id,
+					name: s.name,
+					pumpId: pump.id,
+					pumpName: pump.name,
+				});
+		} catch {
+			// Named by its number on the row rather than not listed at all.
+		}
+	}
+	return speeds;
 }
 
 /** The fields an added or edited schedule carries. */
@@ -1738,6 +1800,22 @@ export interface ScheduleSpec {
 	 * like "Wednesday". Only ever one value, never a list.
 	 */
 	days: string;
+	/**
+	 * The pump, when this program runs one of its speeds rather than a relay.
+	 *
+	 * The pairing is the reverse of what the two names suggest, and it is worth
+	 * stating because getting it backwards would point a program at the wrong
+	 * equipment: `deviceId` holds the *speed* and this holds the *pump that owns
+	 * it*. A real one off this pad reads `deviceId: 110, vspId: 54` — speed 110
+	 * is "Low" and pump 54 is the waterfall.
+	 *
+	 * Null or absent for an ordinary on/off program, and left off the request
+	 * entirely in that case rather than sent empty. An edit must carry back
+	 * whatever the schedule already had: dropping it would turn a speed program
+	 * into a plain one addressed by a device number that means nothing on its
+	 * own.
+	 */
+	vspId?: number | null;
 }
 
 function scheduleParams(spec: ScheduleSpec): Payload {
@@ -1748,6 +1826,7 @@ function scheduleParams(spec: ScheduleSpec): Payload {
 		stopHrs: String(spec.stopHrs),
 		stopMins: String(spec.stopMins),
 		scheduleDays: spec.days,
+		...(spec.vspId == null ? {} : { vspId: String(spec.vspId) }),
 	};
 }
 

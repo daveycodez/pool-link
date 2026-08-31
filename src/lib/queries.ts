@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { useMemo, useSyncExternalStore } from "react";
 import type {
+	ScheduleDevice,
 	ScheduleList,
 	ScheduleSpec,
 	SwcBoostControl,
@@ -27,6 +28,7 @@ import {
 	getDeviceStatus,
 	getScheduleDevices,
 	getScheduleList,
+	getScheduleSpeeds,
 	getSwcConfig,
 	homeScreen,
 	iclGetInfo,
@@ -487,6 +489,34 @@ export function usePanel(serial: string | undefined) {
 		// Persisted, so like the macros it has to outlive maxAge to come back.
 		gcTime: PERSIST_GC_TIME_MS,
 	});
+	/**
+	 * The speeds a schedule can name, which only exist to be read through.
+	 *
+	 * Gated on the device table having named at least one pump, the way `useSwc`
+	 * gates on the home screen's own answer: this costs a request per pump, and
+	 * a panel with no variable-speed pump — most of them — must never send one.
+	 * Chained rather than parallel because it cannot be asked until that table
+	 * says which ids are pumps.
+	 *
+	 * Kept out of `isPending` deliberately, unlike the two above. A speed
+	 * schedule is uncommon and a page that waits for this would hold every
+	 * screen on three sequential requests for a table most pads have no use for.
+	 * A row whose speed is not named yet says so and then fills in.
+	 */
+	const pumps = useMemo(
+		() => (scheduleDevices.data ?? []).filter((d) => d.isVsp),
+		[scheduleDevices.data],
+	);
+	const scheduleSpeeds = useQuery({
+		queryKey: keys.scheduleSpeeds(uid, serial ?? "-"),
+		queryFn:
+			ready && serial && pumps.length
+				? () => getScheduleSpeeds(serial, pumps)
+				: skipToken,
+		staleTime: Number.POSITIVE_INFINITY,
+		refetchOnWindowFocus: false,
+		gcTime: PERSIST_GC_TIME_MS,
+	});
 
 	const snapshot = useMemo(
 		() =>
@@ -511,6 +541,7 @@ export function usePanel(serial: string | undefined) {
 		data,
 		schedules,
 		scheduleDevices,
+		scheduleSpeeds,
 		// All of them, so the screen never paints half-built. Macros and the
 		// schedule device table can satisfy this from storage where the readings
 		// cannot — which is the point of splitting them: the cacheable ones stop
@@ -537,6 +568,7 @@ export function usePanel(serial: string | undefined) {
 			onetouch.refetch();
 			schedules.refetch();
 			scheduleDevices.refetch();
+			scheduleSpeeds.refetch();
 			// Kept out of isPending/isFetching above and only refetched here: on
 			// nearly every pad this query is a skipToken, which never leaves the
 			// pending state — folding it into those would hold the whole screen on
@@ -1864,5 +1896,27 @@ export function useDeleteSchedule(serial: string | undefined) {
 		},
 		onSuccess: (list) => cache.seed(list),
 		onSettled: () => cache.invalidate(),
+	});
+}
+
+/**
+ * The pump speeds a schedule can name, for a page that lists programs without
+ * mounting the panel. Same key and same options as `usePanel`'s copy — see
+ * `useSchedules` for why both exist and why they must not disagree.
+ */
+export function useScheduleSpeeds(
+	serial: string | undefined,
+	pumps: readonly ScheduleDevice[],
+) {
+	const uid = useUserId();
+	return useQuery({
+		queryKey: keys.scheduleSpeeds(uid, serial ?? "-"),
+		queryFn:
+			uid && serial && pumps.length
+				? () => getScheduleSpeeds(serial, pumps)
+				: skipToken,
+		staleTime: Number.POSITIVE_INFINITY,
+		refetchOnWindowFocus: false,
+		gcTime: PERSIST_GC_TIME_MS,
 	});
 }

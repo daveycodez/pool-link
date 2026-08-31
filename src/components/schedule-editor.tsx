@@ -7,7 +7,7 @@ import {
 	TimeField,
 } from "@heroui/react";
 import { Time } from "@internationalized/date";
-import { Trash2, Zap } from "lucide-react";
+import { Clock, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { presetIcon } from "#/components/preset-icons";
 import type {
@@ -86,6 +86,19 @@ export function ScheduleEditor({
 		new Time(schedule?.stopHrs ?? 17, schedule?.stopMins ?? 0),
 	);
 
+	/**
+	 * Whether this program runs a pump speed rather than a relay.
+	 *
+	 * Such a program is addressed by two ids — the speed in `deviceId` and its
+	 * pump in `vspId` — and this form can only offer the one list. So the
+	 * equipment field is fixed for it, and the pair is carried back untouched on
+	 * save: the times and the days are still the owner's to change, and what
+	 * they must not do by accident is have the speed silently rewritten into a
+	 * device number that means nothing without its pump. Offering the speeds
+	 * properly is a feature; quietly breaking one is a bug.
+	 */
+	const speedProgram = schedule?.vspId != null;
+
 	const overnight = isOvernight(
 		start.hour,
 		start.minute,
@@ -112,6 +125,7 @@ export function ScheduleEditor({
 								    the page, and the default carries a shadow of its own that
 								    reads as a second layer stacked on the first. */}
 								<Select
+									isDisabled={speedProgram}
 									onSelectionChange={(key) => setDeviceId(Number(key))}
 									placeholder="Select equipment"
 									selectedKey={String(deviceId)}
@@ -161,7 +175,7 @@ export function ScheduleEditor({
 										onChange={(v) => v && setStart(v)}
 										value={start}
 									>
-										<Label>Start</Label>
+										<Label>Start time</Label>
 										{/* The lower-emphasis variant, because a dialog is an
 										    elevated surface and the default field would sit at
 										    the same depth as the thing holding it. */}
@@ -169,6 +183,9 @@ export function ScheduleEditor({
 											<TimeField.Input>
 												{(segment) => <TimeField.Segment segment={segment} />}
 											</TimeField.Input>
+											<TimeField.Suffix>
+												<Clock className="size-4 text-muted" />
+											</TimeField.Suffix>
 										</TimeField.Group>
 									</TimeField>
 									<TimeField
@@ -178,11 +195,14 @@ export function ScheduleEditor({
 										onChange={(v) => v && setStop(v)}
 										value={stop}
 									>
-										<Label>Stop</Label>
+										<Label>End time</Label>
 										<TimeField.Group variant="secondary">
 											<TimeField.Input>
 												{(segment) => <TimeField.Segment segment={segment} />}
 											</TimeField.Input>
+											<TimeField.Suffix>
+												<Clock className="size-4 text-muted" />
+											</TimeField.Suffix>
 										</TimeField.Group>
 									</TimeField>
 								</div>
@@ -261,6 +281,7 @@ export function ScheduleEditor({
 										stopHrs: stop.hour,
 										stopMins: stop.minute,
 										days,
+										vspId: schedule?.vspId ?? null,
 									})
 								}
 								slot="close"

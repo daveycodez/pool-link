@@ -92,6 +92,10 @@ const PERSISTED = new Set([
 	// a correct answer from a minute ago until the poll replaces it.
 	"panel:schedules",
 	"panel:scheduleDevices",
+	// The speeds those devices offer, on the same argument and at a higher
+	// price: one request per pump, for names that change when a pump is
+	// reconfigured and not otherwise.
+	"panel:scheduleSpeeds",
 ]);
 
 const persister = createAsyncStoragePersister({

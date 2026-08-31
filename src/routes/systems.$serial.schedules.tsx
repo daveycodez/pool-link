@@ -1,6 +1,7 @@
 import { Button, Card, Chip } from "@heroui/react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, Zap } from "lucide-react";
+import { useMemo } from "react";
 import { CardColumns } from "#/components/card-columns";
 import { IconCircle } from "#/components/device-row";
 import { Loading } from "#/components/loading";
@@ -10,12 +11,14 @@ import type {
 	Schedule,
 	ScheduleDevice,
 	ScheduleSpec,
+	ScheduleSpeed,
 } from "#/lib/aqualink/client";
 import {
 	useAddSchedule,
 	useDeleteSchedule,
 	useEditSchedule,
 	useScheduleDevices,
+	useScheduleSpeeds,
 	useSchedules,
 } from "#/lib/queries";
 import { dayLabel, isOvernight, windowLabel } from "#/lib/schedule";
@@ -58,11 +61,46 @@ function deviceName(id: number, devices: ScheduleDevice[]): string {
 	return devices.find((d) => d.id === id)?.name ?? `Device ${id}`;
 }
 
+/**
+ * What a program runs, in the two words an owner would use for it.
+ *
+ * A program against a relay names it directly. A program against a pump speed
+ * names two things and neither is where you would expect: the speed sits in
+ * `deviceId` and the pump in `vspId`, so reading such a row the ordinary way
+ * looks up a speed id in the device list, finds nothing, and calls it "Device
+ * 110". The speed table is the other half of the answer, and it is fetched
+ * separately because it costs a request per pump.
+ *
+ * Either half can be missing — a table still loading, a pad that would not
+ * answer for one pump — and a number stands in when it is. A program the app
+ * cannot fully name is still a program that runs equipment, and saying "Speed
+ * 110" out loud is more use than hiding it.
+ */
+function scheduleTarget(
+	schedule: Schedule,
+	devices: ScheduleDevice[],
+	speeds: ScheduleSpeed[],
+): { name: string; speed: string | null } {
+	if (schedule.vspId == null)
+		return { name: deviceName(schedule.deviceId, devices), speed: null };
+	return {
+		name: deviceName(schedule.vspId, devices),
+		speed:
+			speeds.find((s) => s.id === schedule.deviceId)?.name ??
+			`Speed ${schedule.deviceId}`,
+	};
+}
+
 function Schedules() {
 	const { serial } = Route.useParams();
 	const { pending, signedIn } = useRequireSession();
 	const schedules = useSchedules(serial);
 	const devices = useScheduleDevices(serial);
+	const pumps = useMemo(
+		() => (devices.data ?? []).filter((d) => d.isVsp),
+		[devices.data],
+	);
+	const speeds = useScheduleSpeeds(serial, pumps);
 	const add = useAddSchedule(serial);
 	const edit = useEditSchedule(serial);
 	const remove = useDeleteSchedule(serial);
@@ -87,17 +125,20 @@ function Schedules() {
 
 	const list = schedules.data;
 	const known = devices.data ?? [];
+	const knownSpeeds = speeds.data ?? [];
 	const rows = [...(list?.schedules ?? [])].sort(byAge);
 
 	/**
 	 * What a new schedule may be pointed at.
 	 *
-	 * The pump slots are held back deliberately. `listType=1` lists them
-	 * alongside the relays — the same equipment appears twice, once as a plain
-	 * device and once with `isVSP` set — but every schedule this panel has ever
-	 * shown names the plain one, and nothing has established whether a pump
-	 * schedule is written as that second id or as the first with a speed beside
-	 * it. Offering the choice would be offering to find out on somebody's pump.
+	 * The pump slots are held back, though no longer for want of knowing how
+	 * they work. `listType=1` lists them alongside the relays — the same
+	 * equipment appears twice, once plain and once with `isVSP` set — and a
+	 * program against one is written speed-in-`deviceId`, pump-in-`vspId`. What
+	 * is missing is the rest of the form: choosing a pump means then choosing
+	 * one of its speeds, and a picker that offered the pump alone would be
+	 * asking for half an answer. Existing speed programs still list and still
+	 * take a new time, so nothing here is unreachable — only unaddable.
 	 */
 	const schedulable = known.filter((d) => !d.isVsp);
 
@@ -120,13 +161,32 @@ function Schedules() {
 		/>
 	) : null;
 
+	/**
+	 * The add control, below the columns rather than dealt into them.
+	 *
+	 * Being one of the columns' own children was tried and is worse. They are
+	 * filled sequentially by a count taken from how many children there are, so
+	 * a button among them is a card as far as that arithmetic goes: four
+	 * schedules split evenly two and two, but four schedules and a button split
+	 * three and two — putting three cards against one. Closing the ragged edge
+	 * on an odd count cost a much worse imbalance on every even one.
+	 *
+	 * So it sits under the pair, and on an odd count there is white space above
+	 * it where the short column ran out. That is the columns ending unevenly,
+	 * which they do whenever the cards are of differing heights anyway; it is
+	 * not something this button can fix by standing somewhere else.
+	 */
+	const addRow = addButton ? (
+		<div className="flex justify-end">{addButton}</div>
+	) : null;
+
 	if (rows.length === 0)
 		return (
 			<div className="space-y-4">
 				<Card className="text-sm text-muted">
 					This panel is running no schedules.
 				</Card>
-				<div className="flex justify-end">{addButton}</div>
+				{addRow}
 			</div>
 		);
 
@@ -137,6 +197,7 @@ function Schedules() {
 					<ScheduleRow
 						devices={known}
 						schedulable={schedulable}
+						speeds={knownSpeeds}
 						editError={edit.error}
 						isPending={edit.isPending || remove.isPending}
 						key={schedule.id}
@@ -147,7 +208,7 @@ function Schedules() {
 				))}
 			</CardColumns>
 
-			<div className="flex justify-end">{addButton}</div>
+			{addRow}
 		</div>
 	);
 }
@@ -160,6 +221,7 @@ function ScheduleRow({
 	onSave,
 	schedulable,
 	schedule,
+	speeds,
 }: {
 	/** Everything the panel can name, which is what a row is titled from. */
 	devices: ScheduleDevice[];
@@ -170,8 +232,10 @@ function ScheduleRow({
 	/** The narrower set a schedule may be pointed at — see `schedulable`. */
 	schedulable: ScheduleDevice[];
 	schedule: Schedule;
+	/** Every pump speed the panel named, for the programs that run one. */
+	speeds: ScheduleSpeed[];
 }) {
-	const name = deviceName(schedule.deviceId, devices);
+	const { name, speed } = scheduleTarget(schedule, devices, speeds);
 	const overnight = isOvernight(
 		schedule.startHrs,
 		schedule.startMins,
@@ -237,13 +301,25 @@ function ScheduleRow({
 			</div>
 
 			<ScheduleEditor
-				// Whatever this schedule already points at stays selectable even when
-				// it is a pump slot the Add picker withholds, so opening a program and
-				// saving it cannot silently move it to another piece of equipment.
+				// Whatever this schedule already points at stays selectable, so opening
+				// a program and saving it cannot silently move it to other equipment.
+				// A speed program is the case that needs saying twice: its `deviceId`
+				// is a speed and appears in no device list at all, so it is handed in
+				// as an entry of its own, named the way the row above names it. The
+				// editor fixes that field rather than offering the list — see
+				// `speedProgram` there.
 				devices={
-					schedulable.some((d) => d.id === schedule.deviceId)
-						? schedulable
-						: devices.filter((d) => !d.isVsp || d.id === schedule.deviceId)
+					speed
+						? [
+								{
+									id: schedule.deviceId,
+									name: `${name} — ${speed}`,
+									isVsp: false,
+								},
+							]
+						: schedulable.some((d) => d.id === schedule.deviceId)
+							? schedulable
+							: devices.filter((d) => !d.isVsp || d.id === schedule.deviceId)
 				}
 				error={editError}
 				isPending={isPending}

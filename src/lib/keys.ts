@@ -65,6 +65,14 @@ export const keys = {
 	 */
 	scheduleDevices: (uid: string, serial: string) =>
 		[uid, "panel", serial, "scheduleDevices"] as const,
+	/**
+	 * The pump speeds a schedule can name. Separate from the device table above
+	 * because it costs one request per pump and is only wanted where a schedule
+	 * actually names a speed — and because it cannot be asked for until that
+	 * table has said which devices are pumps.
+	 */
+	scheduleSpeeds: (uid: string, serial: string) =>
+		[uid, "panel", serial, "scheduleSpeeds"] as const,
 	status: (uid: string, serial: string) => [uid, "status", serial] as const,
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,
