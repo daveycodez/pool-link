@@ -110,9 +110,11 @@ export function InstallPrompt() {
 					{/* The base styles separate title from description by one weight
 					    step at the same size, which at 14px is barely a difference —
 					    and the description below is the longer line of the two. */}
-					<Alert.Title className="font-semibold">Install Web App</Alert.Title>
+					<Alert.Title className="font-semibold">
+						Install Pool Link App
+					</Alert.Title>
 					<Alert.Description>
-						Add Pool Link to your home screen
+						Add it to your home screen
 						{/* No button to press on iOS, so the one line it gets has to
 						    carry the way there as well as the reason. */}
 						{manual ? " — tap Share, then Add to Home Screen" : null}
