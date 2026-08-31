@@ -13,7 +13,11 @@ import type {
 	ScheduleSpec,
 	SwcBoostControl,
 	SwcConfig,
+	VspDefinition,
+	VspDefinitionField,
 	VspPump,
+	VspSlot,
+	VspSlotSetup,
 } from "#/lib/aqualink/client";
 import {
 	addDevice,
@@ -30,6 +34,9 @@ import {
 	getScheduleList,
 	getScheduleSpeeds,
 	getSwcConfig,
+	getVspDefinition,
+	getVspSlotSpeeds,
+	getVspSlots,
 	homeScreen,
 	iclGetInfo,
 	iclSetBrightness,
@@ -43,13 +50,18 @@ import {
 	logout,
 	onetouchScreen,
 	pumpForDevice,
+	setAuxSpeed,
 	setDeviceName,
 	setDimmerLevel,
 	setHpmSetPoint,
 	setLightColor,
 	setOnetouch,
+	setSpeedName,
+	setSpeedNameValue,
 	setSwcOutput,
 	setTemps,
+	setVspDefinitionField,
+	setVspName,
 	setVspSpeed,
 	switchHpmMode,
 	toggleDevice,
@@ -1639,6 +1651,337 @@ export function useSetVspSpeed(serial: string | undefined) {
 			qc.invalidateQueries({ queryKey: qk });
 			qc.invalidateQueries({ queryKey: keys.panel(uid, serial ?? "-") });
 		},
+	});
+}
+
+/**
+ * Every pump slot the panel has, empty ones included.
+ *
+ * Two requests for all twenty, and never polled. What this answers is which
+ * slot holds which pump, which cannot change while anybody is looking at it —
+ * installing a pump is not something that happens between refetches. It moves
+ * when this app's own writes move it, and those invalidate it.
+ */
+export function useVspSlots(serial: string | undefined) {
+	const uid = useUserId();
+	return useQuery({
+		queryKey: keys.vspSlots(uid, serial ?? "-"),
+		queryFn: uid && serial ? () => getVspSlots(serial) : skipToken,
+		staleTime: Number.POSITIVE_INFINITY,
+		refetchOnWindowFocus: false,
+		gcTime: PERSIST_GC_TIME_MS,
+	});
+}
+
+/**
+ * The per-slot definitions: unit, model, and the speeds the panel runs unasked.
+ *
+ * One request per *installed* slot, so it is gated on the slot table having
+ * found one — the chained shape `scheduleSpeeds` uses, and for the sharper
+ * version of its reason. There are twenty slots and most pads fill none of
+ * them; asking unconditionally would buy a bare panel twenty rejected requests
+ * to learn nothing, every cycle, forever.
+ *
+ * Never polled and persisted, because this is the most static thing the app
+ * reads. It is also not only the setup pages' data: `unit` is what tells the
+ * equipment page whether a pump's speeds are RPM or GPM, and that page has no
+ * other source for it.
+ */
+export function useVspDefinitions(serial: string | undefined) {
+	const uid = useUserId();
+	const slots = useVspSlots(serial);
+	const installed = useMemo(
+		() => (slots.data ?? []).filter((s) => s.installed).map((s) => s.slotId),
+		[slots.data],
+	);
+
+	return useQuery({
+		queryKey: keys.vspDefs(uid, serial ?? "-"),
+		queryFn:
+			uid && serial && installed.length
+				? async () => {
+						// One at a time, which is how the panel answers anyway: it
+						// serialises commands over RS-485, so firing these together
+						// does not make them land sooner and does put three requests
+						// in a queue that everything else on screen is also waiting
+						// in. `getScheduleSpeeds` reads its per-pump table the same
+						// way, and for the same reason.
+						const defs: VspDefinition[] = [];
+						for (const slotId of installed) {
+							try {
+								defs.push(await getVspDefinition(serial, slotId));
+							} catch {
+								// A slot that will not describe itself costs its own
+								// unit label and nothing else, so the rest still load.
+							}
+						}
+						return defs;
+					}
+				: skipToken,
+		staleTime: Number.POSITIVE_INFINITY,
+		refetchOnWindowFocus: false,
+		gcTime: PERSIST_GC_TIME_MS,
+	});
+}
+
+/**
+ * The unit one pump counts its speeds in, for labelling them.
+ *
+ * Falls back to RPM rather than to nothing. A speed with no unit beside it
+ * reads as a bare number and invites the reader to supply the wrong one from
+ * habit, which is the whole failure this exists to prevent — and RPM is what
+ * the overwhelming majority of these pumps actually are. The fallback is only
+ * ever seen before the definitions land or on a panel that declines to say.
+ */
+export function useSpeedUnit(serial: string | undefined, slotId?: number) {
+	const defs = useVspDefinitions(serial);
+	const def = defs.data?.find((d) => d.slotId === slotId);
+	return (def?.unit || "rpm").toUpperCase();
+}
+
+/** One slot's eight speeds and aux bindings, for the page that edits them. */
+export function useVspSlotSpeeds(
+	serial: string | undefined,
+	slotId: number | undefined,
+) {
+	const uid = useUserId();
+	return useQuery({
+		queryKey: keys.vspSlotSpeeds(uid, serial ?? "-", slotId ?? 0),
+		queryFn:
+			uid && serial && slotId
+				? () => getVspSlotSpeeds(serial, slotId)
+				: skipToken,
+		staleTime: STALE_MS,
+		refetchOnWindowFocus: false,
+	});
+}
+
+/**
+ * The pump configuration writes.
+ *
+ * None of these has ever been sent to a panel — not by this app, not by
+ * upstream, not by anybody who wrote any of it down. What they have instead is
+ * the vendor's own client, which builds these exact query strings, and that is
+ * the strongest evidence available short of firing one. It is not the same
+ * thing as having fired one.
+ *
+ * They take no hold key. Hold keys exist so a poll cannot overwrite a light
+ * that is still pulsing or a pad that is still settling, and both are about
+ * equipment doing something in the world over time. Nothing here asks equipment
+ * to do anything: these change what the panel *knows*, the answer is true the
+ * moment it is stored, and a refetch that lands immediately after simply reads
+ * back what was written.
+ *
+ * Optimistic on the same model as `useSetPoint` — snapshot, patch, roll back on
+ * rejection, invalidate on settle — because a name typed into a dialog should
+ * appear when the dialog closes and not a request later.
+ */
+export function useSetPumpName(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.vspSlots(uid, serial ?? "-");
+	return useMutation({
+		mutationFn: ({ slotId, name }: { slotId: number; name: string }) =>
+			setVspName(serial as string, slotId, name),
+		onMutate: async ({ slotId, name }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData<VspSlot[]>(qk);
+			qc.setQueryData(qk, (old: VspSlot[] | undefined) =>
+				old?.map((s) => (s.slotId === slotId ? { ...s, name } : s)),
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		// The equipment page reads pump names out of its own query, which has no
+		// idea this one moved.
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: qk });
+			qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") });
+		},
+	});
+}
+
+/**
+ * Rename a speed and set what it is worth, together.
+ *
+ * Two commands, because the panel has no single one that carries both, and the
+ * dialog that calls this edits both at once. Only what actually changed is
+ * sent: reasserting a name that was already right would be a second write on
+ * an RS-485 line for no reason, and every command sent is a chance to be
+ * rejected.
+ *
+ * Sequential rather than parallel. The panel answers one command at a time and
+ * two in flight against the same slot is the shape most likely to find that
+ * out the hard way.
+ */
+export function useSetSpeed(serial: string | undefined, slotId: number) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.vspSlotSpeeds(uid, serial ?? "-", slotId);
+	return useMutation({
+		mutationFn: async ({
+			speedId,
+			name,
+			value,
+		}: {
+			speedId: number;
+			name?: string;
+			value?: number;
+		}) => {
+			if (name !== undefined)
+				await setSpeedName(serial as string, slotId, speedId, name);
+			if (value !== undefined)
+				await setSpeedNameValue(serial as string, slotId, speedId, value);
+		},
+		onMutate: async ({ speedId, name, value }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData<VspSlotSetup>(qk);
+			qc.setQueryData(qk, (old: VspSlotSetup | undefined) =>
+				old
+					? {
+							...old,
+							speeds: old.speeds.map((s) =>
+								s.id === speedId
+									? {
+											...s,
+											name: name ?? s.name,
+											rpm: value ?? s.rpm,
+										}
+									: s,
+							),
+						}
+					: old,
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: qk });
+			qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") });
+		},
+	});
+}
+
+/**
+ * Move a speed from one aux relay to another, or off relays entirely.
+ *
+ * The panel stores this the other way round from how anyone edits it: the
+ * binding lives on the *aux*, one speed each, and there is no command that
+ * takes a speed and asks where it should go. So a move is two writes — clear
+ * the relay the speed used to be on, then claim the new one — and clearing is
+ * `speedId: 0` with the aux still named, since no unassign command exists.
+ *
+ * Order matters. Releasing first means a rejected second write leaves the speed
+ * on no relay, which is visible and recoverable; claiming first would leave one
+ * speed on two relays if the release failed, and the panel would then answer
+ * for a pump twice.
+ *
+ * This is the write behind `pumpForDevice`, so it decides which pump the rest
+ * of the app believes a relay belongs to — hence the panel invalidation
+ * alongside.
+ */
+export function useSetAuxSpeed(serial: string | undefined, slotId: number) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.vspSlotSpeeds(uid, serial ?? "-", slotId);
+	return useMutation({
+		mutationFn: async ({
+			speedId,
+			auxId,
+			previousAuxId,
+		}: {
+			speedId: number;
+			/** The aux to bind to, or 0 to leave this speed on no relay. */
+			auxId: number;
+			previousAuxId: number;
+		}) => {
+			if (previousAuxId && previousAuxId !== auxId)
+				await setAuxSpeed(serial as string, slotId, 0, previousAuxId);
+			if (auxId) await setAuxSpeed(serial as string, slotId, speedId, auxId);
+		},
+		onMutate: async ({ speedId, auxId, previousAuxId }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData<VspSlotSetup>(qk);
+			qc.setQueryData(qk, (old: VspSlotSetup | undefined) =>
+				old
+					? {
+							...old,
+							auxSpeeds: old.auxSpeeds.map((s, i) => {
+								if (previousAuxId && i === previousAuxId - 1) return 0;
+								if (auxId && i === auxId - 1) return speedId;
+								return s;
+							}),
+						}
+					: old,
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		onSettled: () => {
+			qc.invalidateQueries({ queryKey: qk });
+			qc.invalidateQueries({ queryKey: keys.vsp(uid, serial ?? "-") });
+		},
+	});
+}
+
+/**
+ * One field of a pump's definition — the master speeds.
+ *
+ * `set_vsp_definition` carries exactly one field per request, which is why this
+ * takes one rather than a patch object. Only four of its seven fields are
+ * reachable from here: min, max, priming and freeze protection. The other three
+ * decide what the slot *is* — its application, its model — and are read-only in
+ * this app, since getting one wrong does not run a pump at a wrong speed, it
+ * teaches the panel a wrong fact about hardware and leaves it there.
+ */
+export function useSetPumpDefinition(serial: string | undefined) {
+	const uid = useUserId();
+	const qc = useQueryClient();
+	const qk = keys.vspDefs(uid, serial ?? "-");
+	return useMutation({
+		mutationFn: ({
+			slotId,
+			field,
+			value,
+		}: {
+			slotId: number;
+			field: Extract<
+				VspDefinitionField,
+				| "min_speed"
+				| "max_speed"
+				| "prime_speed"
+				| "prime_duration"
+				| "freezeprotect_speed"
+			>;
+			value: number;
+		}) => setVspDefinitionField(serial as string, slotId, field, value),
+		onMutate: async ({ slotId, field, value }) => {
+			await qc.cancelQueries({ queryKey: qk });
+			const prev = qc.getQueryData<VspDefinition[]>(qk);
+			const patch: Record<string, keyof VspDefinition> = {
+				min_speed: "min",
+				max_speed: "max",
+				prime_speed: "primeSpeed",
+				prime_duration: "primeDurationMinutes",
+				freezeprotect_speed: "freezeProtectSpeed",
+			};
+			qc.setQueryData(qk, (old: VspDefinition[] | undefined) =>
+				old?.map((d) =>
+					d.slotId === slotId ? { ...d, [patch[field]]: value } : d,
+				),
+			);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx?.prev) qc.setQueryData(qk, ctx.prev);
+		},
+		onSettled: () => qc.invalidateQueries({ queryKey: qk }),
 	});
 }
 

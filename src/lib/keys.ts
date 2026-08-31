@@ -81,6 +81,25 @@ export const keys = {
 	/** Prefix that matches every system's status query. */
 	statuses: (uid: string) => [uid, "status"] as const,
 	vsp: (uid: string, serial: string) => [uid, "vsp", serial] as const,
+	/**
+	 * All twenty pump slots, empty ones included — the setup pages' spine, and
+	 * outside `panel` on the same argument as `vsp`: which slot holds which
+	 * pump is wiring, and it changes when somebody installs a pump.
+	 */
+	vspSlots: (uid: string, serial: string) => [uid, "vspSlots", serial] as const,
+	/**
+	 * Per-slot commissioning data: the unit its speeds are counted in, the
+	 * model behind it, and the speeds the panel runs unasked. The most static
+	 * thing the app reads — none of it moves unless a person changes it here —
+	 * which is why it is never polled, only invalidated by its own writes.
+	 */
+	vspDefs: (uid: string, serial: string) => [uid, "vspDefs", serial] as const,
+	/**
+	 * One slot's eight speeds, unfiltered, for the page that edits them. Keyed
+	 * per slot because only the open pump is ever worth asking about.
+	 */
+	vspSlotSpeeds: (uid: string, serial: string, slotId: number) =>
+		[uid, "vspSlotSpeeds", serial, slotId] as const,
 };
 
 /**

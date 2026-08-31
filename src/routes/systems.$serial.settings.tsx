@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AddSystemRow } from "#/components/add-system";
 import { CardColumns } from "#/components/card-columns";
 import { Loading } from "#/components/loading";
+import { PumpSetupRow } from "#/components/pump-setup-rows";
 import {
 	AppearanceRow,
 	DiagnosticsRow,
@@ -35,6 +36,7 @@ function SystemSettings() {
 			<AppearanceRow />
 			<InstallRow />
 			<AddSystemRow />
+			<PumpSetupRow serial={serial} />
 			<WebTouchRow serial={serial} />
 			<DiagnosticsRow serial={serial} />
 			<MySystemsRow serial={serial} />

@@ -19,6 +19,8 @@ import { Route as SystemsSerialDiagnosticsRouteImport } from './routes/systems.$
 import { Route as SystemsSerialEquipmentRouteImport } from './routes/systems.$serial.equipment'
 import { Route as SystemsSerialSchedulesRouteImport } from './routes/systems.$serial.schedules'
 import { Route as SystemsSerialSettingsRouteImport } from './routes/systems.$serial.settings'
+import { Route as SystemsSerialPumpsIndexRouteImport } from './routes/systems.$serial.pumps.index'
+import { Route as SystemsSerialPumpsSlotIdRouteImport } from './routes/systems.$serial.pumps.$slotId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -71,6 +73,17 @@ const SystemsSerialSettingsRoute = SystemsSerialSettingsRouteImport.update({
   path: '/systems/$serial/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SystemsSerialPumpsIndexRoute = SystemsSerialPumpsIndexRouteImport.update({
+  id: '/systems/$serial/pumps/',
+  path: '/systems/$serial/pumps/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemsSerialPumpsSlotIdRoute =
+  SystemsSerialPumpsSlotIdRouteImport.update({
+    id: '/systems/$serial/pumps/$slotId',
+    path: '/systems/$serial/pumps/$slotId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -83,6 +96,8 @@ export interface FileRoutesByFullPath {
   '/systems/$serial/schedules': typeof SystemsSerialSchedulesRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
   '/systems/$serial/': typeof SystemsSerialIndexRoute
+  '/systems/$serial/pumps/$slotId': typeof SystemsSerialPumpsSlotIdRoute
+  '/systems/$serial/pumps/': typeof SystemsSerialPumpsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -95,6 +110,8 @@ export interface FileRoutesByTo {
   '/systems/$serial/schedules': typeof SystemsSerialSchedulesRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
   '/systems/$serial': typeof SystemsSerialIndexRoute
+  '/systems/$serial/pumps/$slotId': typeof SystemsSerialPumpsSlotIdRoute
+  '/systems/$serial/pumps': typeof SystemsSerialPumpsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -108,6 +125,8 @@ export interface FileRoutesById {
   '/systems/$serial/schedules': typeof SystemsSerialSchedulesRoute
   '/systems/$serial/settings': typeof SystemsSerialSettingsRoute
   '/systems/$serial/': typeof SystemsSerialIndexRoute
+  '/systems/$serial/pumps/$slotId': typeof SystemsSerialPumpsSlotIdRoute
+  '/systems/$serial/pumps/': typeof SystemsSerialPumpsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -122,6 +141,8 @@ export interface FileRouteTypes {
     | '/systems/$serial/schedules'
     | '/systems/$serial/settings'
     | '/systems/$serial/'
+    | '/systems/$serial/pumps/$slotId'
+    | '/systems/$serial/pumps/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -134,6 +155,8 @@ export interface FileRouteTypes {
     | '/systems/$serial/schedules'
     | '/systems/$serial/settings'
     | '/systems/$serial'
+    | '/systems/$serial/pumps/$slotId'
+    | '/systems/$serial/pumps'
   id:
     | '__root__'
     | '/'
@@ -146,6 +169,8 @@ export interface FileRouteTypes {
     | '/systems/$serial/schedules'
     | '/systems/$serial/settings'
     | '/systems/$serial/'
+    | '/systems/$serial/pumps/$slotId'
+    | '/systems/$serial/pumps/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -159,6 +184,8 @@ export interface RootRouteChildren {
   SystemsSerialSchedulesRoute: typeof SystemsSerialSchedulesRoute
   SystemsSerialSettingsRoute: typeof SystemsSerialSettingsRoute
   SystemsSerialIndexRoute: typeof SystemsSerialIndexRoute
+  SystemsSerialPumpsSlotIdRoute: typeof SystemsSerialPumpsSlotIdRoute
+  SystemsSerialPumpsIndexRoute: typeof SystemsSerialPumpsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -233,6 +260,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SystemsSerialSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/systems/$serial/pumps/': {
+      id: '/systems/$serial/pumps/'
+      path: '/systems/$serial/pumps'
+      fullPath: '/systems/$serial/pumps/'
+      preLoaderRoute: typeof SystemsSerialPumpsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/systems/$serial/pumps/$slotId': {
+      id: '/systems/$serial/pumps/$slotId'
+      path: '/systems/$serial/pumps/$slotId'
+      fullPath: '/systems/$serial/pumps/$slotId'
+      preLoaderRoute: typeof SystemsSerialPumpsSlotIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -247,6 +288,8 @@ const rootRouteChildren: RootRouteChildren = {
   SystemsSerialSchedulesRoute: SystemsSerialSchedulesRoute,
   SystemsSerialSettingsRoute: SystemsSerialSettingsRoute,
   SystemsSerialIndexRoute: SystemsSerialIndexRoute,
+  SystemsSerialPumpsSlotIdRoute: SystemsSerialPumpsSlotIdRoute,
+  SystemsSerialPumpsIndexRoute: SystemsSerialPumpsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

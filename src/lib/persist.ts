@@ -96,6 +96,16 @@ const PERSISTED = new Set([
 	// price: one request per pump, for names that change when a pump is
 	// reconfigured and not otherwise.
 	"scheduleSpeeds",
+	// The pump slot table and the per-slot definitions behind it. Commissioning
+	// data in the strictest sense: what pump is in which slot, what model it is,
+	// and what unit its speeds are counted in. None of it can change without a
+	// person changing it, so neither is ever polled — they are fetched once and
+	// then live here until a write on this pad's own setup pages invalidates
+	// them. `vspDefs` also carries the unit the equipment page needs to label a
+	// flow pump's speeds correctly, so persisting it is what keeps that label
+	// right on the first paint after a reload rather than a request later.
+	"vspSlots",
+	"vspDefs",
 ]);
 
 const persister = createAsyncStoragePersister({

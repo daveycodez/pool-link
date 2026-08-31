@@ -1,7 +1,7 @@
 import { Card, Description, Label, ListBox, Select } from "@heroui/react";
 import { Gauge } from "lucide-react";
 import type { VspPump } from "#/lib/aqualink/client";
-import { useSetVspSpeed, useVspPumps } from "#/lib/queries";
+import { useSetVspSpeed, useSpeedUnit, useVspPumps } from "#/lib/queries";
 import { CardColumns } from "./card-columns";
 import { IconCircle } from "./device-row";
 
@@ -37,6 +37,7 @@ export function PumpSpeeds({ serial }: { serial: string }) {
 								setSpeed.mutate({ pumpId: pump.pumpId, speedId })
 							}
 							pump={pump}
+							serial={serial}
 						/>
 					</Card>
 				))}
@@ -46,15 +47,22 @@ export function PumpSpeeds({ serial }: { serial: string }) {
 }
 
 function PumpSpeedSelect({
+	serial,
 	pump,
 	onSelect,
 	className = "w-40",
 }: {
+	serial: string;
 	pump: VspPump;
 	onSelect: (speedId: number) => void;
 	className?: string;
 }) {
 	const active = pump.speeds.find((s) => s.active);
+	// Not every pump counts speed in RPM. A flow pump reports its presets in
+	// gallons per minute over a range a tenth the size, so a hardcoded "RPM"
+	// here printed "45 RPM" at somebody whose pump was doing 45 GPM — a label
+	// that is wrong by a factor of sixty and reads as a broken pump.
+	const unit = useSpeedUnit(serial, pump.pumpId);
 
 	return (
 		<Select
@@ -82,7 +90,7 @@ function PumpSpeedSelect({
 							<div className="flex flex-col">
 								<Label>{speed.name}</Label>
 								<Description className="tabular-nums">
-									{speed.rpm} RPM
+									{speed.rpm} {unit}
 								</Description>
 							</div>
 							<ListBox.ItemIndicator />

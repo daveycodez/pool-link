@@ -27,6 +27,20 @@ import { STALE_MS, usePanel, useSession, useSystems } from "#/lib/queries";
 /** `/systems/<serial>` and anything under it. */
 const SYSTEM_PATH = /^\/systems\/([^/]+)/;
 
+/** The section directly under a system, which is what names its sub-pages. */
+const SYSTEM_SECTION = /^\/systems\/[^/]+\/([^/]+)/;
+
+/**
+ * The pages under a system that are not tab destinations, and what the header
+ * calls them. Out here rather than in the component because the chrome
+ * re-renders on a one-second tick and this is the same object every time.
+ */
+const SUB_PAGES: Record<string, string> = {
+	settings: "Settings",
+	diagnostics: "Diagnostics",
+	pumps: "Pump Setup",
+};
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
 	const session = useSession();
 	const signedIn = Boolean(session.data);
@@ -76,17 +90,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 	// Settings and diagnostics live under /systems/$serial too, but they are not
 	// tab destinations — the bar would show Pool selected while on neither.
 	const leaf = pathname.split("/").pop() ?? "";
-	const onTab =
-		Boolean(serial) && leaf !== "settings" && leaf !== "diagnostics";
+	// Pump setup is the same kind of page and cannot be recognised the same way:
+	// its own leaf is a slot number, so matching the last segment would title a
+	// pump "5" and put the tab bar back under it. The section it sits in is what
+	// identifies it, which is what this matches.
+	const section = SYSTEM_SECTION.exec(pathname)?.[1] ?? leaf;
+	// Falls back to the leaf so the account-level /settings and /diagnostics,
+	// which sit under no system at all, keep the titles they already had.
+	// hasOwn rather than a bare lookup: the section can be a serial, and a
+	// plain object would answer for "constructor" with a function.
+	const pageTitle = Object.hasOwn(SUB_PAGES, section)
+		? SUB_PAGES[section]
+		: null;
+	const onTab = Boolean(serial) && pageTitle === null;
 	// Nothing to navigate to when you are already there.
 	const onSettings = leaf === "settings";
-	// Sub-pages are titled by what they are, not by which system they belong to.
-	const pageTitle =
-		leaf === "settings"
-			? "Settings"
-			: leaf === "diagnostics"
-				? "Diagnostics"
-				: null;
 	// Live state needs a subject: a system's snapshot, or the account's system
 	// list. Account-level sub-pages have neither, so they show neither control.
 	const hasLive = Boolean(serial) || pathname === "/";
