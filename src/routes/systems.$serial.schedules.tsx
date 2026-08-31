@@ -151,7 +151,7 @@ function Schedules() {
 			error={add.error}
 			onSave={(spec) => add.mutate(spec)}
 			speeds={knownSpeeds}
-			title="New schedule"
+			title="Add schedule"
 			trigger={
 				// Solid, which is the default: adding a program is what this page is
 				// for, and a solid fill is reserved for exactly that. The equipment

@@ -21,7 +21,6 @@ import {
 	DEFAULT_SCHEDULE_DAYS,
 	dayLabel,
 	isKnownDays,
-	isOvernight,
 	SCHEDULE_DAYS,
 } from "#/lib/schedule";
 
@@ -160,14 +159,8 @@ export function ScheduleEditor({
 		? (pumpSpeeds.find((s) => s.id === speedId) ?? pumpSpeeds[0])
 		: null;
 
-	const overnight = isOvernight(
-		start.hour,
-		start.minute,
-		stop.hour,
-		stop.minute,
-	);
 	// A window that starts and ends on the same minute is the one shape the
-	// panel cannot act on, so it is the one thing this refuses to send.
+	// panel cannot act on, so it is the one thing this form remarks on.
 	const empty = start.hour === stop.hour && start.minute === stop.minute;
 
 	return (
@@ -336,16 +329,6 @@ export function ScheduleEditor({
 									</TimeField>
 								</div>
 
-								{/* Said before it is saved rather than only in the list
-								    afterwards. A stop time earlier than the start is how an
-								    overnight program is written, and it is also exactly what a
-								    typo looks like — so the form states which one it thinks
-								    this is while there is still a chance to correct it. */}
-								{overnight ? (
-									<p className="text-xs text-muted">
-										Runs overnight, ending the next morning.
-									</p>
-								) : null}
 								{empty ? (
 									<p className="text-xs text-danger" role="alert">
 										Start and stop are the same time.
