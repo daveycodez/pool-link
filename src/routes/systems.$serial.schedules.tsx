@@ -14,6 +14,7 @@ import type {
 	ScheduleSpeed,
 } from "#/lib/aqualink/client";
 import {
+	PENDING_SCHEDULE_ID,
 	useAddSchedule,
 	useDeleteSchedule,
 	useEditSchedule,
@@ -239,6 +240,14 @@ function ScheduleRow({
 	speeds: ScheduleSpeed[];
 }) {
 	const { name, speed } = scheduleTarget(schedule, devices, speeds);
+	/**
+	 * A row the panel has not acknowledged yet, sitting in the list because the
+	 * add was applied optimistically. Its id is a sentinel and addresses nothing
+	 * on the pad, so it cannot be edited or deleted — sending it back would name
+	 * a program that does not exist. It is a moment long, and it resolves into a
+	 * real row the instant the panel answers.
+	 */
+	const pending = schedule.id === PENDING_SCHEDULE_ID;
 	const overnight = isOvernight(
 		schedule.startHrs,
 		schedule.startMins,
@@ -328,6 +337,7 @@ function ScheduleRow({
 					// that has them to spare.
 					<Button
 						aria-label={`Edit ${name} schedule`}
+						isDisabled={pending}
 						size="sm"
 						variant="tertiary"
 					>

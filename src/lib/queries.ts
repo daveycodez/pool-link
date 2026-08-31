@@ -1842,17 +1842,57 @@ function useScheduleCache(serial: string | undefined) {
 }
 
 /**
+ * The id a new program wears for the moment before the panel names it.
+ *
+ * The panel assigns the real one, and the ids it hands out are neither
+ * sequential nor free of gaps — this pool returned 0, 1, 2, 4, 3, 5, and reuses
+ * the ids of programs that have been deleted — so nothing here can predict it.
+ * That is why this is a sentinel rather than a guess: it is deliberately a
+ * number no panel would ever issue, so a row wearing it can be recognised as
+ * not-yet-real by anything that cares. It sorts last, which is where a program
+ * just made belongs on a page ordered oldest first.
+ */
+export const PENDING_SCHEDULE_ID = Number.MAX_SAFE_INTEGER;
+
+/**
  * Add a program.
  *
- * No optimistic insert, unlike the two below. The panel assigns the id, and the
- * ids it hands out are neither sequential nor gap-free — this pool returned 0,
- * 1, 2, 4, 3, 5 — so a placeholder would be a guess at the one field the rest
- * of the page addresses rows by. The reply carries the real list instead.
+ * Optimistic like the other two, which took a sentinel to manage: an added
+ * program has no id until the panel answers, and the id is what every row on
+ * the page is keyed and sorted by. Waiting for the answer instead made adding
+ * the one action in the feature that visibly did nothing for a second — the
+ * dialog closed on an unchanged list, which reads as a failure rather than as
+ * a wait.
+ *
+ * The row is provisional in a way callers must respect: its id addresses
+ * nothing, so anything that would send it back to the panel has to be held
+ * until the real list arrives.
  */
 export function useAddSchedule(serial: string | undefined) {
 	const cache = useScheduleCache(serial);
 	return useMutation({
 		mutationFn: (spec: ScheduleSpec) => addSchedule(serial as string, spec),
+		onMutate: async (spec) => {
+			await cache.cancel();
+			const prev = cache.snapshot();
+			cache.write((schedules) => [
+				...schedules,
+				{
+					id: PENDING_SCHEDULE_ID,
+					deviceId: spec.deviceId,
+					startHrs: spec.startHrs,
+					startMins: spec.startMins,
+					stopHrs: spec.stopHrs,
+					stopMins: spec.stopMins,
+					days: spec.days,
+					vspId: spec.vspId ?? null,
+				},
+			]);
+			return { prev };
+		},
+		onError: (_e, _v, ctx) => {
+			if (ctx) cache.restore(ctx.prev);
+		},
 		onSuccess: (list) => cache.seed(list),
 		onSettled: () => cache.invalidate(),
 	});

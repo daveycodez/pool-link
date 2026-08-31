@@ -210,46 +210,6 @@ export function ScheduleEditor({
 									</Select.Popover>
 								</Select>
 
-								<div className="flex gap-3">
-									<TimeField
-										className="flex-1"
-										granularity="minute"
-										hourCycle={12}
-										onChange={(v) => v && setStart(v)}
-										value={start}
-									>
-										<Label>Start time</Label>
-										{/* The lower-emphasis variant, because a dialog is an
-										    elevated surface and the default field would sit at
-										    the same depth as the thing holding it. */}
-										<TimeField.Group variant="secondary">
-											<TimeField.Input>
-												{(segment) => <TimeField.Segment segment={segment} />}
-											</TimeField.Input>
-											<TimeField.Suffix>
-												<Clock className="size-4 text-muted" />
-											</TimeField.Suffix>
-										</TimeField.Group>
-									</TimeField>
-									<TimeField
-										className="flex-1"
-										granularity="minute"
-										hourCycle={12}
-										onChange={(v) => v && setStop(v)}
-										value={stop}
-									>
-										<Label>End time</Label>
-										<TimeField.Group variant="secondary">
-											<TimeField.Input>
-												{(segment) => <TimeField.Segment segment={segment} />}
-											</TimeField.Input>
-											<TimeField.Suffix>
-												<Clock className="size-4 text-muted" />
-											</TimeField.Suffix>
-										</TimeField.Group>
-									</TimeField>
-								</div>
-
 								{/* Only for equipment that has speeds, and only once the panel
 								    has named them. A pump program is two choices — which pump,
 								    then how fast — and the second has nowhere to live until the
@@ -304,6 +264,46 @@ export function ScheduleEditor({
 										</ListBox>
 									</Select.Popover>
 								</Select>
+
+								<div className="flex gap-3">
+									<TimeField
+										className="flex-1"
+										granularity="minute"
+										hourCycle={12}
+										onChange={(v) => v && setStart(v)}
+										value={start}
+									>
+										<Label>Start time</Label>
+										{/* The lower-emphasis variant, because a dialog is an
+										    elevated surface and the default field would sit at
+										    the same depth as the thing holding it. */}
+										<TimeField.Group variant="secondary">
+											<TimeField.Input>
+												{(segment) => <TimeField.Segment segment={segment} />}
+											</TimeField.Input>
+											<TimeField.Suffix>
+												<Clock className="size-4 text-muted" />
+											</TimeField.Suffix>
+										</TimeField.Group>
+									</TimeField>
+									<TimeField
+										className="flex-1"
+										granularity="minute"
+										hourCycle={12}
+										onChange={(v) => v && setStop(v)}
+										value={stop}
+									>
+										<Label>End time</Label>
+										<TimeField.Group variant="secondary">
+											<TimeField.Input>
+												{(segment) => <TimeField.Segment segment={segment} />}
+											</TimeField.Input>
+											<TimeField.Suffix>
+												<Clock className="size-4 text-muted" />
+											</TimeField.Suffix>
+										</TimeField.Group>
+									</TimeField>
+								</div>
 
 								{/* Said before it is saved rather than only in the list
 								    afterwards. A stop time earlier than the start is how an
