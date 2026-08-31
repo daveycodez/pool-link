@@ -84,7 +84,7 @@ html[data-theme="dark"] {
   --surface-tertiary: oklch(27.21% 0.0135 224.65);
   --overlay: oklch(21.03% 0.0180 224.65);
   --default: oklch(27.40% 0.0090 224.65);
-  --accent: color-mix(in oklab, var(--color-cyan-400, #00D3F2) 50%, var(--color-teal-400, #00D5BE) 50%);
+  --accent: color-mix(in oklab, var(--color-cyan-500, #00B8DB) 50%, var(--color-teal-500, #00BBA7) 50%);
   --accent-foreground: var(--eclipse);
   --success: oklch(73.29% 0.1970 147.31);
   --warning: oklch(82.03% 0.1413 72.84);
