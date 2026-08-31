@@ -72,6 +72,18 @@ function ios(): boolean {
 	);
 }
 
+/**
+ * Whether the browser will ever offer an install of its own.
+ *
+ * Chromium defines the handler property whether or not the event ever fires;
+ * WebKit defines nothing at all. Asked as a feature rather than read off the
+ * user agent, because the agent string is a guess and this is not — a Mac that
+ * answers this yes is a Chrome that can prompt, whatever it calls itself, and
+ * pointing it at a Share menu it does not have is the one wrong answer here.
+ */
+const CAN_EVENT =
+	typeof window !== "undefined" && "onbeforeinstallprompt" in window;
+
 /** Constant for the life of the tab, so it is settled once rather than asked. */
 const IOS = typeof navigator === "undefined" ? false : ios();
 
@@ -132,7 +144,7 @@ export function useInstall(): Install {
 		installed,
 		// `state !== null` is the mounted check: on the server, and on the render
 		// that matches it, this app knows of no iPhone.
-		manual: state !== null && IOS && !installed,
+		manual: state !== null && IOS && !CAN_EVENT && !installed,
 		install,
 	};
 }

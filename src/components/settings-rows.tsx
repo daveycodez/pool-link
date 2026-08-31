@@ -21,6 +21,7 @@ import {
 	LogOut,
 	MapPinHouse,
 	Pencil,
+	Share,
 	Stethoscope,
 	SunMoon,
 	Tag,
@@ -275,9 +276,15 @@ export function InstallRow() {
 					Install
 				</Button>
 			) : (
-				// iOS has no gesture to offer, only a menu to point at.
-				<span className="text-end text-muted text-xs">
-					Share → Add to Home Screen
+				// iOS has no gesture to offer, only a menu to point at — and the
+				// menu is a glyph in Safari's bar, so the row shows the glyph.
+				<span className="flex shrink-0 items-center gap-1.5 text-muted text-xs">
+					<Share
+						aria-label="Share"
+						className="size-4 shrink-0 text-foreground"
+						role="img"
+					/>
+					→ Add to Home Screen
 				</span>
 			)}
 		</SettingsRow>
