@@ -67,16 +67,6 @@ export const Route = createRootRoute({
 				content: "width=device-width, initial-scale=1, viewport-fit=cover",
 			},
 			{
-				name: "theme-color",
-				content: "#030608",
-				media: "(prefers-color-scheme: dark)",
-			},
-			{
-				name: "theme-color",
-				content: "#EFF7FA",
-				media: "(prefers-color-scheme: light)",
-			},
-			{
 				name: "description",
 				content: "A fast control surface for your iAqualink pool and spa.",
 			},
@@ -149,6 +139,20 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				    UI goes on to load. Nothing in this app needs to be introduced by
 				    where it came from. */}
 				<meta content="no-referrer" name="referrer" />
+				{/* Literal rather than entries in head()'s meta array: that array is
+				    deduplicated by `name`, which ignores `media` — so of two
+				    theme-colors only the last survived, and dark mode was left with
+				    none at all. */}
+				<meta
+					content="#030608"
+					media="(prefers-color-scheme: dark)"
+					name="theme-color"
+				/>
+				<meta
+					content="#EFF7FA"
+					media="(prefers-color-scheme: light)"
+					name="theme-color"
+				/>
 				<HeadContent />
 				{/*
 				 * Chrome fires beforeinstallprompt the moment it judges the page
