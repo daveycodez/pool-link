@@ -128,7 +128,7 @@ export const Route = createRootRoute({
 			{
 				rel: "apple-touch-icon",
 				sizes: "180x180",
-				href: `${base}icons/apple-touch-icon.png?v=3`,
+				href: `${base}icons/apple-touch-icon.png?v=4`,
 			},
 		],
 	}),

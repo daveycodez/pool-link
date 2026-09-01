@@ -44,7 +44,8 @@ const WAVES = [
  * @param stroke    lucide stroke width, in 24x24 units
  * @param bare      no plate behind the mark, for the icon iOS repaints itself
  * @param glow      lit from behind; off for the home screen icon, which wants
- *                  the app's own background colour and nothing else
+ *                  a flat ground and nothing else
+ * @param ground    the plate's colour, defaulting to the app's background
  * @param ink       the mark's colour; every caller names its own, because each
  *                  is read against a different ground this file cannot see
  */
@@ -55,6 +56,7 @@ function icon({
 	stroke = 2,
 	bare = false,
 	glow = true,
+	ground = BG,
 	ink,
 }) {
 	const scale = (size * coverage) / 24;
@@ -72,7 +74,7 @@ function icon({
   </defs>
 `
 					: ""
-			}  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="${BG}"/>
+			}  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="${ground}"/>
 ${
 	glow
 		? `  <rect width="${size}" height="${size}" rx="${r}" ry="${r}" fill="url(#glow)"/>
@@ -171,12 +173,17 @@ const flatSvg = tabSvg(ACCENT_DARK);
  * the dark variant had nothing left to darken and both modes came out the same.
  * Light plate, system does the rest.
  *
+ * White rather than --background: on a home screen the icon sits against a
+ * wallpaper rather than against the app, so it wants to read as its own crisp
+ * tile. The app's near-white is faintly cool and goes slightly muddy there.
+ *
  * Full bleed: iOS applies its own squircle mask, so a radius here would only
  * round a corner that is about to be cut off anyway.
  */
 const appleSvg = icon({
 	coverage: 0.72,
 	glow: false,
+	ground: "#FFFFFF",
 	ink: ACCENT_LIGHT,
 	radius: 0,
 	size: 512,
