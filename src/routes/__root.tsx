@@ -122,13 +122,10 @@ export const Route = createRootRoute({
 			},
 			{ rel: "icon", sizes: "32x32", href: `${base}favicon.ico` },
 			// iOS ignores sizes other than 180 and applies its own squircle mask.
-			// The ?v= is a cache-buster: the icon's bytes changed after the first
-			// deploy, and a CDN that already answered for this path will keep
-			// serving the old ones until the URL itself differs.
 			{
 				rel: "apple-touch-icon",
 				sizes: "180x180",
-				href: `${base}icons/apple-touch-icon.png?v=4`,
+				href: `${base}icons/apple-touch-icon.png`,
 			},
 		],
 	}),
