@@ -32,6 +32,19 @@
 	);
 }
 
+/*
+ * No rubber band on the document. Standalone iOS bounces the whole page on
+ * any drag that has nowhere to scroll to, and the tab bar — fixed to the
+ * viewport, which is the thing being dragged — rides along with it. Home and
+ * Equipment are taller than a phone, so a drag there scrolls and the bar holds
+ * still; Schedules is a handful of cards and never was, so every touch on it
+ * bounced the bar off the bottom edge. Removing the bounce at the ends of the
+ * long pages too is the same rule, and the price of the bar never moving.
+ */
+html {
+	overscroll-behavior-y: none;
+}
+
 body {
 	@apply bg-background min-h-svh;
 }
