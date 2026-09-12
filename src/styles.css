@@ -47,7 +47,7 @@
  * much, which is the ordinary price of vh and is not paid in standalone mode.
  */
 body {
-	@apply bg-background min-h-lvh;
+	@apply bg-background min-h-screen;
 }
 
 /*
