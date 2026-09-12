@@ -33,20 +33,21 @@
 }
 
 /*
- * No rubber band on the document. Standalone iOS bounces the whole page on
- * any drag that has nowhere to scroll to, and the tab bar — fixed to the
- * viewport, which is the thing being dragged — rides along with it. Home and
- * Equipment are taller than a phone, so a drag there scrolls and the bar holds
- * still; Schedules is a handful of cards and never was, so every touch on it
- * bounced the bar off the bottom edge. Removing the bounce at the ends of the
- * long pages too is the same rule, and the price of the bar never moving.
+ * The large viewport, not the small one. Installed on an iOS home screen the
+ * small viewport stops short of the status bar, and a page that does not
+ * overflow it leaves the document that same amount short of the screen. The
+ * fixed tab bar is then laid out against that shorter box, and floats the
+ * status bar's height above where it should sit — which on a phone is the
+ * difference between Schedules, a handful of cards, and the tabs that fill
+ * the screen and were never affected. Sizing to the large viewport makes the
+ * document as tall as the screen, and the fixed box follows. Measured on iOS
+ * 26: svh and dvh read 812 on an 874-point screen until the document reached
+ * 874, at which point both caught up. In Safari proper the large viewport is
+ * the one with the toolbar collapsed, so a short page can scroll by that
+ * much, which is the ordinary price of vh and is not paid in standalone mode.
  */
-html {
-	overscroll-behavior-y: none;
-}
-
 body {
-	@apply bg-background min-h-svh;
+	@apply bg-background min-h-lvh;
 }
 
 /*

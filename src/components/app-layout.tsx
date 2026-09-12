@@ -162,10 +162,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
 	return (
 		<div
+			// lvh rather than svh for the same reason as body in styles.css: the
+			// small viewport is short of the screen in a home-screen app, and the
+			// tab bar is positioned against whichever one the document fills.
 			// Landscape puts the notch and the home indicator on the sides, so the
 			// horizontal padding is a floor rather than a fixed value — 1rem when
 			// there is no inset, the inset when it is larger.
-			className={`mx-auto flex min-h-svh w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] duration-200 fade-in ${
+			className={`mx-auto flex min-h-lvh w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] duration-200 fade-in ${
 				// How much of the page the tab bar covers, which is not one number:
 				// below `sm` the bar stacks each label under its icon to fit three
 				// destinations across a phone, so it stands taller there than it does
