@@ -51,29 +51,6 @@ body {
 }
 
 /*
- * iOS 27 draws a Liquid Glass scroll-edge blur over the status bar of a
- * home-screen app whose status bar is translucent, and it reaches about this
- * far below the safe-area inset. Anything laid out inside that band is washed
- * out before a single scroll, so the shell starts beneath it: at rest the
- * glass blurs plain background, which on a solid colour is invisible, and
- * scrolled content still passes under the clock and takes the glass, as native
- * apps do. Zero everywhere else, since Safari and desktop draw no such band;
- * -webkit-touch-callout is the iOS-only gate, so a desktop install pays
- * nothing. The depth is approximate and tuned by eye on a device.
- */
-:root {
-	--glass-edge: 0px;
-}
-
-@media (display-mode: standalone) {
-	@supports (-webkit-touch-callout: none) {
-		:root {
-			--glass-edge: 35px;
-		}
-	}
-}
-
-/*
  * HeroUI Pro Theme
  * Add this to your globals.css after importing @heroui/styles
  * Only includes variables customized from the selected theme

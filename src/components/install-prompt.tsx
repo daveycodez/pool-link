@@ -80,7 +80,7 @@ export function InstallPrompt({ scope }: { scope: InstallScope }) {
 
 	return (
 		// Landscape puts the insets on the sides, same as the layout's own floor.
-		<div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[calc(max(0.5rem,env(safe-area-inset-top))+var(--glass-edge))]">
+		<div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))]">
 			<Alert
 				className="pointer-events-auto w-full max-w-md animate-in shadow-surface duration-300 fade-in slide-in-from-top-4"
 				status="accent"
