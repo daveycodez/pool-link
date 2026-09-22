@@ -35,14 +35,31 @@ export function AppHeader({
 	return (
 		// Fixed to the top of the layout viewport, which without viewport-fit=cover
 		// is the line under the status bar. WebKit hit-tests just inside that edge
-		// for a fixed or sticky box at least 90% of the viewport wide with a plain
-		// background colour; finding this one, it paints the status bar in that
-		// colour and hides the Liquid Glass pocket it would otherwise draw there.
+		// for a fixed or sticky box at least 90% of the viewport wide; finding this
+		// one, it samples the colour at its top (the near-solid tint of the glass
+		// below), paints the status bar in it, and hides the Liquid Glass pocket
+		// it would otherwise draw there.
+		// The faint plain background is for WebKit, not the eye: with no plain
+		// colour to read it samples the bar's pixels once and keeps that colour
+		// for as long as this element is the edge container, so a theme switch
+		// left the status bar in the old theme's colour. A plain colour is read
+		// from style on every pass, and one this translucent is blended onto the
+		// page background, which is the colour wanted anyway.
 		// Fixed rather than sticky so the bar stays put while the page
 		// rubber-bands. Full-bleed, with the row centred to the page width; the
 		// layout reserves the bar's height (inset + 0.5rem + 36px + 0.5rem).
-		<header className="fixed inset-x-0 top-0 z-30 bg-background ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-			<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
+		<header className="fixed inset-x-0 top-0 z-30 bg-background/5 ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
+			{/* The bar's glass and the soft edge below it — see .scroll-edge in
+			    styles.css. Five bands: four of blur, one of tint. */}
+			<div aria-hidden className="scroll-edge">
+				<span />
+				<span />
+				<span />
+				<span />
+				<span />
+			</div>
+			{/* relative: painted above the bands, so the row stays crisp. */}
+			<div className="relative mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
 				<div
 					className={`flex min-w-0 items-center ${onBack ? "gap-0.5" : "gap-2.5"}`}
 				>

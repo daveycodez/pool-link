@@ -143,3 +143,107 @@ html[data-theme="dark"] {
 .card-link:focus-visible {
 	@apply status-focused;
 }
+
+/*
+ * The soft scroll edge iOS 26 and 27 draw behind a bar, rebuilt for the fixed
+ * header. Content passing beneath the bar stays visible but blurs
+ * progressively and fades into the bar's colour, strongest behind the row and
+ * gone a little way below it, while the row itself is painted crisp on top.
+ * CSS has no progressive blur, so this is a stack of bands over the whole bar
+ * and a short tail below, each blurring a little more and masked to reach a
+ * little less far down. A backdrop-filter samples whatever is painted beneath
+ * it, earlier siblings included, so the radii add up towards the top and taper
+ * to nothing at the tail. The last band is the tint: the bar's colour, near
+ * solid at the top, fading out through the tail. Three tunables: how far the
+ * tail reaches below the bar, how hard the blur is at the top, and how much of
+ * the bar's colour sits behind the row.
+ *
+ * WebKit still finds the bar as a fixed box at the top edge (the bands are
+ * children, so their filters do not count against it), samples the near-solid
+ * colour at its top, and paints the status bar with it — which is what keeps
+ * iOS 27's own glass pocket off the row.
+ */
+.scroll-edge {
+	--edge-reach: 28px;
+	--edge-blur: 14px;
+	--edge-tint: 68%;
+
+	position: absolute;
+	inset: 0 0 calc(-1 * var(--edge-reach));
+	pointer-events: none;
+
+	/*
+	 * Nothing has passed under the bar at rest, and the tail would otherwise
+	 * soften the top of the first card before anything has moved — which the
+	 * real thing never does. So the edge starts invisible and comes up over
+	 * the first --edge-reach of scrolling, driven by the scroll position
+	 * itself rather than a listener. A browser without scroll-driven
+	 * animations ignores this and simply keeps the edge on.
+	 */
+	animation: scroll-edge-in linear both;
+	animation-timeline: scroll(root);
+	animation-range: 0px var(--edge-reach);
+}
+
+@keyframes scroll-edge-in {
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+.scroll-edge > * {
+	position: absolute;
+	inset: 0;
+}
+
+.scroll-edge > :nth-child(1) {
+	backdrop-filter: blur(calc(var(--edge-blur) / 8));
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+
+.scroll-edge > :nth-child(2) {
+	backdrop-filter: blur(calc(var(--edge-blur) / 4));
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		#000 0%,
+		#000 40%,
+		transparent 88%
+	);
+	mask-image: linear-gradient(to bottom, #000 0%, #000 40%, transparent 88%);
+}
+
+.scroll-edge > :nth-child(3) {
+	backdrop-filter: blur(calc(var(--edge-blur) / 2));
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		#000 0%,
+		#000 30%,
+		transparent 72%
+	);
+	mask-image: linear-gradient(to bottom, #000 0%, #000 30%, transparent 72%);
+}
+
+.scroll-edge > :nth-child(4) {
+	backdrop-filter: blur(var(--edge-blur));
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		#000 0%,
+		#000 20%,
+		transparent 56%
+	);
+	mask-image: linear-gradient(to bottom, #000 0%, #000 20%, transparent 56%);
+}
+
+.scroll-edge > :last-child {
+	background: linear-gradient(
+		to bottom,
+		color-mix(in oklab, var(--background) 94%, transparent) 0%,
+		color-mix(in oklab, var(--background) var(--edge-tint), transparent) 55%,
+		transparent 100%
+	);
+}
