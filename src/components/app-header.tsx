@@ -33,7 +33,13 @@ export function AppHeader({
 	const mark = <Icon className="size-5 shrink-0 text-accent" />;
 
 	return (
-		<header className="mb-2 flex items-center justify-between gap-4">
+		// Sticky at the very top, carrying the status-bar inset itself. iOS 27
+		// draws a Liquid Glass blur over the status bar of a home-screen app
+		// unless a fixed or sticky element meets the top edge, in which case it
+		// paints that element's colour there instead. The negative inline margins
+		// undo the layout's gutters so the background spans the full width and
+		// scrolled content cannot show at the sides.
+		<header className="sticky top-0 z-30 -ms-[max(1rem,env(safe-area-inset-left))] -me-[max(1rem,env(safe-area-inset-right))] flex items-center justify-between gap-4 bg-background ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
 			<div
 				className={`flex min-w-0 items-center ${onBack ? "gap-0.5" : "gap-2.5"}`}
 			>

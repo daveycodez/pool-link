@@ -169,7 +169,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 			// Landscape puts the notch and the home indicator on the sides, so the
 			// horizontal padding is a floor rather than a fixed value — 1rem when
 			// there is no inset, the inset when it is larger.
-			className={`mx-auto flex min-h-screen w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] duration-200 fade-in ${
+			className={`mx-auto flex min-h-screen w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] duration-200 fade-in ${
+				// The header carries the top inset itself so it can stick against the
+				// screen edge; only the header-less sign-in page pads here.
+				onLogin ? "pt-[max(0.5rem,env(safe-area-inset-top))]" : ""
+			} ${
 				// How much of the page the tab bar covers, which is not one number:
 				// below `sm` the bar stacks each label under its icon to fit three
 				// destinations across a phone, so it stands taller there than it does
