@@ -239,11 +239,14 @@ html[data-theme="dark"] {
 	mask-image: linear-gradient(to bottom, #000 0%, #000 20%, transparent 56%);
 }
 
+/* The first stop is the plain colour, so the bar's top pixel row matches the
+   status bar WebKit paints above it exactly; mixed in sRGB rather than oklab,
+   which came out a step off after rounding and left a hairline there. */
 .scroll-edge > :last-child {
 	background: linear-gradient(
 		to bottom,
-		color-mix(in oklab, var(--background) 94%, transparent) 0%,
-		color-mix(in oklab, var(--background) var(--edge-tint), transparent) 55%,
+		var(--background) 0%,
+		color-mix(in srgb, var(--background) var(--edge-tint), transparent) 55%,
 		transparent 100%
 	);
 }
