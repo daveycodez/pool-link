@@ -171,18 +171,6 @@ html[data-theme="dark"] {
 	position: absolute;
 	inset: 0 0 calc(-1 * var(--edge-reach));
 	pointer-events: none;
-
-	/*
-	 * Nothing has passed under the bar at rest, and the tail would otherwise
-	 * soften the top of the first card before anything has moved — which the
-	 * real thing never does. So the edge starts invisible and comes up over
-	 * the first --edge-reach of scrolling, driven by the scroll position
-	 * itself rather than a listener. A browser without scroll-driven
-	 * animations ignores this and simply keeps the edge on.
-	 */
-	animation: scroll-edge-in linear both;
-	animation-timeline: scroll(root);
-	animation-range: 0px var(--edge-reach);
 }
 
 @keyframes scroll-edge-in {
@@ -198,6 +186,24 @@ html[data-theme="dark"] {
 .scroll-edge > * {
 	position: absolute;
 	inset: 0;
+
+	/*
+	 * Nothing has passed under the bar at rest, and the tail would otherwise
+	 * soften the top of the first card before anything has moved — which the
+	 * real thing never does. So the edge starts invisible and comes up over
+	 * the first --edge-reach of scrolling, driven by the scroll position
+	 * itself rather than a listener. A browser without scroll-driven
+	 * animations ignores this and simply keeps the edge on.
+	 *
+	 * On each band, not on .scroll-edge: in Chrome an ancestor with opacity
+	 * below 1, or an opacity animation, becomes the backdrop root, and a
+	 * backdrop-filter inside it blurs only what that ancestor paints —
+	 * nothing — so the bands went clear and only the tint showed. Safari has
+	 * no such rule, which is why it looked right there.
+	 */
+	animation: scroll-edge-in linear both;
+	animation-timeline: scroll(root);
+	animation-range: 0px var(--edge-reach);
 }
 
 .scroll-edge > :nth-child(1) {
