@@ -170,9 +170,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 			// horizontal padding is a floor rather than a fixed value — 1rem when
 			// there is no inset, the inset when it is larger.
 			className={`mx-auto flex min-h-screen w-full max-w-6xl animate-in flex-col ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] duration-200 fade-in ${
-				// The header carries the top inset itself so it can stick against the
-				// screen edge; only the header-less sign-in page pads here.
-				onLogin ? "pt-[max(0.5rem,env(safe-area-inset-top))]" : ""
+				// The header is fixed and carries the top inset itself, so the page
+				// reserves its height; the header-less sign-in page pads only the inset.
+				onLogin
+					? "pt-[max(0.5rem,env(safe-area-inset-top))]"
+					: "pt-[calc(max(0.5rem,env(safe-area-inset-top))+2.75rem)]"
 			} ${
 				// How much of the page the tab bar covers, which is not one number:
 				// below `sm` the bar stacks each label under its icon to fit three

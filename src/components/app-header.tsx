@@ -33,46 +33,50 @@ export function AppHeader({
 	const mark = <Icon className="size-5 shrink-0 text-accent" />;
 
 	return (
-		// Sticky at the very top, carrying the status-bar inset itself. iOS 27
-		// draws a Liquid Glass blur over the status bar of a home-screen app
-		// unless a fixed or sticky element meets the top edge, in which case it
-		// paints that element's colour there instead. The negative inline margins
-		// undo the layout's gutters so the background spans the full width and
-		// scrolled content cannot show at the sides.
-		<header className="sticky top-0 z-30 -ms-[max(1rem,env(safe-area-inset-left))] -me-[max(1rem,env(safe-area-inset-right))] flex items-center justify-between gap-4 bg-background ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-			<div
-				className={`flex min-w-0 items-center ${onBack ? "gap-0.5" : "gap-2.5"}`}
-			>
-				{onBack ? (
-					<>
-						{/* Negative inline start pulls the button's glyph out to the
+		// Fixed to the top of the layout viewport, which without viewport-fit=cover
+		// is the line under the status bar. WebKit hit-tests just inside that edge
+		// for a fixed or sticky box at least 90% of the viewport wide with a plain
+		// background colour; finding this one, it paints the status bar in that
+		// colour and hides the Liquid Glass pocket it would otherwise draw there.
+		// Fixed rather than sticky so the bar stays put while the page
+		// rubber-bands. Full-bleed, with the row centred to the page width; the
+		// layout reserves the bar's height (inset + 0.5rem + 36px + 0.5rem).
+		<header className="fixed inset-x-0 top-0 z-30 bg-background ps-[max(1rem,env(safe-area-inset-left))] pe-[max(1rem,env(safe-area-inset-right))] pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
+			<div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4">
+				<div
+					className={`flex min-w-0 items-center ${onBack ? "gap-0.5" : "gap-2.5"}`}
+				>
+					{onBack ? (
+						<>
+							{/* Negative inline start pulls the button's glyph out to the
 						    same optical edge the bare icon sat on. */}
-						<IconBtn className="-ms-2.5" label="Back" onPress={onBack}>
-							<ChevronLeft className="size-6 text-foreground" />
-						</IconBtn>
-						{heading}
-					</>
-				) : to ? (
-					// Mark and name are one target: the name is what you are
-					// leaving, so it should be the thing you press. The pair is
-					// wide enough to press without padding, and padding here only
-					// pushed the focus ring away from what it is ringing.
-					<Link
-						className="link flex min-w-0 items-center gap-2.5 rounded-lg text-foreground no-underline"
-						params={params}
-						to={to}
-					>
-						{mark}
-						{heading}
-					</Link>
-				) : (
-					<>
-						{mark}
-						{heading}
-					</>
-				)}
+							<IconBtn className="-ms-2.5" label="Back" onPress={onBack}>
+								<ChevronLeft className="size-6 text-foreground" />
+							</IconBtn>
+							{heading}
+						</>
+					) : to ? (
+						// Mark and name are one target: the name is what you are
+						// leaving, so it should be the thing you press. The pair is
+						// wide enough to press without padding, and padding here only
+						// pushed the focus ring away from what it is ringing.
+						<Link
+							className="link flex min-w-0 items-center gap-2.5 rounded-lg text-foreground no-underline"
+							params={params}
+							to={to}
+						>
+							{mark}
+							{heading}
+						</Link>
+					) : (
+						<>
+							{mark}
+							{heading}
+						</>
+					)}
+				</div>
+				<div className="flex items-center gap-2">{children}</div>
 			</div>
-			<div className="flex items-center gap-2">{children}</div>
 		</header>
 	);
 }

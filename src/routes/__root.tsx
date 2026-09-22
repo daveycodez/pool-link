@@ -62,9 +62,21 @@ export const Route = createRootRoute({
 	head: () => ({
 		meta: [
 			{ charSet: "utf-8" },
+			// No viewport-fit=cover, deliberately. In a home-screen app WebKit only
+			// treats the status bar as an obscured inset when the page keeps out of
+			// the unsafe area; with cover that inset is zero, so nothing on the page
+			// can stand in for the bar, and iOS 26+ draws its Liquid Glass
+			// scroll-edge blur over whatever sits under the clock. Without cover the
+			// fixed header meets the top of the layout viewport, WebKit extends its
+			// colour up through the status bar and hides the blur, and content
+			// still scrolls beneath the clock behind that colour. The bottom edge is
+			// untouched: WebKit insets only top, left and right this way, so the
+			// home-indicator inset and the tab bar are as before. (WebKit main,
+			// Sept 2026: LocalFrameView::fixedContainerEdges and
+			// -[WKWebView _safeAreaShouldAffectObscuredInsets].)
 			{
 				name: "viewport",
-				content: "width=device-width, initial-scale=1, viewport-fit=cover",
+				content: "width=device-width, initial-scale=1",
 			},
 			{
 				name: "description",
